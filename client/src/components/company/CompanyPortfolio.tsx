@@ -237,7 +237,7 @@ const CompanyPortfolio = () => {
   };
 
   if (isFetching)
-    return <div className="text-center py-12">Loading projects...</div>;
+    return <div className="text-center py-12 min-h-screen">Loading projects...</div>;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">

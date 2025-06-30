@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { createSite, getSites, Site } from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
-import { UserRole } from "@/store/types/user";
+import { UserRole } from "@/types/user";
 import AddSiteModal from "./AddSiteModal";
 import AddPurchaseModal from "./AddPurchaseModal";
 import { useNavigate } from "react-router-dom";
