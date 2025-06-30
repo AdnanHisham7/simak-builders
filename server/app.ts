@@ -28,12 +28,24 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
+const allowedOrigins = [
+  'https://simakbuilders.com',
+  'https://www.simakbuilders.com',
+];
+
 app.use(
   cors({
-    origin: env.FRONTEND_URL,
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`Not allowed by CORS: ${origin}`));
+      }
+    },
     credentials: true,
   })
 );
+
 app.use("/api/uploads", express.static("uploads"));
 
 setupCronJobs();
