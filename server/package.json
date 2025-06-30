@@ -6,7 +6,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon",
     "build": "tsc",
-    "start": "node start.js"
+    "start": "ts-node -r tsconfig-paths/register server.ts"
   },
   "keywords": [],
   "author": "",
@@ -28,6 +28,7 @@
     "ioredis": "^5.6.1",
     "joi": "^17.13.3",
     "jsonwebtoken": "^9.0.2",
+    "module-alias": "^2.2.3",
     "mongoose": "^8.15.0",
     "morgan": "^1.10.0",
     "multer": "^2.0.0",
@@ -49,5 +50,15 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.8.3"
   },
-  "description": ""
+  "description": "",
+  "_moduleAliases": {
+    "@utils": "dist/utils",
+    "@middleware": "dist/middleware",
+    "@config": "dist/config",
+    "@controllers": "dist/controllers",
+    "@entities": "dist/entities",
+    "@models": "dist/models",
+    "@routes": "dist/routes",
+    "@schemas": "dist/schemas"
+  }
 }

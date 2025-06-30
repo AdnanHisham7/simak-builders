@@ -1,2 +1,2 @@
-require('tsconfig-paths/register');
+require('module-alias/register');
 require('./dist/server.js');
