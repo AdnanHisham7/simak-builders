@@ -1,7 +1,7 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { errorMiddleware } from "middleware/errorMiddleware";
+import { errorMiddleware } from "./middleware/errorMiddleware";
 import authRoutes from "@routes/authRoutes";
 import userRoutes from "@routes/userRoutes";
 import siteRoutes from "@routes/siteRoutes";
