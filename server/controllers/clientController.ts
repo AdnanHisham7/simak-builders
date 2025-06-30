@@ -190,7 +190,7 @@ const verifyClientTransaction = async (
     const { transactionId } = req.params;
     const adminId = req.user?.userId;
 
-    const transaction = await ClientTransactionModel.findById(
+    const transaction: any = await ClientTransactionModel.findById(
       transactionId
     ).populate("site");
     if (!transaction) {
@@ -216,7 +216,7 @@ const verifyClientTransaction = async (
       throw new ApiError("Company not found", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
-    const site = transaction.site;
+    const site: any = transaction.site;
     if (!site) {
       throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
     }
@@ -248,11 +248,9 @@ const verifyClientTransaction = async (
     });
     await clientNotification.save();
 
-    res
-      .status(HttpStatus.OK)
-      .json({
-        message: "Transaction verified, company budget and site budget updated",
-      });
+    res.status(HttpStatus.OK).json({
+      message: "Transaction verified, company budget and site budget updated",
+    });
   } catch (error) {
     next(error);
   }

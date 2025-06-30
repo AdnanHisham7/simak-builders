@@ -670,7 +670,6 @@ const assignSitesToClients = async (
   }
 };
 
-
 const assignSitesToArchitect = async (
   req: Request,
   res: Response,
@@ -719,7 +718,7 @@ const assignSalary = async (
     // if (req.user.role !== "admin") {
     //   throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     // }
-    const salaryAssignment = {
+    const salaryAssignment: any = {
       date: new Date(),
       givenBy: req.user?.userId,
       amount,
@@ -752,7 +751,10 @@ const verifySalaryAssignment = async (
     // if (req.user.role !== "admin") {
     //   throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     // }
-    const salaryAssignment = user.salaryAssignments.id(assignmentId);
+    const salaryAssignment = user.salaryAssignments.find(
+      (sa) => sa._id?.toString() === assignmentId.toString()
+    );
+
     if (!salaryAssignment) {
       throw new ApiError("Salary assignment not found", HttpStatus.NOT_FOUND);
     }
@@ -773,7 +775,11 @@ const verifySalaryAssignment = async (
   }
 };
 
-const listSalaries = async (req: Request, res: Response, next: NextFunction) => {
+const listSalaries = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const allowedRoles = ["siteManager", "supervisor", "architect"];
     const users = await UserModel.find(
@@ -786,7 +792,11 @@ const listSalaries = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-const updateFixedSalary = async (req: Request, res: Response, next: NextFunction) => {
+const updateFixedSalary = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { id } = req.params;
     const { fixedSalary } = req.body;
@@ -796,13 +806,19 @@ const updateFixedSalary = async (req: Request, res: Response, next: NextFunction
     }
     user.fixedSalary = fixedSalary;
     await user.save();
-    res.status(HttpStatus.OK).json({ message: "Fixed salary updated successfully" });
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Fixed salary updated successfully" });
   } catch (error) {
     next(error);
   }
 };
 
-const updateSalaryAssignmentAmount = async (req: Request, res: Response, next: NextFunction) => {
+const updateSalaryAssignmentAmount = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { userId, assignmentId } = req.params;
     const { amount } = req.body;
@@ -810,16 +826,23 @@ const updateSalaryAssignmentAmount = async (req: Request, res: Response, next: N
     if (!user) {
       throw new ApiError("User not found", HttpStatus.NOT_FOUND);
     }
-    const salaryAssignment = user.salaryAssignments.id(assignmentId);
+    const salaryAssignment = user.salaryAssignments.find(
+      (sa) => sa._id?.toString() === assignmentId.toString()
+    );
     if (!salaryAssignment) {
       throw new ApiError("Salary assignment not found", HttpStatus.NOT_FOUND);
     }
     if (salaryAssignment.isVerified) {
-      throw new ApiError("Cannot update verified salary assignment", HttpStatus.BAD_REQUEST);
+      throw new ApiError(
+        "Cannot update verified salary assignment",
+        HttpStatus.BAD_REQUEST
+      );
     }
     salaryAssignment.amount = amount;
     await user.save();
-    res.status(HttpStatus.OK).json({ message: "Salary assignment updated successfully" });
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Salary assignment updated successfully" });
   } catch (error) {
     next(error);
   }
@@ -851,7 +874,7 @@ const assignSiteExpenses = async (
     if (amount <= 0) {
       throw new ApiError("Amount must be positive", HttpStatus.BAD_REQUEST);
     }
-    const transaction = {
+    const transaction: any = {
       date: new Date(),
       amount,
       type: "incoming",
@@ -889,11 +912,15 @@ const getCurrentUser = async (
   }
 };
 
-const getUnassignedClients = async (req: Request, res: Response, next: NextFunction) => {
+const getUnassignedClients = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const unassignedClients = await UserModel.find({
       role: "client",
-      assignedSites: { $size: 0 } // Matches clients with an empty assignedSites array
+      assignedSites: { $size: 0 }, // Matches clients with an empty assignedSites array
     }).select("name email _id"); // Return only necessary fields
     res.status(HttpStatus.OK).json(unassignedClients);
   } catch (error) {
@@ -901,26 +928,26 @@ const getUnassignedClients = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-const getUserById = async (req, res, next) => {
+const getUserById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const requestingUser = req.user;
 
     // Authorization check: Only CompanyAdmin can access this endpoint
-    if (requestingUser.role !== UserRole.CompanyAdmin) {
-      throw new ApiError('Unauthorized', HttpStatus.FORBIDDEN);
+    if (requestingUser?.role !== UserRole.CompanyAdmin) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
     // Fetch user by ID and populate relevant fields
     const user = await UserModel.findById(id)
-      .populate('assignedSites')
-      .populate('salaryAssignments.givenBy', 'name')
-      .populate('siteExpensesTransactions.givenBy', 'name')
-      .populate('siteExpensesTransactions.site', 'name');
+      .populate("assignedSites")
+      .populate("salaryAssignments.givenBy", "name")
+      .populate("siteExpensesTransactions.givenBy", "name")
+      .populate("siteExpensesTransactions.site", "name");
 
     // Check if user exists
     if (!user) {
-      throw new ApiError('User not found', HttpStatus.NOT_FOUND);
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
     }
 
     // Send the user data in the response

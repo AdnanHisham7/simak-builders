@@ -28,7 +28,7 @@ export async function createMonthlySalaryAssignments() {
 
       if (!hasAssignmentThisMonth) {
         // Create a new salary assignment
-        const newAssignment = {
+        const newAssignment:any = {
           date: now,
           givenBy: null, // Indicates an automated assignment (or use a system user ID)
           amount: user.fixedSalary,

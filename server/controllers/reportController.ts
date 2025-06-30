@@ -6,7 +6,7 @@ import { VendorModel } from "@models/Vendor";
 import { UserModel } from "@models/User";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 // Stock Transactions Report
 export const getStockTransactions = async (
@@ -110,42 +110,54 @@ export const getVendorsReport = async (
   }
 };
 
-// Clients Report
-const getClientsReport = async (req, res) => {
+const getClientsReport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { clientId, status, minAmount, startDate, endDate } = req.query;
-    const filter = { role: 'client' };
+    const { clientId, status, minAmount, startDate, endDate } = req.query as {
+      clientId?: string;
+      status?: string;
+      minAmount?: string;
+      startDate?: string;
+      endDate?: string;
+    };
 
-    if (clientId) {
-      filter._id = new mongoose.Types.ObjectId(clientId);
+    const filter: Record<string, any> = { role: "client" };
+
+    if (clientId && Types.ObjectId.isValid(clientId)) {
+      filter._id = new Types.ObjectId(clientId);
     }
-    if (status) filter.status = status;
-    // Add other filters as needed
+
+    if (status) {
+      filter.status = status;
+    }
 
     const clients = await UserModel.aggregate([
-      { $match: { role: 'client' } },
+      { $match: { role: "client" } },
       {
         $lookup: {
-          from: 'sites',
-          localField: '_id',
-          foreignField: 'client',
-          as: 'sites',
+          from: "sites",
+          localField: "_id",
+          foreignField: "client",
+          as: "sites",
         },
       },
       {
         $lookup: {
-          from: 'clienttransactions',
-          localField: '_id',
-          foreignField: 'client',
-          as: 'transactions',
+          from: "clienttransactions",
+          localField: "_id",
+          foreignField: "client",
+          as: "transactions",
         },
       },
       {
         $addFields: {
-          totalTransactions: { $size: '$transactions' },
-          totalAmount: { $sum: '$transactions.amount' },
-          status: { $arrayElemAt: ['$transactions.status', -1] },
-          site: { $arrayElemAt: ['$sites', 0] }, // Take first site
+          totalTransactions: { $size: "$transactions" },
+          totalAmount: { $sum: "$transactions.amount" },
+          status: { $arrayElemAt: ["$transactions.status", -1] },
+          site: { $arrayElemAt: ["$sites", 0] },
         },
       },
       { $match: filter },
@@ -161,8 +173,8 @@ const getClientsReport = async (req, res) => {
 
     res.json(clients);
   } catch (err) {
-    console.error('Error in getClientsReport:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error("Error in getClientsReport:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -191,6 +203,6 @@ export default {
   getStockTransactions,
   getStockInventory,
   getVendorsReport,
-  getVendorPurchases, 
+  getVendorPurchases,
   getClientsReport,
 };

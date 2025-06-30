@@ -2,10 +2,9 @@ import { Request, Response, NextFunction } from "express";
 import { AttendanceModel } from "@models/Attendance";
 import { SiteModel } from "@models/Site";
 import { EmployeeModel } from "@models/Employee"; // Added
-import { UserRole } from "@entities/user";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
-import mongoose from "mongoose";
+import mongoose, { Types } from "mongoose";
 
 const markAttendance = async (
   req: Request,
@@ -57,7 +56,7 @@ const markAttendance = async (
       type: "attendance",
       description: `Attendance for ${employee.name}`,
       relatedId: attendance._id,
-      user: user.userId,
+      user: user?.userId,
     });
     await site.save();
 
@@ -142,11 +141,14 @@ export const getAttendanceDetailsForDay = async (
       date: new Date(date),
     }).populate("employee", "name");
 
-    const formattedRecords = attendanceRecords.map((record) => ({
-      employeeId: record.employee._id,
-      employeeName: record.employee.name,
-      status: record.status,
-    }));
+    const formattedRecords = attendanceRecords.map((record) => {
+      const employee = record.employee as { _id: Types.ObjectId; name: string };
+      return {
+        employeeId: employee._id,
+        employeeName: employee.name,
+        status: record.status,
+      };
+    });
 
     res.status(HttpStatus.OK).json(formattedRecords);
   } catch (error) {

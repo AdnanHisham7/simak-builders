@@ -131,7 +131,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
 
     if (paymentMethod === "cash") {
       if (user.role === "siteManager") {
-        const transaction = {
+        const transaction:any = {
           date: new Date(),
           amount: -totalAmount,
           type: "expenditure",
@@ -179,7 +179,7 @@ const verifyPurchase = async (
     const { purchaseId } = req.params;
     const user = req.user;
 
-    const purchase = await PurchaseModel.findById(purchaseId).populate("site");
+    const purchase:any = await PurchaseModel.findById(purchaseId).populate("site");
     if (!purchase)
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
 
@@ -234,7 +234,8 @@ const verifyPurchase = async (
           type: "purchase",
           description: `Purchase added by ${purchasedUser?.name}`,
           relatedId: purchase._id,
-          user: purchasedUser?._id,
+          user: purchasedUser?._id.toString(),
+
         });
         await site.save();
       }
@@ -274,9 +275,9 @@ const getPurchasesBySite = async (
     const { siteId, status, startDate, endDate } = req.query;
     const filter: any = { site: siteId };
     if (status) filter.status = status;
-    if (startDate) filter.createdAt = { $gte: new Date(startDate) };
+    if (startDate) filter.createdAt = { $gte: new Date(startDate as string) };
     if (endDate)
-      filter.createdAt = { ...filter.createdAt, $lte: new Date(endDate) };
+      filter.createdAt = { ...filter.createdAt, $lte: new Date(endDate as string) };
 
     const purchases = await PurchaseModel.find(filter)
       .populate("site")
@@ -330,7 +331,7 @@ const deleteBillUpload = async (
   try {
     const { purchaseId } = req.params;
     const user = req.user;
-    if (user.role !== "admin") {
+    if (user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
     const purchase = await PurchaseModel.findById(purchaseId);
@@ -340,8 +341,8 @@ const deleteBillUpload = async (
     if (!purchase.billUpload) {
       throw new ApiError("No bill upload found", HttpStatus.BAD_REQUEST);
     }
-    const filename = purchase.billUpload.url.split("/").pop();
-    const filePath = path.join(process.cwd(), "uploads", filename);
+    const filename = purchase.billUpload?.url?.split("/").pop();
+    const filePath = path.join(process.cwd(), "uploads", filename!);
     try {
       await fs.unlink(filePath);
     } catch (err) {

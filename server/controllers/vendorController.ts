@@ -157,7 +157,7 @@ const settleVendorPayments = async (
   try {
     const { id } = req.params;
     const user = req.user;
-    if (user.role !== "admin") {
+    if (user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
     const vendor = await VendorModel.findById(id);

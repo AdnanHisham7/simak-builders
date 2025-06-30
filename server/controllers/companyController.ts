@@ -13,7 +13,7 @@ import { VendorModel } from "@models/Vendor";
 import { ContractorModel } from "@models/Contractor";
 import upload from "@middleware/multer";
 import Joi from "joi";
-import mongoose, { startSession } from "mongoose";
+import mongoose, { startSession, Types } from "mongoose";
 import { PurchaseModel } from "@models/Purchase";
 import { MachineryRentalModel } from "@models/MachineryRental";
 import { StockUsageModel } from "@models/StockUsage";
@@ -172,15 +172,16 @@ const getDashboardData = async (
         id: stock._id.toString(),
         type: "stock",
         description: `Stock ${stock.name} updated`,
-        timestamp: stock.updatedAt.toISOString(),
+        timestamp: stock.updatedAt?.toISOString(),
       })),
     ];
 
     // Sort by timestamp and take the top 5
     const recentActivity = activities
+      .filter((activity) => activity.timestamp !== undefined)
       .sort(
         (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
       )
       .slice(0, 5);
 
@@ -342,25 +343,25 @@ const createSiteWithBulkData = async (
     let totalExpenditure = 0;
     if (jsonData.purchases) {
       totalExpenditure += jsonData.purchases.reduce(
-        (sum, p) => sum + p.totalAmount,
+        (sum: any, p: { totalAmount: any }) => sum + p.totalAmount,
         0
       );
     }
     if (jsonData.machineryRentals) {
       totalExpenditure += jsonData.machineryRentals.reduce(
-        (sum, r) => sum + r.amount,
+        (sum: any, r: { amount: any }) => sum + r.amount,
         0
       );
     }
     if (jsonData.attendances) {
       totalExpenditure += jsonData.attendances.reduce(
-        (sum, a) => sum + a.dailyWage,
+        (sum: any, a: { dailyWage: any }) => sum + a.dailyWage,
         0
       );
     }
     if (jsonData.contractorTransactions) {
       totalExpenditure += jsonData.contractorTransactions.reduce(
-        (sum, t) => sum + t.amount,
+        (sum: any, t: { amount: any }) => sum + t.amount,
         0
       );
     }
@@ -376,7 +377,7 @@ const createSiteWithBulkData = async (
     const newSite = new SiteModel({
       ...jsonData.site,
       client: new mongoose.Types.ObjectId(jsonData.site.client),
-      phases: jsonData.phases.map((phase) => ({
+      phases: jsonData.phases.map((phase: { name: any; status: string }) => ({
         name: phase.name,
         status: phase.status,
         completionDate: phase.status === "completed" ? new Date() : null,
@@ -406,7 +407,8 @@ const createSiteWithBulkData = async (
           size: docFile.size,
           type: docFile.mimetype,
           url: `/uploads/${docFile.filename}`,
-          uploadedBy: adminUser.userId,
+          uploadedBy: new Types.ObjectId(adminUser.userId), 
+          uploadDate: new Date(),
         };
         newSite.documents.push(document);
       }

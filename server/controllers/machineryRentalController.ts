@@ -91,7 +91,7 @@ const addMachineryRental = async (
     });
 
     if (user.role === "siteManager") {
-      const transaction = {
+      const transaction: any = {
         date: new Date(),
         amount: -parsedAmount,
         type: "expenditure",
@@ -150,7 +150,7 @@ const verifyMachineryRental = async (
     if (user?.role !== "admin")
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
 
-    const rental = await MachineryRentalModel.findById(rentalId).populate(
+    const rental: any = await MachineryRentalModel.findById(rentalId).populate(
       "site"
     );
     if (!rental)
@@ -187,7 +187,7 @@ const verifyMachineryRental = async (
           type: "rental",
           description: `Machinery rental by ${purchasedUser?.name}`,
           relatedId: rental._id,
-          user: purchasedUser?._id,
+          user: purchasedUser?._id.toString(),
         });
         await site.save();
       }

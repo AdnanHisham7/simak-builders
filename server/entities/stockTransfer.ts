@@ -6,8 +6,9 @@ export interface StockTransfer {
   fromSite?: Types.ObjectId;
   toSite: Types.ObjectId;
   requestedBy: Types.ObjectId;
-  approvedBy?: Types.ObjectId;
-  status?: "Requested" | "Approved";
+  approvedBy?: Types.ObjectId  | string;
+  status?: "Requested" | "Approved" | "Rejected";
+  rejectedBy?:string;
   createdAt?: Date;
   updatedAt?: Date;
 }

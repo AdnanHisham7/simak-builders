@@ -30,6 +30,7 @@ export interface User {
   enabledFunctionalities?: string[]; // For SiteManager, Supervisor customization
   googleId?: string;
   salaryAssignments: {
+    _id?: Types.ObjectId;
     date: Date;
     givenBy: Types.ObjectId;
     amount: number;

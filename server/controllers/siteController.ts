@@ -380,7 +380,7 @@ const updatePhaseStatus = async (
     const site = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    const phase = site.phases.find((p) => p._id.toString() === phaseId);
+    const phase = site.phases.find((p) => p._id?.toString() === phaseId);
     if (!phase) throw new ApiError("Phase not found", HttpStatus.NOT_FOUND);
 
     if (user.role === "siteManager") {
@@ -388,7 +388,7 @@ const updatePhaseStatus = async (
         throw new ApiError("Unauthorized status change", HttpStatus.FORBIDDEN);
       }
       phase.status = "pending";
-      phase.requestedBy = user._id;
+      phase.requestedBy = user.userId;
       await site.save();
 
       const admins = await UserModel.find({ role: "admin" });
@@ -448,7 +448,7 @@ const approvePhase = async (
     const site = await SiteModel.findOne({ "phases._id": phaseId });
     if (!site) throw new ApiError("Phase not found", HttpStatus.NOT_FOUND);
 
-    const phase = site.phases.id(phaseId);
+    const phase = site.phases.find((p) => p._id === phaseId);
     if (!phase || phase.status !== "pending") {
       throw new ApiError("Invalid phase status", HttpStatus.BAD_REQUEST);
     }
@@ -480,7 +480,7 @@ const rejectPhase = async (req: Request, res: Response, next: NextFunction) => {
     const site = await SiteModel.findOne({ "phases._id": phaseId });
     if (!site) throw new ApiError("Phase not found", HttpStatus.NOT_FOUND);
 
-    const phase = site.phases.id(phaseId);
+    const phase = site.phases.find((p) => p._id === phaseId);
     if (!phase || phase.status !== "pending") {
       throw new ApiError("Invalid phase status", HttpStatus.BAD_REQUEST);
     }
@@ -531,7 +531,7 @@ const uploadDocument = async (
       throw new ApiError("Invalid or missing category", HttpStatus.BAD_REQUEST);
     }
 
-    const document = {
+    const document:any = {
       name: file.originalname,
       size: file.size,
       type: file.mimetype,
@@ -583,7 +583,7 @@ const downloadSiteDocumentsZip = async (
     const site = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    const documents = site.documents;
+    const documents:any = site.documents;
     if (documents.length === 0) {
       res.status(HttpStatus.NO_CONTENT).send("No documents to download");
       return;
@@ -617,8 +617,8 @@ const downloadPurchaseBillsZip = async (
   try {
     const { siteId } = req.params;
     const purchases = await PurchaseModel.find({ site: siteId });
-    const billUploads = purchases
-      .filter((p) => p.billUpload.url)
+    const billUploads:any = purchases
+      .filter((p) => p.billUpload?.url)
       .map((p) => p.billUpload);
 
     if (billUploads.length === 0) {
@@ -665,7 +665,7 @@ const markSiteAsCompleted = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    const site = await SiteModel.findById(siteId);
+    const site:any = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
     if (site.status === "Completed") {
@@ -689,10 +689,10 @@ const markSiteAsCompleted = async (
     }
 
     if (deletePurchaseBills) {
-      const purchases = await PurchaseModel.find({ site: siteId });
+      const purchases:any = await PurchaseModel.find({ site: siteId });
       for (const purchase of purchases) {
         console.log("filePath", purchase);
-        if (purchase.billUpload.url) {
+        if (purchase.billUpload?.url) {
           console.log("hi push");
           const filePath = join(
             process.cwd(),

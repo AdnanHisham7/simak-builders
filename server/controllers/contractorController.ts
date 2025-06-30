@@ -5,6 +5,7 @@ import { HttpStatus } from "@utils/enums/httpStatus";
 import { ContractorModel } from "@models/Contractor";
 import { ContractorTransactionModel } from "@models/ContractorTransaction";
 import { ActivityLogModel } from "@models/ActivityLog";
+import { Types } from "mongoose";
 
 const createContractor = async (
   req: Request,
@@ -91,7 +92,7 @@ const assignSiteToContractor = async (
 
     if (
       contractor.siteAssignments.some(
-        (assignment) => assignment.site.toString() === siteId
+        (assignment) => assignment.site?.toString() === siteId
       )
     ) {
       throw new ApiError(
@@ -129,11 +130,15 @@ const addTransaction = async (
     if (!siteExists) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
     let siteAssignment = contractor.siteAssignments.find(
-      (assignment) => assignment.site.toString() === siteId
+      (assignment) => assignment.site?.toString() === siteId
     );
     if (!siteAssignment) {
       // Automatically assign the site if not already assigned
-      siteAssignment = { site: siteId, balance: 0 };
+      siteAssignment = contractor.siteAssignments.create({
+        site: new Types.ObjectId(siteId),
+        balance: 0,
+      });
+
       contractor.siteAssignments.push(siteAssignment);
     }
 
@@ -178,11 +183,11 @@ const getContractorTransactions = async (
 ) => {
   try {
     const { contractorId, siteId } = req.query;
-    console.log("HAHAHAHAHAHA", siteId, contractorId)
+    console.log("HAHAHAHAHAHA", siteId, contractorId);
     if (req.user?.role !== "admin")
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
-    
-    console.log("HAHAHAHAHAHA MAATHRA")
+
+    console.log("HAHAHAHAHAHA MAATHRA");
     const contractor = await ContractorModel.findById(contractorId);
     if (!contractor)
       throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
@@ -220,5 +225,10 @@ const getContractorTransactions = async (
 //   }
 // };
 
-
-export default { createContractor, getAllContractors, addTransaction, getContractorTransactions, assignSiteToContractor }
+export default {
+  createContractor,
+  getAllContractors,
+  addTransaction,
+  getContractorTransactions,
+  assignSiteToContractor,
+};

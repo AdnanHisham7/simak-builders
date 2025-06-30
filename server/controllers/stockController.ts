@@ -54,7 +54,7 @@ const requestStockTransfer = async (
     if (!stock || stock.quantity < quantity)
       throw new ApiError("Insufficient stock", HttpStatus.BAD_REQUEST);
 
-    let transfer = new StockTransferModel({
+    let transfer: any = new StockTransferModel({
       stock: stockId,
       quantity,
       fromSite: fromSiteId || null,
@@ -120,11 +120,11 @@ const approveStockTransfer = async (
       throw new ApiError("Insufficient stock", HttpStatus.BAD_REQUEST);
     }
 
-    const purchase = await PurchaseModel.findOne({
+    const purchase: any = await PurchaseModel.findOne({
       "items.name": fromStock.name,
     });
     const stockValue = purchase
-      ? purchase.items.find((item) => item.name === fromStock.name).price *
+      ? purchase.items.find((item: any) => item.name === fromStock.name).price *
         transfer.quantity
       : 0;
 
@@ -138,7 +138,7 @@ const approveStockTransfer = async (
           type: "stockTransfer",
           description: `Stock transferred to site ${transfer.toSite}`,
           relatedId: transfer._id,
-          user: user.userId,
+          user: user?.userId,
         });
         await sourceSite.save();
       }
@@ -161,7 +161,7 @@ const approveStockTransfer = async (
     await toStock.save();
 
     transfer.status = "Approved";
-    transfer.approvedBy = user.userId;
+    transfer.approvedBy = user?.userId;
     await transfer.save();
 
     await NotificationModel.updateMany(
@@ -195,7 +195,7 @@ const rejectStockTransfer = async (
     const { transferId } = req.params;
     const user = req.user;
 
-    const transfer = await StockTransferModel.findById(transferId)
+    const transfer: any = await StockTransferModel.findById(transferId)
       .populate("fromSite")
       .populate("toSite");
     if (!transfer) {
@@ -207,7 +207,7 @@ const rejectStockTransfer = async (
     }
 
     transfer.status = "Rejected";
-    transfer.rejectedBy = user.userId;
+    transfer.rejectedBy = user?.userId;
     await transfer.save();
 
     await NotificationModel.updateMany(
@@ -336,8 +336,11 @@ const getStockUsages = async (
     const user = req.user;
     let filter: any = {};
 
-    if (user.role === UserRole.SiteManager) {
-      filter.site = { $in: user.assignedSites };
+    const currentUser = await UserModel.findById(user?.userId, "assignedSites");
+    const assignedSites = currentUser?.assignedSites;
+
+    if (user?.role === UserRole.SiteManager) {
+      filter.site = { $in: assignedSites };
     }
 
     const usages = await StockUsageModel.find(filter)

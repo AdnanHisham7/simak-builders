@@ -34,7 +34,7 @@ const SiteSchema = new Schema<Site>(
         amount: { type: Number, required: true },
         type: {
           type: String,
-          enum: ["purchase", "rental", "attendance", "stockTransfer"],
+          enum: ["purchase", "rental", "attendance", "stockTransfer", "contractor_payment"],
           required: true,
         },
         description: { type: String },
