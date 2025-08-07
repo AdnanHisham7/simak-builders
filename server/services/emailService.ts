@@ -3,8 +3,8 @@ import { env } from '@config/env';
 
 const transporter = nodemailer.createTransport({
   host: 'smtp.zoho.com',
-  port: 465,
-  secure: true,
+  port: 587,
+  secure: false,
   auth: {
     user: env.EMAIL_USER, 
     pass: env.EMAIL_PASS,
