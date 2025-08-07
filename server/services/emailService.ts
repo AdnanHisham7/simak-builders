@@ -2,14 +2,15 @@ import nodemailer from 'nodemailer';
 import { env } from '@config/env';
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.zoho.com',
+  port: 465,
+  secure: true,
   auth: {
-    user: env.EMAIL_USER,
+    user: env.EMAIL_USER, 
     pass: env.EMAIL_PASS,
   },
 });
 
-// Email template styles and structure
 const getEmailTemplate = (title: string, content: string, buttonText?: string, buttonUrl?: string, footer?: string) => {
   return `
     <!DOCTYPE html>
