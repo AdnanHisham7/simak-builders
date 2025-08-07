@@ -287,7 +287,7 @@ export const sendInitialPasswordEmail = async (email: string, password: string):
       'Welcome to Simak Builders',
       content,
       'Login to Your Account',
-      `${env.FRONTEND_URL}/login`,
+      `${env.FRONTEND_URL}?redirect=/login`,
       footer
     ),
   });
@@ -326,7 +326,7 @@ export const sendRegeneratedPasswordEmail = async (email: string, password: stri
       'Password Successfully Regenerated',
       content,
       'Login with New Password',
-      `${env.FRONTEND_URL}/login`,
+      `${env.FRONTEND_URL}?redirect=/login`,
       footer
     ),
   });

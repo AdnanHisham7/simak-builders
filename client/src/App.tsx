@@ -44,6 +44,7 @@ import ClientProtected from "./router/ClientProtected.tsx";
 import ListEnquiries from "./pages/admin/ListEnquiries.tsx";
 import AboutUs from "./pages/AboutUs.tsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy.tsx";
+import RedirectHandler from "./router/RedirectHandler.tsx";
 
 const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +66,7 @@ const App: React.FC = () => {
     <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}>
       <ToastProvider />
       <Router>
+        <RedirectHandler />
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/portfolio" element={<Portfolio />} />
