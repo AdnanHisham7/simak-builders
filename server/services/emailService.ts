@@ -305,13 +305,6 @@ export const sendRegeneratedPasswordEmail = async (email: string, password: stri
     <div class="security-notice">
       <p><strong>Important:</strong> For your security, please change this password to something memorable after logging in.</p>
     </div>
-    
-    <div class="info-box">
-      <p><strong>What's next?</strong></p>
-      <p>1. Log in with your new password<br>
-      2. Go to your account settings<br>
-      3. Change to a password you'll remember</p>
-    </div>
   `;
   
   const footer = `
