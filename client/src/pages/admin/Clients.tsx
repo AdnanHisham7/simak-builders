@@ -100,7 +100,7 @@ const Clients: React.FC = () => {
       client.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite =
       !selectedSiteId ||
-      client.assignedSites.some((site) => site.id === selectedSiteId); // Updated for array
+      client.assignedSites?.some((site) => site.id === selectedSiteId); // Updated for array
     const matchesStatus =
       selectedStatus === "all" ||
       (selectedStatus === "active" && !client.isBlocked) ||
@@ -215,7 +215,7 @@ const Clients: React.FC = () => {
       message: `Are you sure you want to remove ${site.name} from ${client.name}?`,
       onConfirm: async () => {
         try {
-          const updatedSites = client.assignedSites.filter(
+          const updatedSites = client.assignedSites?.filter(
             (s) => s.id !== siteId
           );
           await assignSitesToClients(
@@ -241,7 +241,7 @@ const Clients: React.FC = () => {
   const handleAssignSites = async (selectedSiteIds: string[]) => {
     if (!selectedClient) return;
     try {
-      const currentSiteIds = selectedClient.assignedSites.map(
+      const currentSiteIds = selectedClient.assignedSites?.map(
         (site) => site.id
       );
       const newSiteIds = [...new Set([...currentSiteIds, ...selectedSiteIds])];
@@ -510,13 +510,13 @@ const Clients: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-1 items-center max-w-xs">
-                        {client.assignedSites.length === 0 ? (
+                        {client.assignedSites?.length === 0 ? (
                           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
                             No sites assigned
                           </span>
                         ) : (
                           <>
-                            {client.assignedSites.slice(0, 2).map((site) => (
+                            {client.assignedSites?.slice(0, 2).map((site) => (
                               <span
                                 key={site.id}
                                 className="inline-flex items-center px-3 py-1 text-xs font-medium rounded-full bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-800 border border-blue-200"
@@ -532,9 +532,9 @@ const Clients: React.FC = () => {
                                 </button>
                               </span>
                             ))}
-                            {client.assignedSites.length > 2 && (
+                            {client.assignedSites?.length > 2 && (
                               <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-                                +{client.assignedSites.length - 2} more
+                                +{client.assignedSites?.length - 2} more
                               </span>
                             )}
                           </>

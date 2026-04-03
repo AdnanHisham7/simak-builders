@@ -323,19 +323,6 @@ const Vendors: React.FC = () => {
                 <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-red-50 to-red-100 p-6 rounded-xl border border-red-200">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-red-600 text-sm font-medium">
-                    Inactive Vendors
-                  </p>
-                  <p className="text-2xl font-bold text-red-900">
-                    {stats.inactive}
-                  </p>
-                </div>
-                <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-              </div>
-            </div>
             <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl border border-purple-200">
               <div className="flex items-center justify-between">
                 <div>

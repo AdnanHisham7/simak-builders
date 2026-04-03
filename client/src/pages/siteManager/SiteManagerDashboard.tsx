@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getCurrentUser, getUserById } from "@/services/userService"; // Ensure getUserById is imported
+import { getCurrentUser, getUserById } from "@/services/userService";
 import {
   DollarSign,
   CreditCard,
@@ -14,31 +14,44 @@ import {
 } from "lucide-react";
 
 const SiteManagerDashboard: React.FC = () => {
-  const { managerId } = useParams<{ managerId: string }>(); // Get managerId from URL
+  const { managerId } = useParams<{ managerId: string }>();
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [activeTable, setActiveTable] = useState<"salary" | "expense" | null>(
-    null
-  );
+  const [activeTable, setActiveTable] = useState<"salary" | "expense" | null>(null);
   const [salaryPage, setSalaryPage] = useState(1);
   const [expensePage, setExpensePage] = useState(1);
   const itemsPerPage = 10;
 
+  /* ------------------------------------------------------------------ */
+  /*  FETCH USER DATA – safe defaults                                      */
+  /* ------------------------------------------------------------------ */
   useEffect(() => {
     const fetchUserData = async () => {
       try {
         let data;
         if (managerId) {
-          // Admin viewing a specific site manager's dashboard
           data = await getUserById(managerId);
         } else {
-          // Site manager viewing their own dashboard
           data = await getCurrentUser();
-          console.log(data)
         }
-        setUserData(data);
+
+        /* Normalise every field – never let a missing value slip through */
+        const safe = {
+          name: data?.name ?? "User",
+          totalSalary: Number(data?.totalSalary ?? 0),
+          salaryAssignments: Array.isArray(data?.salaryAssignments)
+            ? data.salaryAssignments
+            : [],
+          siteExpensesBalance: Number(data?.siteExpensesBalance ?? 0),
+          siteExpensesTransactions: Array.isArray(data?.siteExpensesTransactions)
+            ? data.siteExpensesTransactions
+            : [],
+          assignedSites: Array.isArray(data?.assignedSites) ? data.assignedSites : [],
+        };
+
+        setUserData(safe);
         setLoading(false);
         setTimeout(() => setIsAnimating(true), 100);
       } catch (err: any) {
@@ -47,17 +60,18 @@ const SiteManagerDashboard: React.FC = () => {
       }
     };
     fetchUserData();
-  }, [managerId]); // Add managerId as dependency
+  }, [managerId]);
 
+  /* ------------------------------------------------------------------ */
+  /*  LOADING / ERROR STATES                                            */
+  /* ------------------------------------------------------------------ */
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
         <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
           <div className="flex items-center space-x-4">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <div className="text-gray-600 font-medium">
-              Loading dashboard...
-            </div>
+            <div className="text-gray-600 font-medium">Loading dashboard...</div>
           </div>
         </div>
       </div>
@@ -75,15 +89,21 @@ const SiteManagerDashboard: React.FC = () => {
     );
   }
 
+  /* ------------------------------------------------------------------ */
+  /*  DESTRUCTURE WITH SAFE FALLBACKS                                   */
+  /* ------------------------------------------------------------------ */
   const {
+    name,
     totalSalary,
-    salaryAssignments,
+    salaryAssignments = [],
     siteExpensesBalance,
-    siteExpensesTransactions,
-    assignedSites,
-    name, // Add name to display whose dashboard it is
-  } = userData;
+    siteExpensesTransactions = [],
+    assignedSites = [],
+  } = userData ?? {};
 
+  /* ------------------------------------------------------------------ */
+  /*  CARD / TABLE HANDLERS                                             */
+  /* ------------------------------------------------------------------ */
   const handleStatCardClick = (type: "salary" | "expense") => {
     if (activeTable === type) {
       setActiveTable(null);
@@ -115,9 +135,7 @@ const SiteManagerDashboard: React.FC = () => {
       } ${isActive ? "ring-2 ring-blue-500 ring-opacity-50" : ""}`}
       onClick={onClick}
     >
-      <div
-        className={`absolute top-0 left-0 right-0 h-2 ${gradient} rounded-t-2xl`}
-      />
+      <div className={`absolute top-0 left-0 right-0 h-2 ${gradient} rounded-t-2xl`} />
       <div className="p-8">
         <div className="flex items-center justify-between mb-4">
           <Icon className="w-8 h-8 text-gray-600" />
@@ -148,7 +166,7 @@ const SiteManagerDashboard: React.FC = () => {
   }) => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const paginatedTransactions = transactions.slice(startIndex, endIndex);
+    const paginated = transactions.slice(startIndex, endIndex);
     const totalPages = Math.ceil(transactions.length / itemsPerPage);
 
     return (
@@ -166,168 +184,185 @@ const SiteManagerDashboard: React.FC = () => {
               <X className="w-6 h-6" />
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-gray-50 to-blue-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  {type === "salary" ? (
-                    <>
+
+          {transactions.length === 0 ? (
+            /* EMPTY STATE */
+            <div className="text-center py-12">
+              <div className="bg-gray-100 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
+                <Clock className="w-10 h-10 text-gray-400" />
+              </div>
+              <p className="text-gray-500 font-medium">No {type} transactions yet.</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gradient-to-r from-gray-50 to-blue-50">
+                    <tr>
                       <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Given By
+                        Date
                       </th>
                       <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
+                        Amount
                       </th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Type
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Description
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Site
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Given By
-                      </th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {paginatedTransactions.map(
-                  (transaction: any, index: number) => (
-                    <tr
-                      key={index}
-                      className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {new Date(transaction.date).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
-                        ₹{transaction.amount.toLocaleString()}
-                      </td>
                       {type === "salary" ? (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {transaction.givenBy?.name || "auto"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span
-                              className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
-                                transaction.isVerified
-                                  ? "bg-green-100 text-green-800 border border-green-200"
-                                  : "bg-yellow-100 text-yellow-800 border border-yellow-200"
-                              }`}
-                            >
-                              {transaction.isVerified ? (
-                                <>
-                                  <Check className="w-3 h-3 mr-1" /> Verified
-                                </>
-                              ) : (
-                                <>
-                                  <Clock className="w-3 h-3 mr-1" /> Pending
-                                </>
-                              )}
-                            </span>
-                          </td>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Given By
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                          </th>
                         </>
                       ) : (
                         <>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                              {transaction.type}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-48 truncate">
-                            {transaction.description || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {transaction.site?.name || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                            {transaction.givenBy?.name || "-"}
-                          </td>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Type
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Description
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Site
+                          </th>
+                          <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Given By
+                          </th>
                         </>
                       )}
                     </tr>
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-6 px-6 py-3 bg-gray-50 rounded-lg">
-              <div className="text-sm text-gray-700">
-                Showing {startIndex + 1} to{" "}
-                {Math.min(endIndex, transactions.length)} of{" "}
-                {transactions.length} results
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ChevronLeft className="w-4 h-4 mr-1" />
-                  Previous
-                </button>
-                <div className="flex space-x-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                    (page) => (
-                      <button
-                        key={page}
-                        onClick={() => setCurrentPage(page)}
-                        className={`px-3 py-2 text-sm font-medium rounded-md ${
-                          page === currentPage
-                            ? "bg-blue-600 text-white"
-                            : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
-                        }`}
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginated.map((transaction: any, idx: number) => (
+                      <tr
+                        key={idx}
+                        className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200"
                       >
-                        {page}
-                      </button>
-                    )
-                  )}
-                </div>
-                <button
-                  onClick={() =>
-                    setCurrentPage(Math.min(totalPages, currentPage + 1))
-                  }
-                  disabled={currentPage === totalPages}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                  <ChevronRight className="w-4 h-4 ml-1" />
-                </button>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {transaction.date
+                            ? new Date(transaction.date).toLocaleDateString()
+                            : "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600">
+                          ₹{(transaction.amount ?? 0).toLocaleString()}
+                        </td>
+
+                        {type === "salary" ? (
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {transaction.givenBy?.name ?? "auto"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`inline-flex items-center px-3 py-1 text-xs font-medium rounded-full ${
+                                  transaction.isVerified
+                                    ? "bg-green-100 text-green-800 border border-green-200"
+                                    : "bg-yellow-100 text-yellow-800 border border-yellow-200"
+                                }`}
+                              >
+                                {transaction.isVerified ? (
+                                  <>
+                                    <Check className="w-3 h-3 mr-1" /> Verified
+                                  </>
+                                ) : (
+                                  <>
+                                    <Clock className="w-3 h-3 mr-1" /> Pending
+                                  </>
+                                )}
+                              </span>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                {transaction.type ?? "-"}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 max-w-48 truncate">
+                              {transaction.description ?? "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {transaction.site?.name ?? "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                              {transaction.givenBy?.name ?? "-"}
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
+
+              {/* PAGINATION – only when >1 page */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-6 px-6 py-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm text-gray-700">
+                    Showing {startIndex + 1} to{" "}
+                    {Math.min(endIndex, transactions.length)} of {transactions.length}{" "}
+                    results
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4 mr-1" />
+                      Previous
+                    </button>
+
+                    <div className="flex space-x-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          className={`px-3 py-2 text-sm font-medium rounded-md ${
+                            p === currentPage
+                              ? "bg-blue-600 text-white"
+                              : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
     );
   };
 
-  // Determine the base path for site detail links
+  /* ------------------------------------------------------------------ */
+  /*  DETERMINE SITE LINK BASE PATH                                      */
+  /* ------------------------------------------------------------------ */
   const siteBasePath = managerId ? "/admin/sites" : "/siteManager/sites";
 
+  /* ------------------------------------------------------------------ */
+  /*  RENDER                                                            */
+  /* ------------------------------------------------------------------ */
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div
           className={`mb-12 transition-all duration-500 ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
+            isAnimating ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
           }`}
         >
           <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-4">
@@ -364,9 +399,7 @@ const SiteManagerDashboard: React.FC = () => {
         {activeTable === "salary" && (
           <div
             className={`transition-all duration-500 ${
-              isAnimating
-                ? "translate-y-0 opacity-100"
-                : "translate-y-4 opacity-0"
+              isAnimating ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
             <TransactionTable
@@ -382,9 +415,7 @@ const SiteManagerDashboard: React.FC = () => {
         {activeTable === "expense" && (
           <div
             className={`transition-all duration-500 ${
-              isAnimating
-                ? "translate-y-0 opacity-100"
-                : "translate-y-4 opacity-0"
+              isAnimating ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
             }`}
           >
             <TransactionTable
@@ -400,9 +431,7 @@ const SiteManagerDashboard: React.FC = () => {
         {/* Assigned Sites Section */}
         <div
           className={`transition-all duration-700 delay-300 ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-8 opacity-0"
+            isAnimating ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
           }`}
         >
           <div className="flex items-center mb-8">
@@ -412,43 +441,53 @@ const SiteManagerDashboard: React.FC = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {assignedSites.map((site: any, index: number) => (
-              <div
-                key={site._id}
-                className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 transform hover:scale-105 hover:shadow-3xl ${
-                  isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-                }`}
-                style={{ transitionDelay: `${index * 100}ms` }}
-              >
-                <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-t-2xl" />
-                <div className="p-8">
-                  <div className="flex items-start justify-between mb-4">
-                    <Building2 className="w-8 h-8 text-gray-600" />
-                    <div className="text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-100 px-3 py-1 rounded-full">
-                      Active Site
+          {assignedSites.length === 0 ? (
+            /* EMPTY SITES */
+            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-12 text-center">
+              <Building2 className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500 font-medium">No sites assigned yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {assignedSites.map((site: any, index: number) => (
+                <div
+                  key={site._id ?? index}
+                  className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 transform hover:scale-105 hover:shadow-3xl ${
+                    isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
+                  }`}
+                  style={{ transitionDelay: `${index * 100}ms` }}
+                >
+                  <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-t-2xl" />
+                  <div className="p-8">
+                    <div className="flex items-start justify-between mb-4">
+                      <Building2 className="w-8 h-8 text-gray-600" />
+                      <div className="text-xs font-medium text-gray-500 uppercase tracking-wider bg-gray-100 px-3 py-1 rounded-full">
+                        Active Site
+                      </div>
                     </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-3">
+                      {site.name ?? "Unnamed Site"}
+                    </h3>
+                    <div className="flex items-start mb-6">
+                      <MapPin className="w-4 h-4 text-gray-400 mr-2 mt-1 flex-shrink-0" />
+                      <p className="text-gray-600 leading-relaxed">
+                        {site.address
+                          ? `${site.address}, ${site.city ?? ""}, ${site.state ?? ""} ${site.zip ?? ""}`
+                          : "No address provided"}
+                      </p>
+                    </div>
+                    <Link
+                      to={`${siteBasePath}/${site._id}`}
+                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
+                    >
+                      <span>View & Edit Details</span>
+                      <ChevronRight className="w-4 h-4 ml-2" />
+                    </Link>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3">
-                    {site.name}
-                  </h3>
-                  <div className="flex items-start mb-6">
-                    <MapPin className="w-4 h-4 text-gray-400 mr-2 mt-1 flex-shrink-0" />
-                    <p className="text-gray-600 leading-relaxed">
-                      {`${site.address}, ${site.city}, ${site.state} ${site.zip}`}
-                    </p>
-                  </div>
-                  <Link
-                    to={`${siteBasePath}/${site._id}`}
-                    className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-medium rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105 shadow-lg hover:shadow-xl"
-                  >
-                    <span>View & Edit Details</span>
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Link>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
