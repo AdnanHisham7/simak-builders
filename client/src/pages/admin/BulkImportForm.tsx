@@ -24,10 +24,137 @@ const defaultPhases = [
   "Floor work",
   "Interior work",
   "Paint work",
-];
+] as const;
 
-const BulkImportForm = ({ clients, vendors }:any) => {
-  const [formData, setFormData] = useState({
+// ==================== TYPES ====================
+interface SiteData {
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  client: string;
+  budget: number;
+  status: string;
+}
+
+interface Phase {
+  name: string;
+  status: "not started" | "completed";
+}
+
+interface PurchaseItem {
+  name: string;
+  unit: string;
+  category: string;
+  quantity: number;
+  price: number;
+}
+
+interface Purchase {
+  vendor: string;
+  items: PurchaseItem[];
+  totalAmount: number;
+  billFile: File | null;
+}
+
+interface MachineryRental {
+  description: string;
+  amount: number;
+  date: string;
+}
+
+interface FormDataState {
+  site: SiteData;
+  phases: Phase[];
+  purchases: Purchase[];
+  machineryRentals: MachineryRental[];
+  attendances: any[]; // extend when you add UI
+  stockUsages: any[];
+  contractorTransactions: any[];
+}
+
+interface Errors {
+  name: boolean;
+  address: boolean;
+  city: boolean;
+  state: boolean;
+  zip: boolean;
+  client: boolean;
+  budget: boolean;
+  status: boolean;
+}
+
+interface Client {
+  id: string;
+  name: string;
+}
+
+interface Vendor {
+  _id: string;
+  name: string;
+}
+
+interface BulkImportFormProps {
+  clients: Client[];
+  vendors: Vendor[];
+  // employees, stocks, contractors are passed from AdminDashboard but not used yet
+  employees?: any[];
+  stocks?: any[];
+  contractors?: any[];
+}
+
+// ==================== STABLE SUB-COMPONENTS (moved outside) ====================
+const SectionCard: React.FC<{
+  children: React.ReactNode;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  count?: number;
+}> = ({ children, title, icon: Icon, count }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200">
+    <div className="p-6 border-b border-gray-50">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
+            <Icon className="w-5 h-5 text-blue-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        </div>
+        {count !== undefined && (
+          <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
+            {count} items
+          </span>
+        )}
+      </div>
+    </div>
+    <div className="p-6">{children}</div>
+  </div>
+);
+
+const InputField: React.FC<{
+  label: string;
+  children: React.ReactNode;
+  required?: boolean;
+  error?: boolean;
+}> = ({ label, children, required = false, error = false }) => (
+  <div className="space-y-2">
+    <label className="block text-sm font-medium text-gray-700">
+      {label}
+      {required && <span className="text-red-500 ml-1">*</span>}
+    </label>
+    {children}
+    {error && (
+      <p className="text-red-500 text-sm mt-1">This field is required</p>
+    )}
+  </div>
+);
+
+// ==================== MAIN COMPONENT ====================
+const BulkImportForm: React.FC<BulkImportFormProps> = ({
+  clients,
+  vendors,
+}) => {
+  const [formData, setFormData] = useState<FormDataState>({
     site: {
       name: "",
       address: "",
@@ -40,7 +167,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     },
     phases: defaultPhases.map((name) => ({
       name,
-      status: "not started",
+      status: "not started" as const,
     })),
     purchases: [],
     machineryRentals: [],
@@ -49,7 +176,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     contractorTransactions: [],
   });
 
-  const [errors, setErrors] = useState({
+  const [errors, setErrors] = useState<Errors>({
     name: false,
     address: false,
     city: false,
@@ -60,16 +187,18 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     status: false,
   });
 
-  const [documentFiles, setDocumentFiles] = useState([]);
-  const [activeSection, setActiveSection] = useState("site");
+  const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [activeSection, setActiveSection] = useState<
+    "site" | "phases" | "documents" | "purchases" | "machinery"
+  >("site");
 
-  // Memoized handler to update site fields and prevent unnecessary re-renders
-  const updateSiteField = useCallback((field, value) => {
+  // Memoized handlers (stable across re-renders)
+  const updateSiteField = useCallback((field: keyof SiteData, value: any) => {
     setFormData((prev) => ({
       ...prev,
       site: { ...prev.site, [field]: value },
     }));
-    // Clear error when field is filled
+
     if (
       (typeof value === "string" && value.trim() !== "") ||
       (field === "budget" && value > 0) ||
@@ -79,7 +208,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     }
   }, []);
 
-  const handleBlur = useCallback((field, value) => {
+  const handleBlur = useCallback((field: keyof Errors, value: any) => {
     if (field === "budget") {
       if (value === "" || Number(value) <= 0) {
         setErrors((prev) => ({ ...prev, [field]: true }));
@@ -90,8 +219,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
   }, []);
 
   const handleBulkImport = async () => {
-    // Validate all site fields
-    const siteErrors = {
+    const siteErrors: Errors = {
       name: formData.site.name.trim() === "",
       address: formData.site.address.trim() === "",
       city: formData.site.city.trim() === "",
@@ -114,8 +242,9 @@ const BulkImportForm = ({ clients, vendors }:any) => {
       const jsonData = { ...formData };
       jsonData.purchases = jsonData.purchases.map((p) => {
         const { billFile, ...rest } = p;
-        return rest;
+        return { ...rest, billFile: null };
       });
+
       formDataToSend.append("data", JSON.stringify(jsonData));
 
       documentFiles.forEach((file, index) => {
@@ -126,7 +255,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
         if (purchase.billFile) {
           formDataToSend.append(
             `purchases[${index}].billUpload`,
-            purchase.billFile
+            purchase.billFile,
           );
         }
       });
@@ -134,9 +263,10 @@ const BulkImportForm = ({ clients, vendors }:any) => {
       await privateClient.post("/company/bulk-import", formDataToSend, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
       toast.success("Bulk import successful");
 
-      // Reset form
+      // Reset
       setFormData({
         site: {
           name: "",
@@ -150,7 +280,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
         },
         phases: defaultPhases.map((name) => ({
           name,
-          status: "not started",
+          status: "not started" as const,
         })),
         purchases: [],
         machineryRentals: [],
@@ -174,7 +304,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     }
   };
 
-  const addArrayItem = (key) => {
+  const addArrayItem = useCallback((key: "purchases" | "machineryRentals") => {
     setFormData((prev) => {
       if (key === "purchases") {
         return {
@@ -184,7 +314,8 @@ const BulkImportForm = ({ clients, vendors }:any) => {
             { vendor: "", items: [], totalAmount: 0, billFile: null },
           ],
         };
-      } else if (key === "machineryRentals") {
+      }
+      if (key === "machineryRentals") {
         return {
           ...prev,
           machineryRentals: [
@@ -195,9 +326,9 @@ const BulkImportForm = ({ clients, vendors }:any) => {
       }
       return prev;
     });
-  };
+  }, []);
 
-  const addPurchaseItem = (purchaseIndex) => {
+  const addPurchaseItem = useCallback((purchaseIndex: number) => {
     setFormData((prev) => {
       const newPurchases = [...prev.purchases];
       newPurchases[purchaseIndex].items.push({
@@ -209,51 +340,76 @@ const BulkImportForm = ({ clients, vendors }:any) => {
       });
       return { ...prev, purchases: newPurchases };
     });
-  };
+  }, []);
 
-  const removeArrayItem = (key, index) => {
-    setFormData((prev) => ({
-      ...prev,
-      [key]: prev[key].filter((_, i) => i !== index),
-    }));
-  };
+  const removeArrayItem = useCallback(
+    (key: "phases" | "purchases" | "machineryRentals" | "attendances" | "stockUsages" | "contractorTransactions", index: number) => {
+      setFormData((prev) => ({
+        ...prev,
+        [key]: prev[key].filter((_, i) => i !== index),
+      }));
+    },
+    [],
+  );
 
-  const removePurchaseItem = (purchaseIndex, itemIndex) => {
-    setFormData((prev) => {
-      const newPurchases = [...prev.purchases];
-      newPurchases[purchaseIndex].items = newPurchases[
-        purchaseIndex
-      ].items.filter((_, i) => i !== itemIndex);
-      return { ...prev, purchases: newPurchases };
-    });
-  };
+  const removePurchaseItem = useCallback(
+    (purchaseIndex: number, itemIndex: number) => {
+      setFormData((prev) => {
+        const newPurchases = [...prev.purchases];
+        newPurchases[purchaseIndex].items = newPurchases[
+          purchaseIndex
+        ].items.filter((_, i) => i !== itemIndex);
+        return { ...prev, purchases: newPurchases };
+      });
+    },
+    [],
+  );
 
-  const updateArrayItem = (key, index, field, value) => {
-    setFormData((prev) => {
-      const newArray = [...prev[key]];
-      newArray[index] = { ...newArray[index], [field]: value };
-      return { ...prev, [key]: newArray };
-    });
-  };
+  const updateArrayItem = useCallback(
+    (
+      key: "purchases" | "machineryRentals",
+      index: number,
+      field: string,
+      value: any,
+    ) => {
+      setFormData((prev) => {
+        const newArray = [...prev[key]];
+        newArray[index] = { ...newArray[index], [field]: value };
+        return { ...prev, [key]: newArray };
+      });
+    },
+    [],
+  );
 
-  const updatePurchaseItem = (purchaseIndex, itemIndex, field, value) => {
-    setFormData((prev) => {
-      const newPurchases = [...prev.purchases];
-      newPurchases[purchaseIndex].items[itemIndex] = {
-        ...newPurchases[purchaseIndex].items[itemIndex],
-        [field]: value,
-      };
-      return { ...prev, purchases: newPurchases };
-    });
-  };
+  const updatePurchaseItem = useCallback(
+    (
+      purchaseIndex: number,
+      itemIndex: number,
+      field: keyof PurchaseItem,
+      value: any,
+    ) => {
+      setFormData((prev) => {
+        const newPurchases = [...prev.purchases];
+        newPurchases[purchaseIndex].items[itemIndex] = {
+          ...newPurchases[purchaseIndex].items[itemIndex],
+          [field]: value,
+        };
+        return { ...prev, purchases: newPurchases };
+      });
+    },
+    [],
+  );
 
-  const updatePhaseStatus = (index, isCompleted) => {
-    setFormData((prev) => {
-      const newPhases = [...prev.phases];
-      newPhases[index].status = isCompleted ? "completed" : "not started";
-      return { ...prev, phases: newPhases };
-    });
-  };
+  const updatePhaseStatus = useCallback(
+    (index: number, isCompleted: boolean) => {
+      setFormData((prev) => {
+        const newPhases = [...prev.phases];
+        newPhases[index].status = isCompleted ? "completed" : "not started";
+        return { ...prev, phases: newPhases };
+      });
+    },
+    [],
+  );
 
   const sections = [
     { id: "site", label: "Site Details", icon: Building },
@@ -261,41 +417,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
     { id: "documents", label: "Documents", icon: FileText },
     { id: "purchases", label: "Purchases", icon: Package },
     { id: "machinery", label: "Machinery", icon: Wrench },
-  ];
-
-  const SectionCard = ({ children, title, icon: Icon, count }) => (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200">
-      <div className="p-6 border-b border-gray-50">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-              <Icon className="w-5 h-5 text-blue-600" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          </div>
-          {count !== undefined && (
-            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
-              {count} items
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="p-6">{children}</div>
-    </div>
-  );
-
-  const InputField = ({ label, children, required = false, error = false }) => (
-    <div className="space-y-2">
-      <label className="block text-sm font-medium text-gray-700">
-        {label}
-        {required && <span className="text-red-500 ml-1">*</span>}
-      </label>
-      {children}
-      {error && (
-        <p className="text-red-500 text-sm mt-1">This field is required</p>
-      )}
-    </div>
-  );
+  ] as const;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
@@ -426,7 +548,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                     onChange={(e) =>
                       updateSiteField(
                         "budget",
-                        e.target.value === "" ? 0 : Number(e.target.value)
+                        e.target.value === "" ? 0 : Number(e.target.value),
                       )
                     }
                     onBlur={(e) => handleBlur("budget", e.target.value)}
@@ -455,7 +577,6 @@ const BulkImportForm = ({ clients, vendors }:any) => {
             </SectionCard>
           )}
 
-          {/* Other sections remain unchanged for brevity */}
           {/* Phases */}
           {activeSection === "phases" && (
             <SectionCard
@@ -601,7 +722,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                               "purchases",
                               index,
                               "vendor",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
@@ -624,7 +745,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                               "purchases",
                               index,
                               "totalAmount",
-                              Number(e.target.value)
+                              Number(e.target.value),
                             )
                           }
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
@@ -662,7 +783,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                                     index,
                                     itemIndex,
                                     "name",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -678,7 +799,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                                     index,
                                     itemIndex,
                                     "unit",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -694,7 +815,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                                     index,
                                     itemIndex,
                                     "category",
-                                    e.target.value
+                                    e.target.value,
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -710,7 +831,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                                     index,
                                     itemIndex,
                                     "quantity",
-                                    Number(e.target.value)
+                                    Number(e.target.value),
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -726,7 +847,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                                     index,
                                     itemIndex,
                                     "price",
-                                    Number(e.target.value)
+                                    Number(e.target.value),
                                   )
                                 }
                                 className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -755,14 +876,13 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                         type="file"
                         onChange={(e) => {
                           const file = e.target.files?.[0];
-                          if (file) {
+                          if (file)
                             updateArrayItem(
                               "purchases",
                               index,
                               "billFile",
-                              file
+                              file,
                             );
-                          }
                         }}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                       />
@@ -812,7 +932,6 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <InputField label="Description" required>
                         <input
@@ -823,14 +942,13 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                               "machineryRentals",
                               index,
                               "description",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           placeholder="Enter machinery description"
                         />
                       </InputField>
-
                       <InputField label="Amount">
                         <input
                           type="number"
@@ -840,14 +958,13 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                               "machineryRentals",
                               index,
                               "amount",
-                              Number(e.target.value)
+                              Number(e.target.value),
                             )
                           }
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                           placeholder="Rental amount"
                         />
                       </InputField>
-
                       <InputField label="Date">
                         <input
                           type="date"
@@ -857,7 +974,7 @@ const BulkImportForm = ({ clients, vendors }:any) => {
                               "machineryRentals",
                               index,
                               "date",
-                              e.target.value
+                              e.target.value,
                             )
                           }
                           className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
