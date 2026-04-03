@@ -61,6 +61,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     "Floor Work",
     "Interior work",
     "Paint Work",
+    "Other",
   ];
 
   const units = [
@@ -76,6 +77,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     "kintel",
     "ton",
     "length",
+    "Other",
   ];
 
   useEffect(() => {
@@ -117,7 +119,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   const handleItemChange = (
     index: number,
     field: keyof PurchaseItem,
-    value: string
+    value: string,
   ) => {
     const newItems = [...items];
     newItems[index][field] = value;
@@ -152,9 +154,21 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
 
     items.forEach((item, index) => {
       if (!item.name) newErrors[`item_${index}_name`] = "Item name is required";
-      if (!item.unit) newErrors[`item_${index}_unit`] = "Unit is required";
-      if (!item.category)
+
+      // Updated unit validation to support "Other" + custom input
+      if (!item.unit) {
+        newErrors[`item_${index}_unit`] = "Unit is required";
+      } else if (item.unit === "Other") {
+        newErrors[`item_${index}_unit`] = "Custom unit is required";
+      }
+
+      // Updated category validation to support "Other" + custom input
+      if (!item.category) {
         newErrors[`item_${index}_category`] = "Category is required";
+      } else if (item.category === "Other") {
+        newErrors[`item_${index}_category`] = "Custom category is required";
+      }
+
       if (!item.quantity || parseFloat(item.quantity as string) <= 0) {
         newErrors[`item_${index}_quantity`] = "Valid quantity is required";
       }
@@ -488,14 +502,27 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           </p>
                         )}
                       </div>
+
+                      {/* === UPDATED UNIT FIELD WITH "OTHER" SUPPORT === */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Unit *
                         </label>
                         <select
-                          value={item.unit}
+                          value={
+                            units.includes(item.unit)
+                              ? item.unit
+                              : item.unit
+                                ? "Other"
+                                : ""
+                          }
                           onChange={(e) => {
-                            handleItemChange(index, "unit", e.target.value);
+                            const value = e.target.value;
+                            handleItemChange(
+                              index,
+                              "unit",
+                              value === "Other" ? "Other" : value,
+                            );
                             setErrors((prev) => ({
                               ...prev,
                               [`item_${index}_unit`]: "",
@@ -508,26 +535,65 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           }`}
                         >
                           <option value="">Select Unit</option>
-                          {units.map((unit) => (
-                            <option key={unit} value={unit}>
-                              {unit}
-                            </option>
-                          ))}
+                          {units
+                            .filter((unit) => unit !== "Other")
+                            .map((unit) => (
+                              <option key={unit} value={unit}>
+                                {unit}
+                              </option>
+                            ))}
+                          <option value="Other">Other</option>
                         </select>
+
+                        {/* Custom unit input appears when "Other" is selected or a custom value exists */}
+                        {(item.unit === "Other" ||
+                          (item.unit && !units.includes(item.unit))) && (
+                          <input
+                            type="text"
+                            placeholder="Enter custom unit..."
+                            value={item.unit === "Other" ? "" : item.unit}
+                            onChange={(e) => {
+                              handleItemChange(index, "unit", e.target.value);
+                              setErrors((prev) => ({
+                                ...prev,
+                                [`item_${index}_unit`]: "",
+                              }));
+                            }}
+                            className={`mt-2 w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
+                              errors[`item_${index}_unit`]
+                                ? "border-red-300 bg-red-50"
+                                : "border-gray-200"
+                            }`}
+                          />
+                        )}
+
                         {errors[`item_${index}_unit`] && (
                           <p className="text-red-500 text-xs mt-1">
                             {errors[`item_${index}_unit`]}
                           </p>
                         )}
                       </div>
+
+                      {/* === UPDATED CATEGORY FIELD WITH "OTHER" SUPPORT === */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Category *
                         </label>
                         <select
-                          value={item.category}
+                          value={
+                            categories.includes(item.category)
+                              ? item.category
+                              : item.category
+                                ? "Other"
+                                : ""
+                          }
                           onChange={(e) => {
-                            handleItemChange(index, "category", e.target.value);
+                            const value = e.target.value;
+                            handleItemChange(
+                              index,
+                              "category",
+                              value === "Other" ? "Other" : value,
+                            );
                             setErrors((prev) => ({
                               ...prev,
                               [`item_${index}_category`]: "",
@@ -540,18 +606,52 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           }`}
                         >
                           <option value="">Select Category</option>
-                          {categories.map((category) => (
-                            <option key={category} value={category}>
-                              {category}
-                            </option>
-                          ))}
+                          {categories
+                            .filter((cat) => cat !== "Other")
+                            .map((category) => (
+                              <option key={category} value={category}>
+                                {category}
+                              </option>
+                            ))}
+                          <option value="Other">Other</option>
                         </select>
+
+                        {/* Custom category input appears when "Other" is selected or a custom value exists */}
+                        {(item.category === "Other" ||
+                          (item.category &&
+                            !categories.includes(item.category))) && (
+                          <input
+                            type="text"
+                            placeholder="Enter custom category..."
+                            value={
+                              item.category === "Other" ? "" : item.category
+                            }
+                            onChange={(e) => {
+                              handleItemChange(
+                                index,
+                                "category",
+                                e.target.value,
+                              );
+                              setErrors((prev) => ({
+                                ...prev,
+                                [`item_${index}_category`]: "",
+                              }));
+                            }}
+                            className={`mt-2 w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
+                              errors[`item_${index}_category`]
+                                ? "border-red-300 bg-red-50"
+                                : "border-gray-200"
+                            }`}
+                          />
+                        )}
+
                         {errors[`item_${index}_category`] && (
                           <p className="text-red-500 text-xs mt-1">
                             {errors[`item_${index}_category`]}
                           </p>
                         )}
                       </div>
+
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Quantity *
@@ -639,8 +739,8 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                   dragActive
                     ? "border-purple-400 bg-purple-100"
                     : errors.billFile
-                    ? "border-red-300 bg-red-50"
-                    : "border-purple-200 hover:border-purple-300"
+                      ? "border-red-300 bg-red-50"
+                      : "border-purple-200 hover:border-purple-300"
                 }`}
                 onDragOver={(e) => {
                   e.preventDefault();
