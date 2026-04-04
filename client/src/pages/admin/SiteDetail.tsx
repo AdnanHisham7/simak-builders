@@ -71,10 +71,24 @@ import CompleteSiteModal from "./CompleteSiteModal";
 interface Transaction {
   date: string;
   amount: number;
-  type: "purchase" | "rental" | "attendance" | "stockTransfer";
+  type:
+    | "purchase"
+    | "rental"
+    | "attendance"
+    | "stockTransfer"
+    | "client_payment"
+    | "contractor_payment";
   description: string;
   relatedId: string;
   user: { id: string; name: string };
+}
+
+interface ClientTransaction {
+  _id: string;
+  createdAt: string;
+  amount: number;
+  status: "pending" | "verified";
+  verifiedBy?: { name: string; _id: string };
 }
 
 interface ExtendedSite extends Site {
@@ -87,7 +101,6 @@ const SiteDetail: React.FC = () => {
   const { user, userType } = useSelector((state: RootState) => state.auth);
   const [site, setSite] = useState<ExtendedSite | null>(null);
   const [sites, setSites] = useState<{ _id: string; name: string }[]>([]);
-
   const [purchases, setPurchases] = useState<any[]>([]);
   const [machineryRentals, setMachineryRentals] = useState<any[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -97,7 +110,6 @@ const SiteDetail: React.FC = () => {
   const [isAddMachineryRentalModalOpen, setIsAddMachineryRentalModalOpen] =
     useState(false);
   const [isLogUsageModalOpen, setIsLogUsageModalOpen] = React.useState(false);
-
   const [isRequestTransferModalOpen, setIsRequestTransferModalOpen] =
     useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -106,12 +118,10 @@ const SiteDetail: React.FC = () => {
   >([]);
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
-
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDayAttendance, setSelectedDayAttendance] = useState<
     any[] | null
   >(null);
-
   const [selectedTab, setSelectedTab] = useState<
     | "overview"
     | "team"
@@ -127,9 +137,16 @@ const SiteDetail: React.FC = () => {
   const [currentRole, setCurrentRole] = useState<
     "siteManager" | "architect" | "supervisor" | null
   >(null);
-
   const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+
+  // NEW: Client payments related state
+  const [isClientPaymentsModalOpen, setIsClientPaymentsModalOpen] =
+    useState(false);
+  const [clientPayments, setClientPayments] = useState<ClientTransaction[]>([]);
+  const [isManualPaymentModalOpen, setIsManualPaymentModalOpen] =
+    useState(false);
+  const [manualAmount, setManualAmount] = useState("");
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -139,12 +156,16 @@ const SiteDetail: React.FC = () => {
         const siteData = await getSiteDetails(siteId!);
         setSite(siteData);
 
+        // NEW: Fetch client payment records (inflows from client)
+        const clientPaymentsRes = await privateClient.get(
+          `/client/${siteId}/client-transactions`,
+        );
+        setClientPayments(clientPaymentsRes.data);
+
         const stocksData = await getStocksBySite(siteId!);
         setStocks(stocksData);
-
         const sitesData = await getSites();
         setSites(sitesData);
-
         setLoading(false);
         setTimeout(() => setIsAnimating(true), 100);
       } catch (err) {
@@ -155,6 +176,40 @@ const SiteDetail: React.FC = () => {
     };
     fetchSite();
   }, [siteId]);
+
+  const fetchClientPayments = async () => {
+    try {
+      const { data } = await privateClient.get(
+        `/client/${siteId}/client-transactions`,
+      );
+      setClientPayments(data);
+    } catch (err) {
+      console.error("Error fetching client payments:", err);
+    }
+  };
+
+  const handleManualPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(manualAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    try {
+      await privateClient.post(`/client/${siteId}/client-payments/manual`, {
+        amount,
+      });
+      const updatedSite = await getSiteDetails(siteId!);
+      setSite(updatedSite as ExtendedSite);
+      await fetchClientPayments();
+      toast.success("Manual client payment recorded successfully");
+      setIsManualPaymentModalOpen(false);
+      setManualAmount("");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to record manual payment");
+    }
+  };
 
   useEffect(() => {
     if (selectedTab === "purchases") {
@@ -177,7 +232,7 @@ const SiteDetail: React.FC = () => {
       const data = await getPurchasesBySite(siteId!);
       const sortedData = data.sort(
         (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       setPurchases(sortedData);
     } catch (err) {
@@ -189,7 +244,7 @@ const SiteDetail: React.FC = () => {
     try {
       const data = await getMachineryRentalsBySite(siteId!);
       const sortedData = data.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
       setMachineryRentals(sortedData);
     } catch (err) {
@@ -203,22 +258,18 @@ const SiteDetail: React.FC = () => {
       const endDate = new Date();
       const startDate = new Date(endDate);
       startDate.setMonth(endDate.getMonth() - 10);
-
       const data = await getSiteAttendance(
         siteId!,
         startDate.toISOString(),
-        endDate.toISOString()
+        endDate.toISOString(),
       );
-
       const dateRange = [];
       let currentDate = new Date(startDate);
       while (currentDate <= endDate) {
         dateRange.push(currentDate.toISOString().split("T")[0]);
         currentDate.setDate(currentDate.getDate() + 1);
       }
-
       const attendanceMap = new Map(data.map((d: any) => [d.date, d]));
-
       const getLevel = (percentage: number) => {
         if (percentage === 0) return 0;
         if (percentage <= 25) return 1;
@@ -226,7 +277,6 @@ const SiteDetail: React.FC = () => {
         if (percentage <= 75) return 3;
         return 4;
       };
-
       const attendanceData = dateRange.map((date) => {
         const record = attendanceMap.get(date);
         if (record) {
@@ -239,7 +289,6 @@ const SiteDetail: React.FC = () => {
         }
         return { date, count: 0, level: 0 };
       });
-
       setAttendanceData(attendanceData);
     } catch (err) {
       console.error("Error fetching attendance:", err);
@@ -270,7 +319,6 @@ const SiteDetail: React.FC = () => {
   };
 
   const canVerifyPurchase = userType === "admin";
-
   const canMarkAttendance =
     userType === "admin" ||
     (userType === "siteManager" &&
@@ -291,7 +339,7 @@ const SiteDetail: React.FC = () => {
         `/sites/${siteId}/documents/zip`,
         {
           responseType: "blob",
-        }
+        },
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -312,7 +360,7 @@ const SiteDetail: React.FC = () => {
         `/sites/${siteId}/purchases/bills/zip`,
         {
           responseType: "blob",
-        }
+        },
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -329,13 +377,13 @@ const SiteDetail: React.FC = () => {
 
   const handleMarkAsCompleted = async (
     deleteSiteDocuments: boolean,
-    deletePurchaseBills: boolean
+    deletePurchaseBills: boolean,
   ) => {
     try {
       await markSiteAsCompleted(
         siteId!,
         deleteSiteDocuments,
-        deletePurchaseBills
+        deletePurchaseBills,
       );
       const updatedSite = await getSiteDetails(siteId!);
       setSite(updatedSite);
@@ -381,7 +429,7 @@ const SiteDetail: React.FC = () => {
     const updatedPhases = site!.phases.map((phase) =>
       phase.id === phaseId
         ? { ...phase, isCompleted: !phase.isCompleted }
-        : phase
+        : phase,
     );
     try {
       await updateSite(site!.id, { phases: updatedPhases });
@@ -396,7 +444,7 @@ const SiteDetail: React.FC = () => {
     if (userType !== "admin") return;
     if (
       !window.confirm(
-        "Are you sure you want to reset all phases to 'not started'?"
+        "Are you sure you want to reset all phases to 'not started'?",
       )
     )
       return;
@@ -422,12 +470,12 @@ const SiteDetail: React.FC = () => {
 
   const handlePhaseStatusChange = async (
     phaseId: string,
-    newStatus: string
+    newStatus: string,
   ) => {
     try {
       await updatePhaseStatus(site!.id, phaseId, newStatus);
       const updatedPhases = site!.phases.map((phase) =>
-        phase.id === phaseId ? { ...phase, status: newStatus } : phase
+        phase.id === phaseId ? { ...phase, status: newStatus } : phase,
       );
       setSite({ ...site!, phases: updatedPhases });
     } catch (err) {
@@ -438,12 +486,11 @@ const SiteDetail: React.FC = () => {
 
   const handleAddTeamMember = async (
     user: User,
-    role: "siteManager" | "architect" | "supervisor"
+    role: "siteManager" | "architect" | "supervisor",
   ) => {
     try {
       let updatedIds: string[];
       let field: string;
-
       if (role === "siteManager") {
         updatedIds = [...site!.siteManagers.map((m) => m.id), user.id];
         field = "siteManagerIds";
@@ -465,24 +512,24 @@ const SiteDetail: React.FC = () => {
 
   const handleRemoveTeamMember = async (
     memberId: string,
-    role: "siteManager" | "architect" | "supervisor"
+    role: "siteManager" | "architect" | "supervisor",
   ) => {
     if (userType !== "admin") return;
     const field =
       role === "siteManager"
         ? "siteManagers"
         : role === "architect"
-        ? "architects"
-        : "supervisors";
+          ? "architects"
+          : "supervisors";
     const updatedMembers = site![field].filter(
-      (member) => member.id !== memberId
+      (member) => member.id !== memberId,
     );
     const updateField =
       role === "siteManager"
         ? "siteManagerIds"
         : role === "architect"
-        ? "architectIds"
-        : "supervisorIds";
+          ? "architectIds"
+          : "supervisorIds";
     try {
       await updateSite(site!.id, {
         [updateField]: updatedMembers.map((m) => m.id),
@@ -499,8 +546,8 @@ const SiteDetail: React.FC = () => {
         await deleteBillUpload(purchaseId);
         setPurchases(
           purchases.map((p) =>
-            p._id === purchaseId ? { ...p, billUpload: null } : p
-          )
+            p._id === purchaseId ? { ...p, billUpload: null } : p,
+          ),
         );
         toast.success("Bill successfully deleted");
       } catch (err) {
@@ -525,7 +572,7 @@ const SiteDetail: React.FC = () => {
   const handleUpload = async (
     siteId: string,
     file: File,
-    category: "client" | "site"
+    category: "client" | "site",
   ) => {
     try {
       const formData = new FormData();
@@ -586,11 +633,9 @@ const SiteDetail: React.FC = () => {
   const getMonthLabelsPositions = () => {
     const labels = [];
     let lastMonth = null;
-
     renderAttendanceGrid().forEach((week, index) => {
       const firstDay = week.find((d) => d !== null);
       if (!firstDay) return;
-
       const month = new Date(firstDay.date).toLocaleString("default", {
         month: "short",
       });
@@ -599,26 +644,21 @@ const SiteDetail: React.FC = () => {
         lastMonth = month;
       }
     });
-
     return labels;
   };
 
   const renderAttendanceGrid = () => {
     const weeks = [];
     let currentWeek = [];
-
     attendanceData.forEach((day, index) => {
       const date = new Date(day.date);
       const dayOfWeek = date.getDay();
-
       if (index === 0) {
         for (let i = 0; i < dayOfWeek; i++) {
           currentWeek.push(null);
         }
       }
-
       currentWeek.push(day);
-
       if (dayOfWeek === 6 || index === attendanceData.length - 1) {
         while (currentWeek.length < 7) {
           currentWeek.push(null);
@@ -627,7 +667,6 @@ const SiteDetail: React.FC = () => {
         currentWeek = [];
       }
     });
-
     return weeks;
   };
 
@@ -670,14 +709,13 @@ const SiteDetail: React.FC = () => {
   }
 
   const completedPhases = site.phases.filter(
-    (phase) => phase.status === "completed"
+    (phase) => phase.status === "completed",
   ).length;
   const totalPhases = site.phases.length;
   const progressPercentage =
     totalPhases > 0 ? (completedPhases / totalPhases) * 100 : 0;
-
   const clientDocuments = site.documents.filter(
-    (doc) => doc.category === "client"
+    (doc) => doc.category === "client",
   );
   const siteDocuments = site.documents.filter((doc) => doc.category === "site");
 
@@ -743,27 +781,56 @@ const SiteDetail: React.FC = () => {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          {/* UPDATED: First card - "Received from Client" with balance + clickable + manual add option */}
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
               isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            } hover:shadow-xl hover:scale-105`}
+            } hover:shadow-xl hover:scale-105 cursor-pointer`}
+            onClick={() => setIsClientPaymentsModalOpen(true)}
           >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-t-2xl" />
             <div className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Budget</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ₹{site.budget.toLocaleString()}
+                  <p className="text-sm font-medium text-gray-600">
+                    Received from Client
+                  </p>
+                  <p className="text-3xl font-bold text-gray-900">
+                    ₹{site.budget.toLocaleString("en-IN")}
+                  </p>
+                  <p className="text-sm font-medium text-emerald-600 mt-1 flex items-center gap-1">
+                    Balance:{" "}
+                    <span className="font-semibold">
+                      ₹
+                      {(site.budget - (site.expenses || 0)).toLocaleString(
+                        "en-IN",
+                      )}
+                    </span>
                   </p>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <DollarSign className="w-6 h-6 text-blue-600" />
+                <div className="flex flex-col items-end gap-3">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <DollarSign className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  {/* Manual add button (visible to siteManager & admin) */}
+                  {(userType === "admin" || userType === "siteManager") && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsManualPaymentModalOpen(true);
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
+          {/* Expenses card (unchanged) */}
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
               isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -787,6 +854,7 @@ const SiteDetail: React.FC = () => {
             </div>
           </div>
 
+          {/* Progress card (unchanged) */}
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
               isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -809,6 +877,7 @@ const SiteDetail: React.FC = () => {
             </div>
           </div>
 
+          {/* Team Size card (unchanged) */}
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
               isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -879,6 +948,7 @@ const SiteDetail: React.FC = () => {
           </div>
         </div>
 
+        {/* All tab contents (exactly as in old file) */}
         {selectedTab === "overview" && (
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
@@ -910,8 +980,8 @@ const SiteDetail: React.FC = () => {
                       phase.status === "completed"
                         ? "bg-green-50 border-green-200 hover:border-green-300"
                         : phase.status === "pending"
-                        ? "bg-yellow-50 border-yellow-200 hover:border-yellow-300"
-                        : "bg-gray-50 border-gray-200 hover:border-gray-300"
+                          ? "bg-yellow-50 border-yellow-200 hover:border-yellow-300"
+                          : "bg-gray-50 border-gray-200 hover:border-gray-300"
                     }`}
                     style={{ transitionDelay: `${index * 50}ms` }}
                   >
@@ -966,8 +1036,8 @@ const SiteDetail: React.FC = () => {
                         phase.status === "completed"
                           ? "text-green-800"
                           : phase.status === "pending"
-                          ? "text-yellow-800"
-                          : "text-gray-700"
+                            ? "text-yellow-800"
+                            : "text-gray-700"
                       }`}
                     >
                       {phase.name}
@@ -981,6 +1051,7 @@ const SiteDetail: React.FC = () => {
 
         {selectedTab === "team" && (
           <div className="grid gap-6">
+            {/* Team sections (exactly as in old file) */}
             <div
               className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
                 isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -1147,7 +1218,7 @@ const SiteDetail: React.FC = () => {
                             onClick={() =>
                               handleRemoveTeamMember(
                                 supervisor.id,
-                                "supervisor"
+                                "supervisor",
                               )
                             }
                             className="text-red-600 hover:text-red-800 p-2 rounded-lg"
@@ -1200,7 +1271,7 @@ const SiteDetail: React.FC = () => {
                         <div
                           key={level}
                           className={`w-3 h-3 rounded-sm ${getAttendanceColor(
-                            level
+                            level,
                           )}`}
                         />
                       ))}
@@ -1209,7 +1280,6 @@ const SiteDetail: React.FC = () => {
                   </div>
                 </div>
               </div>
-
               {isAttendanceLoading ? (
                 <div className="flex justify-center items-center h-64">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
@@ -1223,7 +1293,7 @@ const SiteDetail: React.FC = () => {
                     <div className="flex mb-1 ml-[40px]">
                       {renderAttendanceGrid().map((_, index) => {
                         const labelObj = getMonthLabelsPositions().find(
-                          (l) => l.index === index
+                          (l) => l.index === index,
                         );
                         return (
                           <div
@@ -1235,7 +1305,6 @@ const SiteDetail: React.FC = () => {
                         );
                       })}
                     </div>
-
                     <div className="flex">
                       <div className="flex flex-col mr-2">
                         {["Mon", "Wed", "Fri"].map((dayLabel, i) => (
@@ -1248,7 +1317,6 @@ const SiteDetail: React.FC = () => {
                           </div>
                         ))}
                       </div>
-
                       <div className="flex">
                         {renderAttendanceGrid().map((week, weekIndex) => (
                           <div key={weekIndex} className="flex flex-col mr-1">
@@ -1258,9 +1326,9 @@ const SiteDetail: React.FC = () => {
                                 className={`w-3 h-3 mb-1 rounded-sm cursor-pointer transition-all duration-200 ${
                                   day
                                     ? `${getAttendanceColor(
-                                        day.level
+                                        day.level,
                                       )} ${getAttendanceHoverColor(
-                                        day.level
+                                        day.level,
                                       )} hover:scale-110`
                                     : "bg-gray-100"
                                 }`}
@@ -1272,9 +1340,9 @@ const SiteDetail: React.FC = () => {
                                 title={
                                   day
                                     ? `${formatDate(
-                                        day.date
+                                        day.date,
                                       )}: ${day.count?.toFixed(
-                                        1
+                                        1,
                                       )} effective attendance`
                                     : ""
                                 }
@@ -1583,7 +1651,7 @@ const SiteDetail: React.FC = () => {
                               handleUpload(
                                 site.id,
                                 e.target.files[0],
-                                "client"
+                                "client",
                               );
                             }
                           }}
@@ -1621,7 +1689,7 @@ const SiteDetail: React.FC = () => {
                                 <Calendar className="h-3 w-3" />
                                 <span>
                                   {new Date(
-                                    doc.uploadDate
+                                    doc.uploadDate,
                                   ).toLocaleDateString()}
                                 </span>
                               </div>
@@ -1642,7 +1710,6 @@ const SiteDetail: React.FC = () => {
                     </div>
                   )}
                 </div>
-
                 {/* Site Documentation */}
                 <div>
                   <div className="flex items-center justify-between">
@@ -1694,7 +1761,7 @@ const SiteDetail: React.FC = () => {
                                 <Calendar className="h-3 w-3" />
                                 <span>
                                   {new Date(
-                                    doc.uploadDate
+                                    doc.uploadDate,
                                   ).toLocaleDateString()}
                                 </span>
                               </div>
@@ -1720,6 +1787,7 @@ const SiteDetail: React.FC = () => {
           </div>
         )}
 
+        {/* Existing modals (unchanged) */}
         {isAddPurchaseModalOpen && (
           <AddPurchaseModal
             siteId={siteId!}
@@ -1729,6 +1797,7 @@ const SiteDetail: React.FC = () => {
             }}
           />
         )}
+
         {isRequestTransferModalOpen && (
           <RequestTransferModal
             isOpen={isRequestTransferModalOpen}
@@ -1739,6 +1808,7 @@ const SiteDetail: React.FC = () => {
             allowedToSites={sites.map((s) => s.id)}
           />
         )}
+
         {isLogUsageModalOpen && (
           <LogUsageModal
             isOpen={isLogUsageModalOpen}
@@ -1748,6 +1818,7 @@ const SiteDetail: React.FC = () => {
             stocks={stocks}
           />
         )}
+
         {isModalOpen && currentRole && (
           <SelectUserModal
             role={currentRole}
@@ -1755,13 +1826,14 @@ const SiteDetail: React.FC = () => {
               currentRole === "siteManager"
                 ? site.siteManagers.map((m) => m.id)
                 : currentRole === "architect"
-                ? site.architects.map((a) => a.id)
-                : site.supervisors.map((s) => s.id)
+                  ? site.architects.map((a) => a.id)
+                  : site.supervisors.map((s) => s.id)
             }
             onSelect={(user) => handleAddTeamMember(user, currentRole)}
             onClose={() => setIsModalOpen(false)}
           />
         )}
+
         {isMarkAttendanceModalOpen && (
           <MarkAttendanceModal
             siteId={siteId!}
@@ -1769,6 +1841,7 @@ const SiteDetail: React.FC = () => {
             onAttendanceMarked={fetchAttendance}
           />
         )}
+
         {selectedDate && (
           <AttendanceByDay
             selectedDate={selectedDate}
@@ -1777,18 +1850,21 @@ const SiteDetail: React.FC = () => {
             onClose={() => setSelectedDate(null)}
           />
         )}
+
         {isAddMachineryRentalModalOpen && (
           <AddMachineryRentalModal
             siteId={siteId!}
             onClose={() => setIsAddMachineryRentalModalOpen(false)}
           />
         )}
+
         {isTransactionsModalOpen && site.transactions && (
           <TransactionsModal
             transactions={site.transactions}
             onClose={() => setIsTransactionsModalOpen(false)}
           />
         )}
+
         {isCompleteModalOpen && (
           <CompleteSiteModal
             isOpen={isCompleteModalOpen}
@@ -1797,6 +1873,74 @@ const SiteDetail: React.FC = () => {
             downloadSiteDocuments={downloadSiteDocumentsZip}
             downloadPurchaseBills={downloadPurchaseBillsZip}
           />
+        )}
+
+        {/* NEW: Client Payments Modal (reuses TransactionsModal with mapped data) */}
+        {isClientPaymentsModalOpen && (
+          <TransactionsModal
+            transactions={clientPayments.map((t) => ({
+              date: t.createdAt,
+              amount: t.amount,
+              type: "client_payment" as any,
+              description: `Client payment (${t.status.toUpperCase()})`,
+              relatedId: t._id,
+              user: t.verifiedBy
+                ? { id: t.verifiedBy._id || "", name: t.verifiedBy.name }
+                : { id: "", name: "Client" },
+            }))}
+            onClose={() => setIsClientPaymentsModalOpen(false)}
+          />
+        )}
+
+        {/* NEW: Manual Payment Modal (simple inline form) */}
+        {isManualPaymentModalOpen && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-md mx-4">
+              <h3 className="text-2xl font-semibold text-gray-900 mb-2">
+                Record Direct Client Payment
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Use this when client paid offline (cash/UPI) and forgot the
+                portal.
+              </p>
+              <form onSubmit={handleManualPaymentSubmit}>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Amount (₹)
+                    </label>
+                    <input
+                      type="number"
+                      value={manualAmount}
+                      onChange={(e) => setManualAmount(e.target.value)}
+                      placeholder="Enter amount"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500 text-3xl font-semibold"
+                      step="0.01"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsManualPaymentModalOpen(false);
+                        setManualAmount("");
+                      }}
+                      className="flex-1 py-4 text-gray-700 font-medium border border-gray-300 rounded-2xl hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-2xl transition-colors"
+                    >
+                      Record Payment
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
       </div>
     </div>

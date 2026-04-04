@@ -20,18 +20,18 @@ const ClientTransactionSchema = new Schema(
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
     verifiedAt: { type: Date },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const ClientTransactionModel = model(
   "ClientTransaction",
-  ClientTransactionSchema
+  ClientTransactionSchema,
 );
 
 const getClientSites = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const clientId = req.user?.userId;
@@ -45,7 +45,7 @@ const getClientSites = async (
 const getClientDashboard = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const clientId = req.user?.userId;
@@ -67,7 +67,7 @@ const getClientDashboard = async (
     if (!site) {
       throw new ApiError(
         "Site not found or not authorized",
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
 
@@ -132,7 +132,7 @@ const getClientDashboard = async (
 const sendMoneyToAdmin = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { amount, siteId } = req.body;
@@ -146,7 +146,7 @@ const sendMoneyToAdmin = async (
     if (!site) {
       throw new ApiError(
         "Site not found or not authorized",
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
 
@@ -184,22 +184,21 @@ const sendMoneyToAdmin = async (
 const verifyClientTransaction = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { transactionId } = req.params;
     const adminId = req.user?.userId;
 
-    const transaction: any = await ClientTransactionModel.findById(
-      transactionId
-    ).populate("site");
+    const transaction: any =
+      await ClientTransactionModel.findById(transactionId).populate("site");
     if (!transaction) {
       throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
     }
     if (transaction.status === "verified") {
       throw new ApiError(
         "Transaction already verified",
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -236,7 +235,7 @@ const verifyClientTransaction = async (
 
     await NotificationModel.updateMany(
       { relatedId: transactionId, type: "client_payment_verification" },
-      { status: "approved" }
+      { status: "approved" },
     );
 
     const clientNotification = new NotificationModel({
@@ -259,7 +258,7 @@ const verifyClientTransaction = async (
 const getTransactionsForReport = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { clientId } = req.params;
@@ -272,10 +271,144 @@ const getTransactionsForReport = async (
   }
 };
 
+const getSiteClientTransactions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { siteId } = req.params;
+    console.log("Fetching client transactions for site:", siteId);
+    const site = await SiteModel.findById(siteId);
+    if (!site) {
+      throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+    }
+
+    const transactions = await ClientTransactionModel.find({ site: siteId })
+      .populate("client", "name email")
+      .populate("verifiedBy", "name")
+      .sort({ createdAt: -1 });
+
+    res.status(HttpStatus.OK).json(transactions);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addManualClientPayment = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { siteId } = req.params;
+    const { amount } = req.body;
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+console.log("Adding manual client payment:", { siteId, amount, userId, userRole });
+    if (!amount || amount <= 0) {
+      throw new ApiError(
+        "Amount must be a positive number",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (!userId) {
+      throw new ApiError("User not authenticated", HttpStatus.UNAUTHORIZED);
+    }
+
+    // Fetch the site
+    const site = await SiteModel.findById(siteId);
+    if (!site) {
+      throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Authorization logic using assignedSites (correct way)
+    let isAuthorized = false;
+
+    if (userRole === "admin") {
+      isAuthorized = true;
+    } else if (userRole === "siteManager") {
+      // Check if this site is in the user's assignedSites array
+      const user =
+        await UserModel.findById(userId).select("assignedSites role");
+      if (!user) {
+        throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+      }
+
+      const isAssigned = user.assignedSites.some(
+        (assignedSiteId: any) => assignedSiteId.toString() === siteId,
+      );
+
+      if (isAssigned) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      throw new ApiError(
+        "Not authorized to record manual payment for this site",
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // Create verified client transaction
+    const transaction = new ClientTransactionModel({
+      client: site.client,
+      site: siteId,
+      amount: Number(amount),
+      status: "verified",
+      verifiedBy: userId,
+      verifiedAt: new Date(),
+    });
+
+    await transaction.save();
+
+    // Update Company total amount
+    const company = await CompanyModel.findOne();
+    if (company) {
+      company.totalAmount = (company.totalAmount || 0) + Number(amount);
+      company.transactions.push({
+        date: new Date(),
+        amount: Number(amount),
+        type: "incoming",
+        description: `Manual client payment recorded for site: ${site.name}`,
+        site: site._id,
+      });
+      await company.save();
+    }
+
+    // Update Site budget
+    site.budget = (site.budget || 0) + Number(amount);
+    await site.save();
+
+    // Notify the client (optional but recommended)
+    const clientNotification = new NotificationModel({
+      user: site.client,
+      type: "payment_verified",
+      relatedId: transaction._id,
+      message: `₹${amount} has been added to the budget of site "${site.name}" by the team.`,
+      status: "approved",
+    });
+    await clientNotification.save();
+
+    res.status(HttpStatus.CREATED).json({
+      success: true,
+      message: "Manual client payment recorded successfully",
+      transaction,
+      newSiteBudget: site.budget,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getClientDashboard,
   getClientSites,
   sendMoneyToAdmin,
   verifyClientTransaction,
   getTransactionsForReport,
+  getSiteClientTransactions,
+  addManualClientPayment,
 };
