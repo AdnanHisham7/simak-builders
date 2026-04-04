@@ -56,58 +56,65 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     else setIsAnimating(false);
   }, [isOpen]);
 
+  const getPastTense = (word: string) => {
+    const map: Record<string, string> = {
+      verify: "verified",
+      reject: "rejected",
+      approve: "approved",
+    };
+    return map[word] || word + "d";
+  };
+
   const handleAction = async (notification: Notification, action: string) => {
     setActionLoading(`${notification._id}-${action}`);
     try {
       if (notification.type === "stock_transfer") {
         if (action === "approve") {
           await privateClient.patch(
-            `/stocks/transfers/${notification.relatedId}/approve`
+            `/stocks/transfers/${notification.relatedId}/approve`,
           );
           updateNotificationStatus(notification._id, "approved");
         } else if (action === "reject") {
           await privateClient.patch(
-            `/stocks/transfers/${notification.relatedId}/reject`
+            `/stocks/transfers/${notification.relatedId}/reject`,
           );
           updateNotificationStatus(notification._id, "rejected");
         }
       } else if (notification.type === "purchase_verification") {
         if (action === "verify") {
           await privateClient.patch(
-            `/purchases/${notification.relatedId}/verify`
+            `/purchases/${notification.relatedId}/verify`,
           );
           updateNotificationStatus(notification._id, "approved");
         }
-      } else if (notification.type === "machinery_rental_verification") {
+      } else if (notification.type === "miscellaneous_expense_verification") {
         if (action === "verify") {
           await privateClient.patch(
-            `/machinery-rentals/${notification.relatedId}/verify`
+            `/miscellaneous-expenses/${notification.relatedId}/verify`,
           );
           updateNotificationStatus(notification._id, "approved");
         }
       } else if (notification.type === "phase_status_verification") {
         if (action === "approve") {
           await privateClient.patch(
-            `/sites/phases/${notification.relatedId}/approve`
+            `/sites/phases/${notification.relatedId}/approve`,
           );
           updateNotificationStatus(notification._id, "approved");
         } else if (action === "reject") {
           await privateClient.patch(
-            `/sites/phases/${notification.relatedId}/reject`
+            `/sites/phases/${notification.relatedId}/reject`,
           );
           updateNotificationStatus(notification._id, "rejected");
         }
       } else if (notification.type === "client_payment_verification") {
         if (action === "verify") {
           await privateClient.put(
-            `/client/transactions/${notification.relatedId}/verify`
+            `/client/transactions/${notification.relatedId}/verify`,
           );
           updateNotificationStatus(notification._id, "approved");
         }
       }
-      toast.success(
-        `${action.charAt(0).toUpperCase() + action.slice(1)}d successfully`
-      );
+      toast.success(`${getPastTense(action)} successfully`);
     } catch (error) {
       console.error(`Failed to ${action} notification`, error);
       toast.error(`Failed to ${action} notification`);
@@ -122,7 +129,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         return <Package className="w-5 h-5 text-blue-500" />;
       case "purchase_verification":
         return <ShoppingCart className="w-5 h-5 text-green-500" />;
-      case "machinery_rental_verification":
+      case "miscellaneous_expense_verification":
         return <Settings className="w-5 h-5 text-purple-500" />;
       case "phase_status_verification":
         return <CheckCircle2 className="w-5 h-5 text-teal-500" />;
@@ -162,24 +169,24 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
   };
 
   const filteredNotifications = notifications.filter(
-    (notif) => filter === "all" || notif.status === filter
+    (notif) => filter === "all" || notif.status === filter,
   );
 
   const pendingCount = notifications.filter(
-    (n) => n.status === "pending"
+    (n) => n.status === "pending",
   ).length;
   const approvedCount = notifications.filter(
-    (n) => n.status === "approved"
+    (n) => n.status === "approved",
   ).length;
   const rejectedCount = notifications.filter(
-    (n) => n.status === "rejected"
+    (n) => n.status === "rejected",
   ).length;
 
   const formatTimeAgo = (dateString: string) => {
     const now = new Date();
     const date = new Date(dateString);
     const diffInHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60)
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
     );
     if (diffInHours < 1) return "Just now";
     if (diffInHours < 24) return `${diffInHours}h ago`;
@@ -339,7 +346,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                         <div className="flex items-center justify-between mb-2">
                           <span
                             className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                              notif.status
+                              notif.status,
                             )}`}
                           >
                             {getStatusIcon(notif.status)}
@@ -387,7 +394,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                               </>
                             )}
                             {(notif.type === "purchase_verification" ||
-                              notif.type === "machinery_rental_verification" ||
+                              notif.type ===
+                                "miscellaneous_expense_verification" ||
                               notif.type === "client_payment_verification") && (
                               <button
                                 onClick={() => handleAction(notif, "verify")}

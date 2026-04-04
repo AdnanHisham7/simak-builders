@@ -3,6 +3,11 @@ import { Purchase } from "@entities/purchase";
 
 const PurchaseSchema = new Schema<Purchase>(
   {
+    date: {
+      type: Date,
+      default: Date.now,
+      required: true,
+    },
     site: { type: Schema.Types.ObjectId, ref: "Site" },
     vendor: { type: Schema.Types.ObjectId, ref: "Vendor", required: true },
     items: [
@@ -29,7 +34,7 @@ const PurchaseSchema = new Schema<Purchase>(
       isPaid: { type: Boolean, default: false },
     },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const PurchaseModel = model<Purchase>("Purchase", PurchaseSchema);

@@ -14,7 +14,7 @@ import * as path from "path";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { siteId, vendorId, paymentMethod } = req.body;
+    const { siteId, vendorId, paymentMethod, date: dateStr } = req.body;
     const file = req.file;
     const user = await UserModel.findById(req.user?.userId);
     if (!user) throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
@@ -28,6 +28,14 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       throw new ApiError("Invalid total amount", HttpStatus.BAD_REQUEST);
     }
 
+    let purchaseDate = new Date();
+    if (dateStr) {
+      const parsed = new Date(dateStr);
+      if (!isNaN(parsed.getTime())) {
+        purchaseDate = parsed;
+      }
+    }
+
     const items =
       typeof req.body.items === "string"
         ? JSON.parse(req.body.items)
@@ -38,13 +46,13 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       if (isNaN(quantity) || !isFinite(quantity) || quantity <= 0) {
         throw new ApiError(
           `Invalid quantity for item ${item.name}`,
-          HttpStatus.BAD_REQUEST
+          HttpStatus.BAD_REQUEST,
         );
       }
       if (isNaN(price) || !isFinite(price) || price <= 0) {
         throw new ApiError(
           `Invalid price for item ${item.name}`,
-          HttpStatus.BAD_REQUEST
+          HttpStatus.BAD_REQUEST,
         );
       }
       item.quantity = quantity;
@@ -62,7 +70,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
         if (user.siteExpensesBalance < totalAmount) {
           throw new ApiError(
             "Insufficient site expenses balance",
-            HttpStatus.BAD_REQUEST
+            HttpStatus.BAD_REQUEST,
           );
         }
       } else if (user.role === "admin") {
@@ -70,12 +78,12 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
         if (!company)
           throw new ApiError(
             "Company not found",
-            HttpStatus.INTERNAL_SERVER_ERROR
+            HttpStatus.INTERNAL_SERVER_ERROR,
           );
         if (company.totalAmount < totalAmount) {
           throw new ApiError(
             "Insufficient company funds",
-            HttpStatus.BAD_REQUEST
+            HttpStatus.BAD_REQUEST,
           );
         }
       } else {
@@ -99,6 +107,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
     };
 
     const purchase = new PurchaseModel({
+      date: purchaseDate,
       site: siteId || null,
       vendor: vendorId,
       items,
@@ -131,7 +140,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
 
     if (paymentMethod === "cash") {
       if (user.role === "siteManager") {
-        const transaction:any = {
+        const transaction: any = {
           date: new Date(),
           amount: -totalAmount,
           type: "expenditure",
@@ -146,7 +155,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
         if (!company)
           throw new ApiError(
             "Company not found",
-            HttpStatus.INTERNAL_SERVER_ERROR
+            HttpStatus.INTERNAL_SERVER_ERROR,
           );
         company.totalAmount -= totalAmount;
         const transaction = {
@@ -173,13 +182,14 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
 const verifyPurchase = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { purchaseId } = req.params;
     const user = req.user;
 
-    const purchase:any = await PurchaseModel.findById(purchaseId).populate("site");
+    const purchase: any =
+      await PurchaseModel.findById(purchaseId).populate("site");
     if (!purchase)
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
 
@@ -211,7 +221,7 @@ const verifyPurchase = async (
 
     await NotificationModel.updateMany(
       { relatedId: purchaseId, type: "purchase_verification" },
-      { status: "approved" }
+      { status: "approved" },
     );
 
     const notification = new NotificationModel({
@@ -235,13 +245,14 @@ const verifyPurchase = async (
           description: `Purchase added by ${purchasedUser?.name}`,
           relatedId: purchase._id,
           user: purchasedUser?._id.toString(),
-
         });
         await site.save();
       }
     }
 
-    res.status(HttpStatus.OK).json({ message: "Purchase verified and stocks updated" });
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Purchase verified and stocks updated" });
   } catch (error) {
     next(error);
   }
@@ -250,7 +261,7 @@ const verifyPurchase = async (
 const getPurchases = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const user = req.user;
@@ -268,7 +279,7 @@ const getPurchases = async (
 const getPurchasesBySite = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const user = req.user;
@@ -277,7 +288,10 @@ const getPurchasesBySite = async (
     if (status) filter.status = status;
     if (startDate) filter.createdAt = { $gte: new Date(startDate as string) };
     if (endDate)
-      filter.createdAt = { ...filter.createdAt, $lte: new Date(endDate as string) };
+      filter.createdAt = {
+        ...filter.createdAt,
+        $lte: new Date(endDate as string),
+      };
 
     const purchases = await PurchaseModel.find(filter)
       .populate("site")
@@ -293,11 +307,12 @@ const getPurchasesBySite = async (
 export const getPurchasesBySiteForReport = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
-    const { status, clientId, minAmount, search, startDate, endDate } = req.query;
+    const { status, clientId, minAmount, search, startDate, endDate } =
+      req.query;
     const site = await SiteModel.findById(siteId);
     if (!site) {
       throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
@@ -305,15 +320,22 @@ export const getPurchasesBySiteForReport = async (
     const filter: any = { site: siteId };
     if (status) filter.status = status;
     if (clientId) {
-      const clientSites = await SiteModel.find({ client: clientId }, { _id: 1 });
+      const clientSites = await SiteModel.find(
+        { client: clientId },
+        { _id: 1 },
+      );
       const siteIds = clientSites.map((site) => site._id);
       filter.site = { $in: siteIds };
     }
-    if (minAmount) filter.totalAmount = { $gte: parseFloat(minAmount as string) };
+    if (minAmount)
+      filter.totalAmount = { $gte: parseFloat(minAmount as string) };
     if (search) filter["items.name"] = { $regex: search, $options: "i" };
     if (startDate) filter.createdAt = { $gte: new Date(startDate as string) };
     if (endDate)
-      filter.createdAt = { ...filter.createdAt, $lte: new Date(endDate as string) };
+      filter.createdAt = {
+        ...filter.createdAt,
+        $lte: new Date(endDate as string),
+      };
     const purchases = await PurchaseModel.find(filter)
       .populate("vendor", "name email phone")
       .populate("addedBy", "name email role");
@@ -326,7 +348,7 @@ export const getPurchasesBySiteForReport = async (
 const deleteBillUpload = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { purchaseId } = req.params;
@@ -348,7 +370,10 @@ const deleteBillUpload = async (
     } catch (err) {
       console.error("Error deleting file:", err);
     }
-    await PurchaseModel.updateOne({ _id: purchaseId }, { $unset: { billUpload: "" } });
+    await PurchaseModel.updateOne(
+      { _id: purchaseId },
+      { $unset: { billUpload: "" } },
+    );
     res.status(HttpStatus.OK).json({ message: "Bill upload deleted" });
   } catch (error) {
     next(error);

@@ -58,11 +58,11 @@ import {
 } from "@/services/attendanceService";
 import MarkAttendanceModal from "./MarkAttendanceModal";
 import AttendanceByDay from "./AttendanceByDay";
-import AddMachineryRentalModal from "./AddMachineryModal";
+import AddMiscellaneousExpenseModal from "./AddMiscellaneousExpenseModal";
 import {
-  getMachineryRentalsBySite,
-  verifyMachineryRental,
-} from "@/services/machineryRentalService";
+  getMiscellaneousExpensesBySite,
+  verifyMiscellaneousExpense,
+} from "@/services/miscellaneousExpenseService";
 import TransactionsModal from "./TransactionsModal";
 import { toast } from "sonner";
 import { privateClient } from "@/api";
@@ -73,7 +73,7 @@ interface Transaction {
   amount: number;
   type:
     | "purchase"
-    | "rental"
+    | "miscellaneous"
     | "attendance"
     | "stockTransfer"
     | "client_payment"
@@ -102,12 +102,12 @@ const SiteDetail: React.FC = () => {
   const [site, setSite] = useState<ExtendedSite | null>(null);
   const [sites, setSites] = useState<{ _id: string; name: string }[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
-  const [machineryRentals, setMachineryRentals] = useState<any[]>([]);
+  const [miscellaneousExpenses, setMiscellaneousExpenses] = useState<any[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
-  const [isAddMachineryRentalModalOpen, setIsAddMachineryRentalModalOpen] =
+  const [isAddMiscellaneousModalOpen, setIsAddMiscellaneousModalOpen] =
     useState(false);
   const [isLogUsageModalOpen, setIsLogUsageModalOpen] = React.useState(false);
   const [isRequestTransferModalOpen, setIsRequestTransferModalOpen] =
@@ -128,7 +128,7 @@ const SiteDetail: React.FC = () => {
     | "attendance"
     | "purchases"
     | "stocks"
-    | "machineryRentals"
+    | "miscellaneous"
     | "documents"
   >("overview");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -216,8 +216,8 @@ const SiteDetail: React.FC = () => {
       fetchPurchases();
     } else if (selectedTab === "attendance") {
       fetchAttendance();
-    } else if (selectedTab === "machineryRentals") {
-      fetchMachineryRentals();
+    } else if (selectedTab === "miscellaneous") {
+      fetchMiscellaneousExpenses();
     }
   }, [selectedTab, siteId]);
 
@@ -240,18 +240,17 @@ const SiteDetail: React.FC = () => {
     }
   };
 
-  const fetchMachineryRentals = async () => {
+  const fetchMiscellaneousExpenses = async () => {
     try {
-      const data = await getMachineryRentalsBySite(siteId!);
+      const data = await getMiscellaneousExpensesBySite(siteId!); // update service
       const sortedData = data.sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );
-      setMachineryRentals(sortedData);
+      setMiscellaneousExpenses(sortedData);
     } catch (err) {
-      console.error("Error fetching machinery rentals:", err);
+      console.error("Error fetching miscellaneous expenses:", err);
     }
   };
-
   const fetchAttendance = async () => {
     setIsAttendanceLoading(true);
     try {
@@ -298,12 +297,12 @@ const SiteDetail: React.FC = () => {
     }
   };
 
-  const handleVerifyMachineryRental = async (rentalId: string) => {
+  const handleVerifyMiscellaneous = async (expenseId: string) => {
     try {
-      await verifyMachineryRental(rentalId);
-      fetchMachineryRentals();
+      await verifyMiscellaneousExpense(expenseId); // update service
+      fetchMiscellaneousExpenses();
     } catch (err) {
-      console.error("Error verifying machinery rental:", err);
+      console.error(err);
     }
   };
 
@@ -675,7 +674,7 @@ const SiteDetail: React.FC = () => {
     userType === "siteManager" ||
     userType === "supervisor";
   const canManageStocks = userType === "siteManager" || userType === "admin";
-  const canAddMachineryRental = canAddPurchase;
+  const canAddMiscellaneous = canAddPurchase;
   const canUploadDocuments = userType === "admin" || userType === "siteManager";
 
   if (loading) {
@@ -724,7 +723,7 @@ const SiteDetail: React.FC = () => {
     { id: "team", label: "Team", icon: Users },
     { id: "attendance", label: "Attendance", icon: Calendar },
     { id: "purchases", label: "Purchases", icon: ShoppingCart },
-    { id: "machineryRentals", label: "Machinery/Rentals", icon: Wrench },
+    { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
     { id: "stocks", label: "Stocks", icon: Package },
     { id: "documents", label: "Documents", icon: FileText },
   ];
@@ -1408,7 +1407,9 @@ const SiteDetail: React.FC = () => {
                     {purchases.map((purchase) => (
                       <tr key={purchase.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {new Date(purchase.createdAt).toLocaleDateString()}
+                          {new Date(
+                            purchase.date || purchase.createdAt,
+                          ).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           ₹{purchase.totalAmount.toLocaleString()}
@@ -1530,7 +1531,7 @@ const SiteDetail: React.FC = () => {
           </div>
         )}
 
-        {selectedTab === "machineryRentals" && (
+        {selectedTab === "miscellaneous" && (
           <div
             className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
               isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
@@ -1542,19 +1543,21 @@ const SiteDetail: React.FC = () => {
               <div className="flex justify-between mb-6">
                 <h2 className="text-2xl font-bold flex items-center space-x-3">
                   <Wrench className="w-7 h-7 text-blue-600" />
-                  <span>Machinery/Rentals</span>
+                  <span>Miscellaneous Expenses</span>
                 </h2>
-                {canAddMachineryRental && (
+                {canAddMiscellaneous && (
                   <button
-                    onClick={() => setIsAddMachineryRentalModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+                    onClick={() => setIsAddMiscellaneousModalOpen(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>Add Machinery/Rental</span>
+                    <span>Add Expense</span>
                   </button>
                 )}
               </div>
-              {machineryRentals.length > 0 ? (
+
+              {/* Table */}
+              {miscellaneousExpenses.length > 0 ? (
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
@@ -1562,10 +1565,19 @@ const SiteDetail: React.FC = () => {
                         Date
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Description
+                        Category
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Name
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Tip
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Total
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                         Status
@@ -1576,40 +1588,45 @@ const SiteDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {machineryRentals.map((rental) => (
-                      <tr key={rental._id}>
+                    {miscellaneousExpenses.map((exp) => (
+                      <tr key={exp._id}>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {new Date(rental.date).toLocaleDateString()}
+                          {new Date(exp.date).toLocaleDateString()}
+                        </td>
+                        <td className="capitalize">{exp.category}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {exp.name}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {rental.description}
+                          ₹{exp.amount.toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          ₹{rental.amount.toLocaleString()}
+                          ₹{(exp.tip || 0).toLocaleString()}
+                        </td>
+                        <td className="font-medium">
+                          ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              rental.status === "verified"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${exp.status === "verified" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}
                           >
-                            {rental.status}
+                            {exp.status}
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {userType === "admin" &&
-                            rental.status === "pending" && (
-                              <button
-                                onClick={() =>
-                                  handleVerifyMachineryRental(rental._id)
-                                }
-                                className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                              >
-                                Verify
-                              </button>
-                            )}
+                          {userType === "admin" && exp.status === "pending" && (
+                            <button
+                              onClick={() => handleVerifyMiscellaneous(exp._id)}
+                              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                            >
+                              Verify
+                            </button>
+                          )}
+                          {exp.notes && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Notes: {exp.notes}
+                            </p>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1617,7 +1634,7 @@ const SiteDetail: React.FC = () => {
                 </table>
               ) : (
                 <p className="text-gray-600">
-                  No machinery/rentals found for this site.
+                  No miscellaneous expenses found for this site.
                 </p>
               )}
             </div>
@@ -1791,6 +1808,7 @@ const SiteDetail: React.FC = () => {
         {isAddPurchaseModalOpen && (
           <AddPurchaseModal
             siteId={siteId!}
+            isAdmin={userType === "admin"}
             onClose={() => {
               setIsAddPurchaseModalOpen(false);
               if (selectedTab === "purchases") fetchPurchases();
@@ -1851,10 +1869,13 @@ const SiteDetail: React.FC = () => {
           />
         )}
 
-        {isAddMachineryRentalModalOpen && (
-          <AddMachineryRentalModal
+        {isAddMiscellaneousModalOpen && (
+          <AddMiscellaneousExpenseModal
             siteId={siteId!}
-            onClose={() => setIsAddMachineryRentalModalOpen(false)}
+            onClose={() => {
+              setIsAddMiscellaneousModalOpen(false);
+              if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();
+            }}
           />
         )}
 

@@ -15,7 +15,7 @@ export interface Transaction {
   id: string;
   date: string;
   amount: number;
-  type: "purchase" | "rental" | "attendance" | "stockTransfer";
+  type: "purchase" | "miscellaneous" | "attendance" | "stockTransfer";
   description?: string;
   relatedId?: string;
   user?: { id: string; name: string };

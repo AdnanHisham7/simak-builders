@@ -10,7 +10,7 @@ import purchaseRoutes from "@routes/purchaseRoutes";
 import vendorRoutes from "@routes/vendorRoutes";
 import employeeRoutes from "@routes/employeeRoutes";
 import attendanceRoutes from "@routes/attendanceRoutes";
-import machineryRentalRoutes from "@routes/machineryRentalRoutes";
+import miscellaneousExpenseRoutes from "@routes/miscellaneousExpenseRoutes";
 import companyRoutes from "@routes/companyRoutes";
 import contractorRoutes from "@routes/contractorRoutes";
 import clientRoutes from "@routes/clientRoutes";
@@ -29,8 +29,8 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(morgan("dev"));
 const allowedOrigins = [
-  'https://simakbuilders.com',
-  'https://www.simakbuilders.com',
+  "https://simakbuilders.com",
+  "https://www.simakbuilders.com",
 ];
 
 app.use(
@@ -43,7 +43,7 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
 app.use("/api/uploads", express.static("uploads"));
@@ -59,7 +59,7 @@ app.use("/api/purchases", purchaseRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/attendance", attendanceRoutes);
-app.use("/api/machinery-rentals", machineryRentalRoutes);
+app.use("/api/miscellaneous-expenses", miscellaneousExpenseRoutes);
 app.use("/api/company", companyRoutes);
 app.use("/api/contractors", contractorRoutes);
 app.use("/api/client", clientRoutes);

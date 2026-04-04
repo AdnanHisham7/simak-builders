@@ -22,6 +22,7 @@ export interface Payment {
 }
 
 export interface Purchase {
+  date: Date;
   site?: Types.ObjectId;
   vendor: Types.ObjectId;
   items: PurchaseItem[];

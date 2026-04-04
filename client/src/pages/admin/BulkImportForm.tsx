@@ -58,9 +58,12 @@ interface Purchase {
   billFile: File | null;
 }
 
-interface MachineryRental {
-  description: string;
+interface MiscellaneousExpense {
+  category: "machinery" | "rental" | "service";
+  name: string;
   amount: number;
+  tip: number;
+  notes: string;
   date: string;
 }
 
@@ -68,7 +71,7 @@ interface FormDataState {
   site: SiteData;
   phases: Phase[];
   purchases: Purchase[];
-  machineryRentals: MachineryRental[];
+  miscellaneousExpenses: MiscellaneousExpense[];
   attendances: any[]; // extend when you add UI
   stockUsages: any[];
   contractorTransactions: any[];
@@ -170,7 +173,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
       status: "not started" as const,
     })),
     purchases: [],
-    machineryRentals: [],
+    miscellaneousExpenses: [],
     attendances: [],
     stockUsages: [],
     contractorTransactions: [],
@@ -189,7 +192,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
 
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
   const [activeSection, setActiveSection] = useState<
-    "site" | "phases" | "documents" | "purchases" | "machinery"
+    "site" | "phases" | "documents" | "purchases" | "miscellaneous"
   >("site");
 
   // Memoized handlers (stable across re-renders)
@@ -283,7 +286,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
           status: "not started" as const,
         })),
         purchases: [],
-        machineryRentals: [],
+        miscellaneousExpenses: [],
         attendances: [],
         stockUsages: [],
         contractorTransactions: [],
@@ -304,29 +307,39 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
     }
   };
 
-  const addArrayItem = useCallback((key: "purchases" | "machineryRentals") => {
-    setFormData((prev) => {
-      if (key === "purchases") {
-        return {
-          ...prev,
-          purchases: [
-            ...prev.purchases,
-            { vendor: "", items: [], totalAmount: 0, billFile: null },
-          ],
-        };
-      }
-      if (key === "machineryRentals") {
-        return {
-          ...prev,
-          machineryRentals: [
-            ...prev.machineryRentals,
-            { description: "", amount: 0, date: "" },
-          ],
-        };
-      }
-      return prev;
-    });
-  }, []);
+  const addArrayItem = useCallback(
+    (key: "purchases" | "miscellaneousExpenses") => {
+      setFormData((prev) => {
+        if (key === "purchases") {
+          return {
+            ...prev,
+            purchases: [
+              ...prev.purchases,
+              { vendor: "", items: [], totalAmount: 0, billFile: null },
+            ],
+          };
+        }
+        if (key === "miscellaneousExpenses") {
+          setFormData((prev) => ({
+            ...prev,
+            miscellaneousExpenses: [
+              ...prev.miscellaneousExpenses,
+              {
+                category: "machinery",
+                name: "",
+                amount: 0,
+                tip: 0,
+                notes: "",
+                date: "",
+              },
+            ],
+          }));
+        }
+        return prev;
+      });
+    },
+    [],
+  );
 
   const addPurchaseItem = useCallback((purchaseIndex: number) => {
     setFormData((prev) => {
@@ -343,7 +356,16 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
   }, []);
 
   const removeArrayItem = useCallback(
-    (key: "phases" | "purchases" | "machineryRentals" | "attendances" | "stockUsages" | "contractorTransactions", index: number) => {
+    (
+      key:
+        | "phases"
+        | "purchases"
+        | "miscellaneousExpenses"
+        | "attendances"
+        | "stockUsages"
+        | "contractorTransactions",
+      index: number,
+    ) => {
       setFormData((prev) => ({
         ...prev,
         [key]: prev[key].filter((_, i) => i !== index),
@@ -367,7 +389,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
 
   const updateArrayItem = useCallback(
     (
-      key: "purchases" | "machineryRentals",
+      key: "purchases" | "miscellaneousExpenses",
       index: number,
       field: string,
       value: any,
@@ -416,7 +438,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
     { id: "phases", label: "Phases", icon: CheckCircle },
     { id: "documents", label: "Documents", icon: FileText },
     { id: "purchases", label: "Purchases", icon: Package },
-    { id: "machinery", label: "Machinery", icon: Wrench },
+    { id: "miscellaneous", label: "Miscellaneous Expenses", icon: Wrench },
   ] as const;
 
   return (
@@ -899,85 +921,141 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
             </SectionCard>
           )}
 
-          {/* Machinery Rentals */}
-          {activeSection === "machinery" && (
+          {/* Miscellaneous Expenses */}
+          {activeSection === "miscellaneous" && (
             <SectionCard
-              title="Machinery Rentals"
+              title="Miscellaneous Expenses"
               icon={Wrench}
-              count={formData.machineryRentals.length}
+              count={formData.miscellaneousExpenses.length}
             >
               <div className="space-y-6">
                 <button
                   type="button"
-                  onClick={() => addArrayItem("machineryRentals")}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-all duration-200"
+                  onClick={() => addArrayItem("miscellaneousExpenses")}
+                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-blue-400 hover:text-blue-600"
                 >
                   <Plus className="w-5 h-5" />
-                  <span>Add Machinery Rental</span>
+                  <span>Add Miscellaneous Expense</span>
                 </button>
 
-                {formData.machineryRentals.map((rental, index) => (
-                  <div key={index} className="p-6 bg-gray-50 rounded-xl">
-                    <div className="flex items-center justify-between mb-4">
-                      <h4 className="text-lg font-semibold text-gray-900">
-                        Rental #{index + 1}
+                {formData.miscellaneousExpenses.map((exp, index) => (
+                  <div
+                    key={index}
+                    className="p-6 bg-gray-50 rounded-xl space-y-4"
+                  >
+                    <div className="flex justify-between">
+                      <h4 className="text-lg font-semibold">
+                        Expense #{index + 1}
                       </h4>
                       <button
-                        type="button"
                         onClick={() =>
-                          removeArrayItem("machineryRentals", index)
+                          removeArrayItem("miscellaneousExpenses", index)
                         }
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
+                        className="text-red-600"
                       >
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <InputField label="Description" required>
-                        <input
-                          type="text"
-                          value={rental.description}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <InputField label="Category" required>
+                        <select
+                          value={exp.category}
                           onChange={(e) =>
                             updateArrayItem(
-                              "machineryRentals",
+                              "miscellaneousExpenses",
                               index,
-                              "description",
+                              "category",
                               e.target.value,
                             )
                           }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          placeholder="Enter machinery description"
-                        />
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
+                        >
+                          <option value="machinery">Machinery</option>
+                          <option value="rental">Rental</option>
+                          <option value="service">Service</option>
+                        </select>
                       </InputField>
-                      <InputField label="Amount">
+
+                      <InputField label="Name / Description" required>
                         <input
-                          type="number"
-                          value={rental.amount}
+                          type="text"
+                          value={exp.name}
                           onChange={(e) =>
                             updateArrayItem(
-                              "machineryRentals",
+                              "miscellaneousExpenses",
+                              index,
+                              "name",
+                              e.target.value,
+                            )
+                          }
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
+                          placeholder="e.g. JCB Hire, Generator Service"
+                        />
+                      </InputField>
+
+                      <InputField label="Amount (₹)" required>
+                        <input
+                          type="number"
+                          value={exp.amount}
+                          onChange={(e) =>
+                            updateArrayItem(
+                              "miscellaneousExpenses",
                               index,
                               "amount",
                               Number(e.target.value),
                             )
                           }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          placeholder="Rental amount"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
                         />
                       </InputField>
-                      <InputField label="Date">
+
+                      <InputField label="Tip (₹) Optional">
                         <input
-                          type="date"
-                          value={rental.date}
+                          type="number"
+                          value={exp.tip}
                           onChange={(e) =>
                             updateArrayItem(
-                              "machineryRentals",
+                              "miscellaneousExpenses",
+                              index,
+                              "tip",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
+                          placeholder="0"
+                        />
+                      </InputField>
+
+                      <InputField label="Notes">
+                        <textarea
+                          value={exp.notes}
+                          onChange={(e) =>
+                            updateArrayItem(
+                              "miscellaneousExpenses",
+                              index,
+                              "notes",
+                              e.target.value,
+                            )
+                          }
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl h-20"
+                          placeholder="Additional notes..."
+                        />
+                      </InputField>
+
+                      <InputField label="Date" required>
+                        <input
+                          type="date"
+                          value={exp.date}
+                          onChange={(e) =>
+                            updateArrayItem(
+                              "miscellaneousExpenses",
                               index,
                               "date",
                               e.target.value,
                             )
                           }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
                         />
                       </InputField>
                     </div>

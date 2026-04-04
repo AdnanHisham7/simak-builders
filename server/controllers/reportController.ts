@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { PurchaseModel } from "@models/Purchase";
-import { MachineryRentalModel } from "@models/MachineryRental";
+import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { StockModel } from "@models/Stock";
 import { VendorModel } from "@models/Vendor";
 import { UserModel } from "@models/User";
@@ -12,7 +12,7 @@ import mongoose, { Types } from "mongoose";
 export const getStockTransactions = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId, startDate, endDate, type, minAmount } = req.query;
@@ -30,14 +30,17 @@ export const getStockTransactions = async (
     const purchases = await PurchaseModel.find(filter)
       .populate("vendor", "name email phone")
       .populate("addedBy", "name email role");
-    const rentals = await MachineryRentalModel.find(filter).populate(
-      "addedBy",
-      "name email role"
-    );
+    const miscellaneousExpenses = await MiscellaneousExpenseModel.find(
+      filter,
+    ).populate("addedBy", "name email role");
 
     const transactions = [
       ...purchases.map((p) => ({ ...p.toObject(), type: "purchase" })),
-      ...rentals.map((r) => ({ ...r.toObject(), type: "rental" })),
+      ...miscellaneousExpenses.map((exp) => ({
+        ...exp.toObject(),
+        type: "miscellaneous",
+        totalAmount: exp.amount + (exp.tip || 0),
+      })),
     ];
 
     res.status(HttpStatus.OK).json(transactions);
@@ -50,7 +53,7 @@ export const getStockTransactions = async (
 export const getStockInventory = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId, category, minQuantity, name } = req.query;
@@ -63,7 +66,7 @@ export const getStockInventory = async (
 
     const stocks = await StockModel.find(filter).populate(
       "site",
-      "name address"
+      "name address",
     );
     res.status(HttpStatus.OK).json(stocks);
   } catch (error) {
@@ -75,7 +78,7 @@ export const getStockInventory = async (
 export const getVendorsReport = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId, minAmount, search } = req.query;
@@ -113,7 +116,7 @@ export const getVendorsReport = async (
 const getClientsReport = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { clientId, status, minAmount, startDate, endDate } = req.query as {
@@ -181,7 +184,7 @@ const getClientsReport = async (
 export const getVendorPurchases = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { vendorId } = req.query;

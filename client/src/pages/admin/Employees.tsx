@@ -110,6 +110,7 @@ const Employees: React.FC = () => {
       const data = await getAttendanceByEmployee(employeeId);
       setAttendanceData(data);
     } catch (err) {
+      console.error("Failed to fetch attendance:", err);
       setAttendanceError("Failed to fetch attendance data");
     } finally {
       setAttendanceLoading(false);

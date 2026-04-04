@@ -378,7 +378,7 @@ const CompleteSiteModal: React.FC<CompleteSiteModalProps> = ({
                     </h3>
                     <p className="text-sm text-amber-700">
                       After completion, you won't be able to add purchases,
-                      machinery rentals, mark attendance, or perform other
+                      miscellaneous expenses, mark attendance, or perform other
                       operations except stock transfers.
                     </p>
                   </div>

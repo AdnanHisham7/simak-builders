@@ -158,6 +158,15 @@ interface Purchase {
   };
 }
 
+interface MiscellaneousExpense {
+  category: "machinery" | "rental" | "service";
+  name: string;
+  amount: number;
+  tip: number;
+  notes: string;
+  date: string;
+}
+
 interface BulkImportForm {
   siteUpdates: {
     budget: number;
@@ -175,11 +184,7 @@ interface BulkImportForm {
     url: string;
   }>;
   purchases: Purchase[];
-  machineryRentals: Array<{
-    description: string;
-    amount: number;
-    date: string;
-  }>;
+  miscellaneousExpenses: MiscellaneousExpense[];
   attendances: Array<{
     employee: string;
     date: string;
@@ -205,7 +210,7 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allActivityLogs, setAllActivityLogs] = useState<ActivityLog[] | null>(
-    null
+    null,
   );
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -317,10 +322,10 @@ const AdminDashboard = () => {
                 color.includes("blue")
                   ? "text-blue-600"
                   : color.includes("green")
-                  ? "text-green-600"
-                  : color.includes("purple")
-                  ? "text-purple-600"
-                  : "text-indigo-600"
+                    ? "text-green-600"
+                    : color.includes("purple")
+                      ? "text-purple-600"
+                      : "text-indigo-600"
               }`}
             />
           </div>
@@ -746,8 +751,8 @@ const AdminDashboard = () => {
                               activity.type === "employee"
                                 ? "bg-blue-100"
                                 : activity.type === "site"
-                                ? "bg-green-100"
-                                : "bg-amber-100"
+                                  ? "bg-green-100"
+                                  : "bg-amber-100"
                             }`}
                           >
                             {activity.type === "employee" && (
@@ -768,7 +773,7 @@ const AdminDashboard = () => {
                               <Clock size={10} className="mr-1" />
                               {formatDistanceToNow(
                                 new Date(activity.timestamp),
-                                { addSuffix: true }
+                                { addSuffix: true },
                               )}
                             </p>
                           </div>
@@ -813,7 +818,7 @@ const AdminDashboard = () => {
                             </span>
                             <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full">
                               {new Date(
-                                transaction.createdAt
+                                transaction.createdAt,
                               ).toLocaleDateString()}
                             </span>
                           </div>

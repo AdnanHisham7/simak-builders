@@ -489,7 +489,7 @@ const StockTransactionsReport = ({ sites }) => {
           >
             <option value="">All Types</option>
             <option value="purchase">Purchase</option>
-            <option value="rental">Rental</option>
+            <option value="miscellaneous">Miscellaneous</option>
           </select>
         </div>
         <div className="flex items-center space-x-3">

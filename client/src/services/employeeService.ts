@@ -16,7 +16,7 @@ export interface Attendance {
   id: string;
   site: { id: string; name: string };
   date: string;
-  status: number; 
+  status: number;
   dailyWage: number;
   isPaid: boolean;
   markedBy: { id: string; name: string };
@@ -77,7 +77,7 @@ export const createEmployee = async (data: {
 
 export const updateEmployee = async (
   id: string,
-  data: Partial<Omit<Employee, "id">>
+  data: Partial<Omit<Employee, "id">>,
 ): Promise<Employee> => {
   const response = await privateClient.put(`/employees/${id}`, data);
   const employee = response.data;
@@ -98,19 +98,19 @@ export const deleteEmployee = async (id: string): Promise<void> => {
 };
 
 export const getAttendanceByEmployee = async (
-  employeeId: string
+  employeeId: string,
 ): Promise<Attendance[]> => {
   const response = await privateClient.get(
-    `/employees/${employeeId}/attendance`
+    `/employees/${employeeId}/attendance`,
   );
   return response.data.map((attendance: any) => ({
     id: attendance._id,
-    site: { id: attendance.site._id, name: attendance.site.name },
+    site: { id: attendance.site?._id, name: attendance.site?.name },
     date: attendance.date,
     status: attendance.status,
     dailyWage: attendance.dailyWage,
     isPaid: attendance.isPaid,
-    markedBy: { id: attendance.markedBy._id, name: attendance.markedBy.name },
+    markedBy: { id: attendance.markedBy?._id, name: attendance.markedBy?.name },
     createdAt: attendance.createdAt,
     updatedAt: attendance.updatedAt,
   }));
@@ -119,7 +119,7 @@ export const getAttendanceByEmployee = async (
 export const calculateSalary = async (
   employeeId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<{ totalSalary: number; attendanceIds: string[] }> => {
   const response = await privateClient.post("/employees/calculate-salary", {
     employeeId,
@@ -130,7 +130,7 @@ export const calculateSalary = async (
 };
 
 export const markAttendancesPaid = async (
-  attendanceIds: string[]
+  attendanceIds: string[],
 ): Promise<void> => {
   await privateClient.post("/employees/mark-attendances-paid", {
     attendanceIds,

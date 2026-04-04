@@ -11,6 +11,7 @@ import {
   Check,
   Building2,
   DollarSign,
+  Calendar,
 } from "lucide-react";
 import { addPurchase } from "@/services/purchaseService";
 import { getVendors, createVendor, Vendor } from "@/services/vendorService";
@@ -18,6 +19,7 @@ import { getVendors, createVendor, Vendor } from "@/services/vendorService";
 interface AddPurchaseModalProps {
   siteId: string | null; // null for company-level purchases
   onClose: () => void;
+  isAdmin?: boolean;
 }
 
 interface PurchaseItem {
@@ -30,6 +32,7 @@ interface PurchaseItem {
 
 const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   siteId,
+  isAdmin = false,
   onClose,
 }) => {
   const [isAnimating, setIsAnimating] = useState(false);
@@ -49,6 +52,9 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   const [paymentMethod, setPaymentMethod] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
+  const [purchaseDate, setPurchaseDate] = useState<string>(
+    new Date().toISOString().split("T")[0],
+  );
 
   const categories = [
     "Earth Work",
@@ -226,6 +232,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       formData.append("totalAmount", totalAmount.toString());
       formData.append("billUpload", billFile!);
       formData.append("paymentMethod", paymentMethod);
+      formData.append("date", purchaseDate);
       if (siteId) formData.append("siteId", siteId);
 
       await addPurchase(formData);
@@ -443,6 +450,24 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                 </p>
               )}
             </div>
+
+            {isAdmin && (
+              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100">
+                <div className="flex items-center mb-3">
+                  <Calendar size={18} className="text-indigo-600 mr-2" />
+                  <h3 className="font-semibold text-gray-900">Purchase Date</h3>
+                </div>
+                <input
+                  type="date"
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-200 rounded-xl transition-all duration-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  You can set past or future dates
+                </p>
+              </div>
+            )}
 
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
               <div className="flex items-center justify-between mb-4">

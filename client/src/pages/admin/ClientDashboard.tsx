@@ -44,12 +44,13 @@ const ClientDashboard: React.FC = () => {
     page: 1,
     limit: 10,
   });
-  const [machineryRentals, setMachineryRentals] = useState<SectionState>({
-    data: [],
-    total: 0,
-    page: 1,
-    limit: 10,
-  });
+  const [miscellaneousExpenses, setMiscellaneousExpenses] =
+    useState<SectionState>({
+      data: [],
+      total: 0,
+      page: 1,
+      limit: 10,
+    });
   const [transactions, setTransactions] = useState<SectionState>({
     data: [],
     total: 0,
@@ -94,11 +95,11 @@ const ClientDashboard: React.FC = () => {
         page: Number(params.stocksPage),
         limit: Number(params.stocksLimit),
       });
-      setMachineryRentals({
-        data: data.machineryRentals.data,
-        total: data.machineryRentals.total,
-        page: Number(params.rentalsPage),
-        limit: Number(params.rentalsLimit),
+      setMiscellaneousExpenses({
+        data: data.miscellaneousExpenses.data,
+        total: data.miscellaneousExpenses.total,
+        page: Number(params.miscellaneousPage),
+        limit: Number(params.miscellaneousLimit),
       });
       setTransactions({
         data: data.transactions.data,
@@ -127,8 +128,8 @@ const ClientDashboard: React.FC = () => {
         purchasesLimit: 10,
         stocksPage: 1,
         stocksLimit: 10,
-        rentalsPage: 1,
-        rentalsLimit: 10,
+        miscellaneousPage: 1,
+        miscellaneousLimit: 10,
         transactionsPage: 1,
         transactionsLimit: 10,
       };
@@ -147,8 +148,8 @@ const ClientDashboard: React.FC = () => {
     purchasesLimit: purchases.limit,
     stocksPage: stocks.page,
     stocksLimit: stocks.limit,
-    rentalsPage: machineryRentals.page,
-    rentalsLimit: machineryRentals.limit,
+    miscellaneousPage: miscellaneousExpenses.page,
+    miscellaneousLimit: miscellaneousExpenses.limit,
     transactionsPage: transactions.page,
     transactionsLimit: transactions.limit,
   });
@@ -159,10 +160,10 @@ const ClientDashboard: React.FC = () => {
       section === "purchases"
         ? purchases.total
         : section === "stocks"
-        ? stocks.total
-        : section === "rentals"
-        ? machineryRentals.total
-        : transactions.total / 10
+          ? stocks.total
+          : section === "miscellaneous"
+            ? miscellaneousExpenses.total
+            : transactions.total / 10,
     );
     if (newPage < 1 || newPage > totalPages) return;
 
@@ -229,7 +230,11 @@ const ClientDashboard: React.FC = () => {
     { id: "overview", label: "Overview", icon: <BarChart size={20} /> },
     { id: "purchases", label: "Purchases", icon: <ShoppingCart size={20} /> },
     { id: "stocks", label: "Inventory", icon: <PackageIcon size={20} /> },
-    { id: "rentals", label: "Rentals", icon: <Construction size={20} /> },
+    {
+      id: "miscellaneous",
+      label: "Miscellaneous",
+      icon: <Construction size={20} />,
+    },
     {
       id: "transactions",
       label: "Transactions",
@@ -281,10 +286,10 @@ const ClientDashboard: React.FC = () => {
       section === "purchases"
         ? purchases
         : section === "stocks"
-        ? stocks
-        : section === "rentals"
-        ? machineryRentals
-        : transactions;
+          ? stocks
+          : section === "miscellaneous"
+            ? miscellaneousExpenses
+            : transactions;
     const totalPages = Math.ceil(sectionData.total / sectionData.limit);
 
     return (
@@ -457,9 +462,11 @@ const ClientDashboard: React.FC = () => {
                   </div>
                   <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
                     <div className="text-2xl font-bold text-amber-600">
-                      {machineryRentals.total || 0}
+                      {miscellaneousExpenses.total || 0}
                     </div>
-                    <div className="text-sm text-gray-600">Rentals</div>
+                    <div className="text-sm text-gray-600">
+                      Miscellaneous Expenses
+                    </div>
                   </div>
                   <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
                     <div className="text-2xl font-bold text-amber-600">
@@ -513,8 +520,8 @@ const ClientDashboard: React.FC = () => {
                               pur.status === "completed"
                                 ? "bg-green-100 text-green-800"
                                 : pur.status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : "bg-gray-100 text-gray-800"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-gray-100 text-gray-800"
                             }`}
                           >
                             {pur.status || "Unknown"}
@@ -574,11 +581,11 @@ const ClientDashboard: React.FC = () => {
             </TableCard>
           )}
 
-          {activeTab === "rentals" && (
+          {activeTab === "miscellaneous" && (
             <TableCard
-              title="Machinery Rentals"
+              title="Miscellaneous Expenses"
               icon={<Construction size={24} />}
-              section="rentals"
+              section="miscellaneous"
             >
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -596,27 +603,29 @@ const ClientDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {machineryRentals.data?.map(
-                      (rental: any, index: number) => (
+                    {miscellaneousExpenses.data?.map(
+                      (miscellaneous: any, index: number) => (
                         <tr
-                          key={rental._id}
+                          key={miscellaneous._id}
                           className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
                             index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
                           }`}
                         >
                           <td className="py-4 px-6 font-medium text-gray-900">
-                            {rental.description || "N/A"}
+                            {miscellaneous.description || "N/A"}
                           </td>
                           <td className="py-4 px-6 text-green-600 font-semibold">
-                            ₹{rental.amount?.toLocaleString() || 0}
+                            ₹{miscellaneous.amount?.toLocaleString() || 0}
                           </td>
                           <td className="py-4 px-6 text-gray-600">
-                            {rental.date
-                              ? new Date(rental.date).toLocaleDateString()
+                            {miscellaneous.date
+                              ? new Date(
+                                  miscellaneous.date,
+                                ).toLocaleDateString()
                               : "N/A"}
                           </td>
                         </tr>
-                      )
+                      ),
                     )}
                   </tbody>
                 </table>
@@ -662,10 +671,10 @@ const ClientDashboard: React.FC = () => {
                               trans.status === "completed"
                                 ? "bg-green-100 text-green-800"
                                 : trans.status === "pending"
-                                ? "bg-yellow-100 text-yellow-800"
-                                : trans.status === "failed"
-                                ? "bg-red-100 text-red-800"
-                                : "bg-gray-100 text-gray-800"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : trans.status === "failed"
+                                    ? "bg-red-100 text-red-800"
+                                    : "bg-gray-100 text-gray-800"
                             }`}
                           >
                             {trans.status || "Unknown"}
@@ -692,7 +701,7 @@ const ClientDashboard: React.FC = () => {
         onConfirm={handleConfirmSendMoney}
         title="Confirm Send Money"
         description={`Are you sure you want to send ₹${parseFloat(
-          amountStr
+          amountStr,
         ).toLocaleString()} to the admin for ${selectedSite?.name}?`}
         confirmText="Send"
         cancelText="Cancel"

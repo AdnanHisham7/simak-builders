@@ -15,14 +15,14 @@ import upload from "@middleware/multer";
 import Joi from "joi";
 import mongoose, { startSession, Types } from "mongoose";
 import { PurchaseModel } from "@models/Purchase";
-import { MachineryRentalModel } from "@models/MachineryRental";
+import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { StockUsageModel } from "@models/StockUsage";
 import { ContractorTransactionModel } from "@models/ContractorTransaction";
 
 const initializeComapny = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const company = new CompanyModel({
@@ -41,7 +41,7 @@ const initializeComapny = async (
 const getDashboardData = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const totalEmployees = await EmployeeModel.countDocuments();
@@ -101,7 +101,7 @@ const getDashboardData = async (
         month: d._id,
         revenue: d.revenue,
         expenses: d.expenses,
-      }))
+      })),
     );
 
     const pendingTransactions = await ClientTransactionModel.find({
@@ -114,7 +114,7 @@ const getDashboardData = async (
     const sitePerformance = await Promise.all(
       sites.map(async (site) => {
         const completedPhases = site.phases.filter(
-          (phase) => phase.status === "completed"
+          (phase) => phase.status === "completed",
         ).length;
         const totalPhases = site.phases.length;
         const efficiency =
@@ -127,7 +127,7 @@ const getDashboardData = async (
 
         const totalAttendance = attendances.reduce(
           (sum, att) => sum + att.status,
-          0
+          0,
         );
         const averageAttendance =
           attendances.length > 0 ? totalAttendance / attendances.length : 0;
@@ -138,7 +138,7 @@ const getDashboardData = async (
           efficiency: Math.round(efficiency),
           utilization: Math.round(utilization),
         };
-      })
+      }),
     );
 
     // Fetch recent activities
@@ -181,7 +181,7 @@ const getDashboardData = async (
       .filter((activity) => activity.timestamp !== undefined)
       .sort(
         (a, b) =>
-          new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime()
+          new Date(b.timestamp!).getTime() - new Date(a.timestamp!).getTime(),
       )
       .slice(0, 5);
 
@@ -207,7 +207,7 @@ const getDashboardData = async (
 const getAllActivityLogs = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const activityLogs = await ActivityLogModel.find()
@@ -224,7 +224,7 @@ const getAllActivityLogs = async (
 const createSiteWithBulkData = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const adminUser = req.user;
@@ -266,7 +266,7 @@ const createSiteWithBulkData = async (
               .valid(...defaultPhases)
               .required(),
             status: Joi.string().valid("not started", "completed").required(),
-          })
+          }),
         )
         .length(10)
         .required(),
@@ -282,20 +282,25 @@ const createSiteWithBulkData = async (
                   category: Joi.string().required(),
                   quantity: Joi.number().required(),
                   price: Joi.number().required(),
-                })
+                }),
               )
               .required(),
             totalAmount: Joi.number().required(),
-          })
+          }),
         )
         .optional(),
-      machineryRentals: Joi.array()
+      miscellaneousExpenses: Joi.array()
         .items(
           Joi.object({
-            description: Joi.string().required(),
+            category: Joi.string()
+              .valid("machinery", "rental", "service")
+              .required(),
+            name: Joi.string().required(),
             amount: Joi.number().required(),
+            tip: Joi.number().optional().default(0),
+            notes: Joi.string().optional().allow("").default(""),
             date: Joi.date().required(),
-          })
+          }).unknown(true),
         )
         .optional(),
       attendances: Joi.array()
@@ -305,7 +310,7 @@ const createSiteWithBulkData = async (
             date: Joi.date().required(),
             status: Joi.number().min(0).max(1).required(),
             dailyWage: Joi.number().required(),
-          })
+          }),
         )
         .optional(),
       stockUsages: Joi.array()
@@ -314,7 +319,7 @@ const createSiteWithBulkData = async (
             stock: Joi.string().required(),
             quantity: Joi.number().required(),
             usageDate: Joi.date(),
-          })
+          }),
         )
         .optional(),
       contractorTransactions: Joi.array()
@@ -327,7 +332,7 @@ const createSiteWithBulkData = async (
             amount: Joi.number().required(),
             description: Joi.string(),
             date: Joi.date(),
-          })
+          }),
         )
         .optional(),
     });
@@ -336,7 +341,7 @@ const createSiteWithBulkData = async (
     if (error) {
       throw new ApiError(
         `Validation error: ${error.details[0].message}`,
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -344,25 +349,25 @@ const createSiteWithBulkData = async (
     if (jsonData.purchases) {
       totalExpenditure += jsonData.purchases.reduce(
         (sum: any, p: { totalAmount: any }) => sum + p.totalAmount,
-        0
+        0,
       );
     }
-    if (jsonData.machineryRentals) {
-      totalExpenditure += jsonData.machineryRentals.reduce(
-        (sum: any, r: { amount: any }) => sum + r.amount,
-        0
+    if (jsonData.miscellaneousExpenses) {
+      totalExpenditure += jsonData.miscellaneousExpenses.reduce(
+        (sum: any, exp: any) => sum + exp.amount + (exp.tip || 0),
+        0,
       );
     }
     if (jsonData.attendances) {
       totalExpenditure += jsonData.attendances.reduce(
         (sum: any, a: { dailyWage: any }) => sum + a.dailyWage,
-        0
+        0,
       );
     }
     if (jsonData.contractorTransactions) {
       totalExpenditure += jsonData.contractorTransactions.reduce(
         (sum: any, t: { amount: any }) => sum + t.amount,
-        0
+        0,
       );
     }
 
@@ -391,7 +396,7 @@ const createSiteWithBulkData = async (
 
     // Arrays to track saved documents for cleanup
     const savedPurchases = [];
-    const savedRentals = [];
+    const savedExpenses = [];
     const savedAttendances = [];
     const savedStockUsages = [];
     const savedContractorTransactions = [];
@@ -399,7 +404,7 @@ const createSiteWithBulkData = async (
     try {
       // Process documents from uploaded files
       const documentFiles = files.filter((f) =>
-        f.fieldname.startsWith("documents[")
+        f.fieldname.startsWith("documents["),
       );
       for (const docFile of documentFiles) {
         const document = {
@@ -407,7 +412,7 @@ const createSiteWithBulkData = async (
           size: docFile.size,
           type: docFile.mimetype,
           url: `/uploads/${docFile.filename}`,
-          uploadedBy: new Types.ObjectId(adminUser.userId), 
+          uploadedBy: new Types.ObjectId(adminUser.userId),
           uploadDate: new Date(),
         };
         newSite.documents.push(document);
@@ -481,36 +486,36 @@ const createSiteWithBulkData = async (
         }
       }
 
-      // Process machinery rentals
-      if (jsonData.machineryRentals) {
-        for (const rentalData of jsonData.machineryRentals) {
-          const rental = new MachineryRentalModel({
-            ...rentalData,
+      // Process Miscellaneous Expenses
+      if (jsonData.miscellaneousExpenses) {
+        for (const expData of jsonData.miscellaneousExpenses) {
+          const totalAmount = expData.amount + (expData.tip || 0);
+
+          const expense = new MiscellaneousExpenseModel({
             site: newSite._id,
+            category: expData.category,
+            name: expData.name,
+            amount: expData.amount,
+            tip: expData.tip || 0,
+            notes: expData.notes || "",
+            date: expData.date,
             addedBy: adminUser.userId,
-            status: "verified",
+            status: "verified", // bulk import by admin → auto verified
           });
-          await rental.save();
-          savedRentals.push(rental._id);
+          await expense.save();
+          savedExpenses.push(expense._id);
+
           newSite.transactions.push({
-            date: rentalData.date,
-            amount: rental.amount,
-            type: "rental",
-            description: rentalData.description,
-            relatedId: rental._id,
+            date: new Date(expData.date),
+            amount: totalAmount,
+            type: "miscellaneous",
+            description: `${expData.category} - ${expData.name}`,
+            relatedId: expense._id,
             user: adminUser.userId,
           });
 
-          newSite.expenses += rental.amount;
-          newSite.budget -= rental.amount;
-          // company.totalAmount -= rental.amount;
-          // company.transactions.push({
-          //   date: rentalData.date,
-          //   amount: -rental.amount,
-          //   type: "expenditure",
-          //   description: `Machinery rental for site ${newSite.name}`,
-          //   site: newSite._id,
-          // });
+          newSite.expenses += totalAmount;
+          newSite.budget -= totalAmount;
         }
       }
 
@@ -609,9 +614,10 @@ const createSiteWithBulkData = async (
       if (savedPurchases.length > 0) {
         await PurchaseModel.deleteMany({ _id: { $in: savedPurchases } });
       }
-      if (savedRentals.length > 0) {
-        await MachineryRentalModel.deleteMany({ _id: { $in: savedRentals } });
-      }
+      if (savedExpenses.length > 0)
+        await MiscellaneousExpenseModel.deleteMany({
+          _id: { $in: savedExpenses },
+        });
       if (savedAttendances.length > 0) {
         await AttendanceModel.deleteMany({ _id: { $in: savedAttendances } });
       }

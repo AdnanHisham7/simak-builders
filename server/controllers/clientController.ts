@@ -3,7 +3,7 @@ import { SiteModel } from "@models/Site";
 import { AttendanceModel } from "@models/Attendance";
 import { PurchaseModel } from "@models/Purchase";
 import { StockModel } from "@models/Stock";
-import { MachineryRentalModel } from "@models/MachineryRental";
+import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { CompanyModel } from "@models/Company";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
@@ -55,8 +55,8 @@ const getClientDashboard = async (
       purchasesLimit = 10,
       stocksPage = 1,
       stocksLimit = 10,
-      rentalsPage = 1,
-      rentalsLimit = 10,
+      miscellaneousPage = 1,
+      miscellaneousLimit = 10,
       transactionsPage = 1,
       transactionsLimit = 10,
     } = req.query;
@@ -87,14 +87,16 @@ const getClientDashboard = async (
       .sort({ createdAt: -1 });
     const stocksCount = await StockModel.countDocuments({ site: site._id });
 
-    const machineryRentals = await MachineryRentalModel.find({ site: site._id })
-      .populate("addedBy", "name")
-      .skip((Number(rentalsPage) - 1) * Number(rentalsLimit))
-      .limit(Number(rentalsLimit))
-      .sort({ createdAt: -1 });
-    const machineryRentalsCount = await MachineryRentalModel.countDocuments({
+    const miscellaneousExpenses = await MiscellaneousExpenseModel.find({
       site: site._id,
-    });
+    })
+      .populate("addedBy", "name")
+      .skip((Number(miscellaneousPage) - 1) * Number(miscellaneousLimit))
+      .limit(Number(miscellaneousLimit))
+      .sort({ createdAt: -1 });
+
+    const miscellaneousExpensesCount =
+      await MiscellaneousExpenseModel.countDocuments({ site: site._id });
 
     const transactions = await ClientTransactionModel.find({
       client: clientId,
@@ -118,9 +120,9 @@ const getClientDashboard = async (
       attendances,
       purchases: { data: purchases, total: purchasesCount },
       stocks: { data: stocks, total: stocksCount },
-      machineryRentals: {
-        data: machineryRentals,
-        total: machineryRentalsCount,
+      miscellaneousExpenses: {
+        data: miscellaneousExpenses,
+        total: miscellaneousExpensesCount,
       },
       transactions: { data: transactions, total: transactionsCount },
     });
@@ -305,7 +307,12 @@ const addManualClientPayment = async (
     const { amount } = req.body;
     const userId = req.user?.userId;
     const userRole = req.user?.role;
-console.log("Adding manual client payment:", { siteId, amount, userId, userRole });
+    console.log("Adding manual client payment:", {
+      siteId,
+      amount,
+      userId,
+      userRole,
+    });
     if (!amount || amount <= 0) {
       throw new ApiError(
         "Amount must be a positive number",

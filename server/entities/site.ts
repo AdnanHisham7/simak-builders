@@ -21,7 +21,7 @@ export interface Site {
   transactions: Array<{
     date: Date;
     amount: number;
-    type: "purchase" | "rental" | "attendance" | "stockTransfer" | "contractor_payment";
+    type: "purchase" | "attendance" | "stockTransfer" | "contractor_payment" | "miscellaneous";
     description?: string;
     relatedId?: Types.ObjectId;
     user?: string;
