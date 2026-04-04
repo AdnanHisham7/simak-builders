@@ -1,6 +1,5 @@
-import React, { useState } from "react";
-import { X, MapPin, AlertCircle } from "lucide-react";
-import { assignSiteToContractor } from "@/services/contractorService";
+import React, { useState, useMemo, useEffect } from "react";
+import { X, MapPin, AlertCircle, Search } from "lucide-react";
 
 interface Contractor {
   id: string;
@@ -23,59 +22,66 @@ interface ContractorAssignSiteModalProps {
   contractor: Contractor | null;
   sites: Site[];
   onAssign: (siteId: string) => void;
-  setSelectedContractor: React.Dispatch<React.SetStateAction<Contractor | null>>;
-  setIsAssignSiteModalOpen: (open: boolean) => void;
-  setError: (error: string | null) => void;
-  isAnimating: boolean;
-  sizeStyles: string;
+  setError?: (error: string | null) => void;
+  isAnimating?: boolean;
+  sizeStyles?: string;
 }
 
 const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
   isOpen,
   onClose,
   contractor,
-  sites,
+  sites = [],
   onAssign,
-  setSelectedContractor,
-  setIsAssignSiteModalOpen,
   setError,
-  isAnimating,
-  sizeStyles,
+  isAnimating = false,
+  sizeStyles = "max-w-2xl w-full mx-4",
 }) => {
-  if (!isOpen || !contractor) return null;
-  const assignedSiteIds = contractor.siteAssignments.map(
-    (assignment) => assignment.site.id
-  );
-  const availableSites = sites.filter(
-    (site) => !assignedSiteIds.includes(site.id)
-  );
+  // === ALL HOOKS ALWAYS RUN — NO EARLY RETURN BEFORE THEM ===
+  const [searchQuery, setSearchQuery] = useState("");
   const [localSelectedSiteId, setLocalSelectedSiteId] = useState("");
 
+  // Reset form when modal is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery("");
+      setLocalSelectedSiteId("");
+    }
+  }, [isOpen]);
+
+  // We compute these even if contractor is null (safe fallback)
+  const assignedSiteIds =
+    contractor?.siteAssignments.map((a) => a.site.id) || [];
+  const availableSites = sites.filter(
+    (site) => !assignedSiteIds.includes(site.id),
+  );
+
+  const filteredSites = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return availableSites;
+    return availableSites.filter((site) =>
+      site.name.toLowerCase().includes(query),
+    );
+  }, [availableSites, searchQuery]);
+
   const handleAssign = async () => {
-    if (!localSelectedSiteId) return;
+    if (!localSelectedSiteId || !contractor) return;
     try {
-      await assignSiteToContractor(
-        contractor.id,
-        localSelectedSiteId
-      );
-      const newAssignment = {
-        site: {
-          id: localSelectedSiteId,
-          name:
-            availableSites.find((s) => s.id === localSelectedSiteId)?.name ||
-            "",
-        },
-        balance: 0,
-      };
-      setSelectedContractor((prev) => ({
-        ...prev!,
-        siteAssignments: [...prev!.siteAssignments, newAssignment],
-      }));
-      setIsAssignSiteModalOpen(false);
+      await onAssign(localSelectedSiteId);
+      onClose();
     } catch (err) {
-      setError("Failed to assign site.");
+      setError?.("Failed to assign site.");
     }
   };
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  // Now safe to early return
+  if (!isOpen || !contractor) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -93,51 +99,63 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
               Assign Site to {contractor.name}
             </h2>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
             >
               <X size={20} />
             </button>
           </div>
 
-          <div className="mb-6">
-            <label className="block text-gray-700 text-sm font-semibold mb-3">
-              Select Available Site
-            </label>
-            <select
-              value={localSelectedSiteId}
-              onChange={(e) => setLocalSelectedSiteId(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-            >
-              <option value="">Choose a site to assign</option>
-              {availableSites.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.name}
-                </option>
-              ))}
-            </select>
+          <div className="relative mb-6">
+            <Search
+              className="absolute left-3 top-3.5 text-gray-400"
+              size={20}
+            />
+            <input
+              type="text"
+              placeholder="Search sites..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50"
+            />
           </div>
 
-          {availableSites.length === 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-              <p className="text-yellow-800 flex items-center">
-                <AlertCircle size={16} className="mr-2" />
-                All available sites have been assigned to this contractor.
-              </p>
+          <label className="block text-gray-700 text-sm font-semibold mb-3">
+            Select Available Site
+          </label>
+
+          <select
+            value={localSelectedSiteId}
+            onChange={(e) => setLocalSelectedSiteId(e.target.value)}
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all"
+          >
+            <option value="">Choose a site to assign...</option>
+            {filteredSites.map((site) => (
+              <option key={site.id} value={site.id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+
+          {filteredSites.length === 0 && (
+            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
+              {searchQuery.trim()
+                ? "No matching sites found."
+                : "No available sites remaining."}
             </div>
           )}
 
-          <div className="flex justify-end space-x-4">
+          <div className="flex justify-end gap-4 mt-8">
             <button
-              onClick={onClose}
-              className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 font-medium"
+              onClick={handleClose}
+              className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all font-medium"
             >
               Cancel
             </button>
             <button
               onClick={handleAssign}
-              disabled={!localSelectedSiteId || availableSites.length === 0}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!localSelectedSiteId}
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               Assign Site
             </button>

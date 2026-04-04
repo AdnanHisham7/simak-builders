@@ -4,7 +4,6 @@ import {
   Plus,
   ChevronLeft,
   ChevronRight,
-  Filter,
   AlignJustify,
   Users,
   Eye,
@@ -14,6 +13,8 @@ import {
   AlertCircle,
   Mail,
   Phone,
+  ArrowLeft,
+  DollarSign,
 } from "lucide-react";
 import {
   getAllContractors,
@@ -24,9 +25,8 @@ import {
 } from "@/services/contractorService";
 import { getSites } from "@/services/siteService";
 import AddContractorModal from "./AddContractorModal";
-import DetailsModal from "./ContractorDetailsModal";
-import AssignSiteModal from "./ContractorAssignSiteModal";
-import TransactionsModal from "./ContractorTransactionsModal";
+import ContractorAssignSiteModal from "./ContractorAssignSiteModal";
+import AddTransactionModal from "./AddContractorTransactionModal";
 
 interface Contractor {
   id: string;
@@ -50,27 +50,36 @@ const Contractors: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isAssignSiteModalOpen, setIsAssignSiteModalOpen] = useState(false);
-  const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
+  const [isAddTransactionModalOpen, setIsAddTransactionModalOpen] =
+    useState(false);
+
   const [selectedContractor, setSelectedContractor] =
     useState<Contractor | null>(null);
+  const [selectedSiteIdForTx, setSelectedSiteIdForTx] = useState("");
+
+  const [viewMode, setViewMode] = useState<
+    "list" | "grid" | "details" | "transactions"
+  >("list");
+
   const [selectedCompany, setSelectedCompany] = useState("All Companies");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [companies, setCompanies] = useState<string[]>(["All Companies"]);
+  const [sites, setSites] = useState<Site[]>([]);
+
   const [newContractor, setNewContractor] = useState({
     name: "",
     email: "",
     phone: "",
     company: "",
   });
-  const [companies, setCompanies] = useState<string[]>(["All Companies"]);
   const [inputErrors, setInputErrors] = useState({
     name: false,
     email: false,
     phone: false,
     company: false,
   });
-  const [sites, setSites] = useState<Site[]>([]);
-  const [selectedSiteId, setSelectedSiteId] = useState("");
+
   const [transactions, setTransactions] = useState<any[]>([]);
   const [newTransaction, setNewTransaction] = useState({
     siteId: "",
@@ -79,16 +88,16 @@ const Contractors: React.FC = () => {
     description: "",
   });
   const [transactionError, setTransactionError] = useState<string | null>(null);
+
   const [isAnimating, setIsAnimating] = useState(false);
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [sortBy, setSortBy] = useState<"name" | "company" | "email" | "status">(
-    "name"
+    "name",
   );
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [statusFilter, setStatusFilter] = useState("All Statuses");
 
   const itemsPerPage = 6;
 
+  // Fetch initial data
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -97,7 +106,7 @@ const Contractors: React.FC = () => {
         setContractors(contractorsData);
         setSites(sitesData);
         const uniqueCompanies = Array.from(
-          new Set(contractorsData.map((c) => c.company).filter(Boolean))
+          new Set(contractorsData.map((c) => c.company).filter(Boolean)),
         );
         setCompanies(["All Companies", ...uniqueCompanies]);
         setLoading(false);
@@ -110,20 +119,10 @@ const Contractors: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (
-      isAddModalOpen ||
-      isDetailsModalOpen ||
-      isAssignSiteModalOpen ||
-      isTransactionsModalOpen
-    ) {
+    if (isAddModalOpen || isAssignSiteModalOpen || isAddTransactionModalOpen) {
       setIsAnimating(true);
     }
-  }, [
-    isAddModalOpen,
-    isDetailsModalOpen,
-    isAssignSiteModalOpen,
-    isTransactionsModalOpen,
-  ]);
+  }, [isAddModalOpen, isAssignSiteModalOpen, isAddTransactionModalOpen]);
 
   const filteredAndSortedContractors = useMemo(() => {
     let filtered = contractors.filter((contractor) => {
@@ -131,11 +130,14 @@ const Contractors: React.FC = () => {
         contractor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         contractor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (contractor.phone && contractor.phone.includes(searchTerm));
+
       const matchesCompany =
         selectedCompany === "All Companies" ||
         contractor.company === selectedCompany;
+
       const matchesStatus =
         statusFilter === "All Statuses" || contractor.status === statusFilter;
+
       return matchesSearch && matchesCompany && matchesStatus;
     });
 
@@ -147,8 +149,8 @@ const Contractors: React.FC = () => {
           ? -1
           : 1
         : aValue > bValue
-        ? -1
-        : 1;
+          ? -1
+          : 1;
     });
 
     return filtered;
@@ -162,13 +164,13 @@ const Contractors: React.FC = () => {
   ]);
 
   const totalPages = Math.ceil(
-    filteredAndSortedContractors.length / itemsPerPage
+    filteredAndSortedContractors.length / itemsPerPage,
   );
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentContractors = filteredAndSortedContractors.slice(
     indexOfFirstItem,
-    indexOfLastItem
+    indexOfLastItem,
   );
 
   const paginate = (pageNumber: number) => {
@@ -176,7 +178,7 @@ const Contractors: React.FC = () => {
   };
 
   const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
     setNewContractor((prev) => ({ ...prev, [name]: value }));
@@ -200,12 +202,7 @@ const Contractors: React.FC = () => {
     if (errors.name || errors.email) return;
 
     try {
-      const createdContractor = await createContractor({
-        name: newContractor.name,
-        email: newContractor.email,
-        phone: newContractor.phone,
-        company: newContractor.company,
-      });
+      const createdContractor = await createContractor(newContractor);
       setContractors((prev) => [...prev, createdContractor]);
       if (newContractor.company && !companies.includes(newContractor.company)) {
         setCompanies((prev) => [...prev, newContractor.company]);
@@ -217,9 +214,27 @@ const Contractors: React.FC = () => {
     }
   };
 
-  const handleAssignSite = async (siteId: string) => {
+  const openDetails = (contractor: Contractor) => {
+    setSelectedContractor(contractor);
+    setViewMode("details");
+  };
+
+  const openTransactions = async (contractor: Contractor, siteId: string) => {
+    setSelectedContractor(contractor);
+    setSelectedSiteIdForTx(siteId);
     try {
-      await assignSiteToContractor(selectedContractor!.id, siteId);
+      const txs = await getContractorTransactions(contractor.id, siteId);
+      setTransactions(txs);
+      setViewMode("transactions");
+    } catch (err) {
+      setError("Failed to fetch transactions.");
+    }
+  };
+
+  const handleAssignSite = async (siteId: string) => {
+    if (!selectedContractor) return;
+    try {
+      await assignSiteToContractor(selectedContractor.id, siteId);
       const newAssignment = {
         site: {
           id: siteId,
@@ -229,7 +244,7 @@ const Contractors: React.FC = () => {
       };
       setSelectedContractor((prev) => ({
         ...prev!,
-        siteAssignments: [...prev!.siteAssignments, newAssignment],
+        siteAssignments: [...(prev?.siteAssignments || []), newAssignment],
       }));
       setIsAssignSiteModalOpen(false);
     } catch (err) {
@@ -237,14 +252,19 @@ const Contractors: React.FC = () => {
     }
   };
 
-  const handleAddTransaction = async (data) => {
+  const handleAddTransaction = async (data: any) => {
     const response = await addTransaction(data);
     setContractors((prev) =>
       prev.map((c) =>
-        c.id === response.updatedContractor.id ? response.updatedContractor : c
-      )
+        c.id === response.updatedContractor.id ? response.updatedContractor : c,
+      ),
     );
-    setSelectedContractor(response.updatedContractor);
+    if (
+      selectedContractor &&
+      selectedContractor.id === response.updatedContractor.id
+    ) {
+      setSelectedContractor(response.updatedContractor);
+    }
     return response;
   };
 
@@ -331,10 +351,7 @@ const Contractors: React.FC = () => {
           </span>
         </div>
         <button
-          onClick={() => {
-            setSelectedContractor(contractor);
-            setIsDetailsModalOpen(true);
-          }}
+          onClick={() => openDetails(contractor)}
           className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
         >
           <Eye size={14} />
@@ -344,10 +361,11 @@ const Contractors: React.FC = () => {
     </div>
   );
 
+  // ======================= RENDER =======================
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -364,400 +382,604 @@ const Contractors: React.FC = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Contractor Management
-              </h1>
-              <p className="text-gray-600 mt-2">
-                Manage your contractors and their assignments
-              </p>
-            </div>
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              Contractor Management
+            </h1>
+            <p className="text-gray-600 mt-2">
+              Manage your contractors and their assignments
+            </p>
+          </div>
+          {viewMode === "list" || viewMode === "grid" ? (
             <button
               onClick={() => setIsAddModalOpen(true)}
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 font-medium flex items-center space-x-2"
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
+              <Plus size={20} />
               <span>Add Contractor</span>
             </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <StatsCard
-            icon={Users}
-            title="Total Contractors"
-            value={contractors.length}
-            color="bg-gradient-to-br from-blue-500 to-purple-600"
-          />
-          <StatsCard
-            icon={Activity}
-            title="Active Contractors"
-            value={contractors.filter((c) => c.status === "active").length}
-            color="bg-gradient-to-br from-green-500 to-blue-500"
-          />
-          <StatsCard
-            icon={AlertCircle}
-            title="Blocked Contractors"
-            value={contractors.filter((c) => c.status === "blocked").length}
-            color="bg-gradient-to-br from-red-500 to-pink-600"
-          />
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 mb-8 relative">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mt-2">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Contractors
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search by name, email, or phone..."
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Company
-              </label>
-              <select
-                value={selectedCompany}
-                onChange={(e) => {
-                  setSelectedCompany(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              >
-                {companies.map((company) => (
-                  <option key={company} value={company}>
-                    {company}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              >
-                <option value="All Statuses">All Statuses</option>
-                <option value="active">Active</option>
-                <option value="blocked">Blocked</option>
-              </select>
-            </div>
-            <div className="flex items-end space-x-2">
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-2 rounded-xl ${
-                    viewMode === "list"
-                      ? "bg-blue-100 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <AlignJustify size={18} />
-                </button>
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded-xl ${
-                    viewMode === "grid"
-                      ? "bg-blue-100 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Grid size={18} />
-                </button>
-              </div>
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setSelectedCompany("All Companies");
-                  setStatusFilter("All Statuses");
-                  setCurrentPage(1);
-                }}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-            <span>
-              Showing {indexOfFirstItem + 1} to{" "}
-              {Math.min(indexOfLastItem, filteredAndSortedContractors.length)}{" "}
-              of {filteredAndSortedContractors.length} contractors
-            </span>
-            <span>Total Companies: {companies.length - 1}</span>
-          </div>
-        </div>
-
-        {filteredAndSortedContractors.length === 0 ? (
-          <div className="p-12 text-center">
-            <svg
-              className="mx-auto h-12 w-12 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          ) : (
+            <button
+              onClick={() => setViewMode("list")}
+              className="flex items-center text-blue-600 hover:text-blue-700 font-medium"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-              />
-            </svg>
-            <h3 className="mt-4 text-lg font-medium text-gray-900">
-              No contractors found
-            </h3>
-            <p className="mt-2 text-gray-500">
-              {searchTerm ||
-              selectedCompany !== "All Companies" ||
-              statusFilter !== "All Statuses"
-                ? "Try adjusting your search criteria or filters."
-                : "Get started by adding your first contractor."}
-            </p>
-          </div>
-        ) : viewMode === "list" ? (
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden relative">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                  <tr>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("name")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Name</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("name")}
-                        </span>
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("company")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Company</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("company")}
-                        </span>
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("email")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Email</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("email")}
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Phone
-                    </th>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("status")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Status</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("status")}
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {currentContractors.map((contractor) => (
-                    <tr
-                      key={contractor.id}
-                      className="hover:bg-gray-50 transition-colors duration-150"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium text-sm">
-                              {contractor.name.charAt(0).toUpperCase()}
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {contractor.name}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                          {contractor.company || "N/A"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {contractor.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {contractor.phone || "-"}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${
-                            contractor.status === "active"
-                              ? "bg-green-100 text-green-800 border border-green-200"
-                              : "bg-red-100 text-red-800 border border-red-200"
-                          }`}
-                        >
-                          {contractor.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => {
-                            setSelectedContractor(contractor);
-                            setIsDetailsModalOpen(true);
-                          }}
-                          className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {currentContractors.map((contractor) => (
-              <ContractorCard key={contractor.id} contractor={contractor} />
-            ))}
+              <ArrowLeft size={20} className="mr-2" />
+              Back to List
+            </button>
+          )}
+        </div>
+
+        {/* Stats Cards - only show in list/grid view */}
+        {(viewMode === "list" || viewMode === "grid") && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <StatsCard
+              icon={Users}
+              title="Total Contractors"
+              value={contractors.length}
+              color="bg-gradient-to-br from-blue-500 to-purple-600"
+            />
+            <StatsCard
+              icon={Activity}
+              title="Active Contractors"
+              value={contractors.filter((c) => c.status === "active").length}
+              color="bg-gradient-to-br from-green-500 to-blue-500"
+            />
+            <StatsCard
+              icon={AlertCircle}
+              title="Blocked Contractors"
+              value={contractors.filter((c) => c.status === "blocked").length}
+              color="bg-gradient-to-br from-red-500 to-pink-600"
+            />
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-6">
-          <div className="text-sm text-gray-500">
-            Showing {indexOfFirstItem + 1} to{" "}
-            {Math.min(indexOfLastItem, filteredAndSortedContractors.length)} of{" "}
-            {filteredAndSortedContractors.length} contractors
-          </div>
-          <div className="flex items-center space-x-2">
+        {/* ==================== DETAILS VIEW ==================== */}
+        {viewMode === "details" && selectedContractor && (
+          <div>
             <button
-              onClick={() => paginate(currentPage - 1)}
-              disabled={currentPage === 1}
-              className={`p-2 rounded-md ${
-                currentPage === 1
-                  ? "text-gray-300 cursor-not-allowed"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
+              onClick={() => setViewMode("list")}
+              className="flex items-center text-blue-600 hover:text-blue-700 font-medium mb-6"
             >
-              <ChevronLeft size={18} />
+              <ArrowLeft size={20} className="mr-2" />
+              Back to Contractors
             </button>
-            <div className="flex space-x-1">
-              {[...Array(totalPages)].map((_, index) => {
-                const pageNum = index + 1;
-                if (
-                  pageNum === 1 ||
-                  pageNum === totalPages ||
-                  (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
-                ) {
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => paginate(pageNum)}
-                      className={`w-8 h-8 flex items-center justify-center rounded-md ${
-                        currentPage === pageNum
-                          ? "bg-blue-600 text-white"
-                          : "text-gray-600 hover:bg-gray-100"
+
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8">
+              <div className="flex justify-between items-start mb-8">
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center">
+                    <span className="text-white font-bold text-2xl">
+                      {selectedContractor.name.charAt(0)}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold text-gray-900">
+                      {selectedContractor.name}
+                    </h2>
+                    <p className="text-lg text-gray-600">
+                      {selectedContractor.company || "No Company"}
+                    </p>
+                    <span
+                      className={`inline-flex px-3 py-1 rounded-full text-sm font-medium mt-2 ${
+                        selectedContractor.status === "active"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {pageNum}
-                    </button>
-                  );
-                }
-                if (
-                  pageNum === currentPage - 2 ||
-                  pageNum === currentPage + 2
-                ) {
-                  return (
-                    <span
-                      key={pageNum}
-                      className="w-8 h-8 flex items-center justify-center"
-                    >
-                      ...
+                      {selectedContractor.status === "active"
+                        ? "Active"
+                        : "Blocked"}
                     </span>
-                  );
-                }
-                return null;
-              })}
-            </div>
-            <button
-              onClick={() => paginate(currentPage + 1)}
-              disabled={currentPage === totalPages}
-              className={`p-2 rounded-md ${
-                currentPage === totalPages
-                  ? "text-gray-300 cursor-not-allowed"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        </div>
+                  </div>
+                </div>
+              </div>
 
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Contact Information */}
+                <div className="lg:col-span-1">
+                  <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                      <Users size={20} className="mr-2 text-blue-600" />
+                      Contact Information
+                    </h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center space-x-3">
+                        <Mail size={16} className="text-gray-500" />
+                        <span className="text-gray-700">
+                          {selectedContractor.email}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <Phone size={16} className="text-gray-500" />
+                        <span className="text-gray-700">
+                          {selectedContractor.phone || "Not provided"}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <MapPin size={16} className="text-gray-500" />
+                        <span className="text-gray-700">
+                          {selectedContractor.company || "Not provided"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Site Assignments */}
+                <div className="lg:col-span-2">
+                  <div className="bg-white border-2 border-gray-100 rounded-2xl p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                        <MapPin size={20} className="mr-2 text-green-600" />
+                        Site Assignments (
+                        {selectedContractor.siteAssignments.length})
+                      </h3>
+                      <button
+                        onClick={() => {
+                          if (selectedContractor) {
+                            setIsAssignSiteModalOpen(true);
+                          }
+                        }}
+                        className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 flex items-center space-x-2"
+                      >
+                        <Plus size={16} />
+                        <span>Assign Site</span>
+                      </button>
+                    </div>
+
+                    {selectedContractor.siteAssignments.length > 0 ? (
+                      <div className="space-y-4">
+                        {selectedContractor.siteAssignments.map(
+                          (assignment) => (
+                            <div
+                              key={assignment.site.id}
+                              className="bg-gray-50 rounded-xl p-4 flex items-center justify-between"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-lg flex items-center justify-center">
+                                  <MapPin size={18} className="text-white" />
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-gray-900">
+                                    {assignment.site.name}
+                                  </h4>
+                                  <p
+                                    className={`text-sm font-medium ${
+                                      assignment.balance >= 0
+                                        ? "text-green-600"
+                                        : "text-red-600"
+                                    }`}
+                                  >
+                                    Balance: ₹{assignment.balance.toFixed(2)}
+                                  </p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  openTransactions(
+                                    selectedContractor,
+                                    assignment.site.id,
+                                  )
+                                }
+                                className="px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center space-x-2"
+                              >
+                                <Activity size={14} />
+                                <span className="text-sm">Transactions</span>
+                              </button>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <MapPin
+                          size={48}
+                          className="mx-auto text-gray-300 mb-4"
+                        />
+                        <p className="text-gray-500">No sites assigned yet</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-100">
+                <button
+                  onClick={() => setIsAddTransactionModalOpen(true)}
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 flex items-center space-x-2"
+                >
+                  <DollarSign size={16} />
+                  <span>Add Transaction</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================== TRANSACTIONS VIEW ==================== */}
+        {viewMode === "transactions" && selectedContractor && (
+          <div>
+            <button
+              onClick={() => setViewMode("details")}
+              className="flex items-center text-blue-600 hover:text-blue-700 font-medium mb-6"
+            >
+              <ArrowLeft size={20} className="mr-2" />
+              Back to Details
+            </button>
+
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 max-h-[80vh] flex flex-col">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center mb-6">
+                <Activity size={24} className="mr-3 text-blue-600" />
+                Transactions for {selectedContractor.name}
+              </h2>
+
+              <div className="mb-6">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Select Site
+                </label>
+                <select
+                  value={selectedSiteIdForTx}
+                  onChange={async (e) => {
+                    const siteId = e.target.value;
+                    setSelectedSiteIdForTx(siteId);
+                    if (siteId) {
+                      try {
+                        const txs = await getContractorTransactions(
+                          selectedContractor.id,
+                          siteId,
+                        );
+                        setTransactions(txs);
+                      } catch (err) {
+                        setError("Failed to fetch transactions.");
+                      }
+                    } else {
+                      setTransactions([]);
+                    }
+                  }}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
+                >
+                  <option value="">Select a site to view transactions</option>
+                  {selectedContractor.siteAssignments.map((assignment) => (
+                    <option key={assignment.site.id} value={assignment.site.id}>
+                      {assignment.site.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedSiteIdForTx && (
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                    Transactions for{" "}
+                    {selectedContractor.siteAssignments.find(
+                      (a) => a.site.id === selectedSiteIdForTx,
+                    )?.site.name || "Unknown Site"}
+                  </h3>
+
+                  {transactions.length > 0 ? (
+                    <div className="max-h-[400px] overflow-y-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Type
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Amount
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Description
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Date
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {transactions.map((tx) => (
+                            <tr key={tx.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {tx.type}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                ${tx.amount.toFixed(2)}
+                              </td>
+                              <td className="px-6 py-4">
+                                {tx.description || "N/A"}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {new Date(tx.date).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500">
+                      No transactions found for this site.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ==================== LIST / GRID VIEW ==================== */}
+        {(viewMode === "list" || viewMode === "grid") && (
+          <>
+            {/* Filters */}
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Search Contractors
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search by name, email, or phone..."
+                      value={searchTerm}
+                      onChange={(e) => {
+                        setSearchTerm(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Company
+                  </label>
+                  <select
+                    value={selectedCompany}
+                    onChange={(e) => {
+                      setSelectedCompany(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {companies.map((company) => (
+                      <option key={company} value={company}>
+                        {company}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Filter by Status
+                  </label>
+                  <select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="All Statuses">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="blocked">Blocked</option>
+                  </select>
+                </div>
+
+                <div className="flex items-end space-x-2">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={`p-2 rounded-xl ${viewMode === "list" ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:bg-gray-100"}`}
+                    >
+                      <AlignJustify size={18} />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("grid")}
+                      className={`p-2 rounded-xl ${viewMode === "grid" ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:bg-gray-100"}`}
+                    >
+                      <Grid size={18} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSearchTerm("");
+                      setSelectedCompany("All Companies");
+                      setStatusFilter("All Statuses");
+                      setCurrentPage(1);
+                    }}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* List or Grid */}
+            {filteredAndSortedContractors.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="mx-auto h-12 w-12 text-gray-400">
+                  No contractors found
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  No contractors found
+                </h3>
+                <p className="mt-2 text-gray-500">
+                  Try adjusting your search criteria or filters.
+                </p>
+              </div>
+            ) : viewMode === "list" ? (
+              // List View (Table) - same as old
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                      <tr>
+                        <th
+                          className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200"
+                          onClick={() => handleSort("name")}
+                        >
+                          Name {getSortIcon("name")}
+                        </th>
+                        <th
+                          className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200"
+                          onClick={() => handleSort("company")}
+                        >
+                          Company {getSortIcon("company")}
+                        </th>
+                        <th
+                          className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200"
+                          onClick={() => handleSort("email")}
+                        >
+                          Email {getSortIcon("email")}
+                        </th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Phone
+                        </th>
+                        <th
+                          className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200"
+                          onClick={() => handleSort("status")}
+                        >
+                          Status {getSortIcon("status")}
+                        </th>
+                        <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {currentContractors.map((contractor) => (
+                        <tr
+                          key={contractor.id}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium text-sm">
+                                {contractor.name.charAt(0).toUpperCase()}
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {contractor.name}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                              {contractor.company || "N/A"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {contractor.email}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {contractor.phone || "-"}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`inline-flex px-3 py-1 text-xs font-medium rounded-full ${contractor.status === "active" ? "bg-green-100 text-green-800 border border-green-200" : "bg-red-100 text-red-800 border border-red-200"}`}
+                            >
+                              {contractor.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button
+                              onClick={() => openDetails(contractor)}
+                              className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200"
+                            >
+                              View Details
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              // Grid View
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {currentContractors.map((contractor) => (
+                  <ContractorCard key={contractor.id} contractor={contractor} />
+                ))}
+              </div>
+            )}
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between mt-8">
+              <div className="text-sm text-gray-500">
+                Showing {indexOfFirstItem + 1} to{" "}
+                {Math.min(indexOfLastItem, filteredAndSortedContractors.length)}{" "}
+                of {filteredAndSortedContractors.length} contractors
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className={`p-2 rounded-md ${currentPage === 1 ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                {[...Array(totalPages)].map((_, index) => {
+                  const pageNum = index + 1;
+                  if (
+                    pageNum === 1 ||
+                    pageNum === totalPages ||
+                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => paginate(pageNum)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-md ${currentPage === pageNum ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-100"}`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  if (
+                    pageNum === currentPage - 2 ||
+                    pageNum === currentPage + 2
+                  ) {
+                    return (
+                      <span
+                        key={pageNum}
+                        className="w-8 h-8 flex items-center justify-center"
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  return null;
+                })}
+                <button
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className={`p-2 rounded-md ${currentPage === totalPages ? "text-gray-300 cursor-not-allowed" : "text-gray-600 hover:bg-gray-100"}`}
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* ======================= MODALS ======================= */}
         <AddContractorModal
           isOpen={isAddModalOpen}
           onClose={() => {
@@ -778,50 +1000,23 @@ const Contractors: React.FC = () => {
           isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
         />
-        <DetailsModal
-          isOpen={isDetailsModalOpen}
-          onClose={() => setIsDetailsModalOpen(false)}
-          selectedContractor={selectedContractor}
-          sites={sites}
-          setIsAssignSiteModalOpen={setIsAssignSiteModalOpen}
-          setSelectedSiteId={setSelectedSiteId}
-          setIsTransactionsModalOpen={setIsTransactionsModalOpen}
-          setTransactions={setTransactions}
-          setError={setError}
-          isAnimating={isAnimating}
-          handleAddTransaction={handleAddTransaction}
-        />
-        <AssignSiteModal
-          isOpen={isAssignSiteModalOpen}
+
+        <ContractorAssignSiteModal
+          isOpen={isAssignSiteModalOpen && !!selectedContractor}
           onClose={() => setIsAssignSiteModalOpen(false)}
           contractor={selectedContractor}
           sites={sites}
           onAssign={handleAssignSite}
-          setSelectedContractor={setSelectedContractor}
-          setIsAssignSiteModalOpen={setIsAssignSiteModalOpen}
           setError={setError}
           isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
         />
-        <TransactionsModal
-          isOpen={isTransactionsModalOpen}
-          onClose={() => {
-            setIsTransactionsModalOpen(false);
-            setSelectedSiteId("");
-            setTransactions([]);
-          }}
+
+        <AddTransactionModal
+          isOpen={isAddTransactionModalOpen}
+          onClose={() => setIsAddTransactionModalOpen(false)}
           contractor={selectedContractor}
-          sites={sites}
-          transactions={transactions}
-          setTransactions={setTransactions}
           onAddTransaction={handleAddTransaction}
-          selectedSiteId={selectedSiteId}
-          setSelectedContractor={setSelectedContractor}
-          setContractors={setContractors}
-          newTransaction={newTransaction}
-          setNewTransaction={setNewTransaction}
-          setTransactionError={setTransactionError}
-          isAnimating={isAnimating}
         />
       </div>
     </div>

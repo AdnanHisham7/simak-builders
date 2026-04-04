@@ -11,7 +11,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { getContractorTransactions } from "@/services/contractorService";
-import AddTransactionModal from "./AddContractorTransactionModal"; // Import the new modal
+import AddTransactionModal from "./AddContractorTransactionModal";
 
 interface Contractor {
   id: string;
@@ -176,7 +176,7 @@ const ContractorDetailsModal: React.FC<ContractorDetailsModalProps> = ({
                                   : "text-red-600"
                               }`}
                             >
-                              Balance: ${assignment.balance.toFixed(2)}
+                              Balance: ₹{assignment.balance.toFixed(2)}
                             </p>
                           </div>
                         </div>
