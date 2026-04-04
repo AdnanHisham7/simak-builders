@@ -46,7 +46,11 @@ const SiteManagerDashboard: React.FC = () => {
             : [],
           siteExpensesBalance: Number(data?.siteExpensesBalance ?? 0),
           siteExpensesTransactions: Array.isArray(data?.siteExpensesTransactions)
-            ? data.siteExpensesTransactions
+            ? [...data.siteExpensesTransactions].sort((a, b) => {
+                const dateA = new Date(a.date || 0).getTime();
+                const dateB = new Date(b.date || 0).getTime();
+                return dateB - dateA; // Descending order
+              })
             : [],
           assignedSites: Array.isArray(data?.assignedSites) ? data.assignedSites : [],
         };

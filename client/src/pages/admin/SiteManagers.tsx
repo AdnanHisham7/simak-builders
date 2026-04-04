@@ -63,7 +63,7 @@ const SiteManagers: React.FC = () => {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isAssignFundsModalOpen, setIsAssignFundsModalOpen] = useState(false);
   const [selectedManager, setSelectedManager] = useState<SiteManager | null>(
-    null
+    null,
   );
   const [isToggling, setIsToggling] = useState<{ [key: string]: boolean }>({});
   const [isRegenerating, setIsRegenerating] = useState<{
@@ -139,7 +139,7 @@ const SiteManagers: React.FC = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSiteManagers = filteredSiteManagers.slice(
     indexOfFirstItem,
-    indexOfLastItem
+    indexOfLastItem,
   );
 
   const activeManagers = siteManagers.filter((m) => !m.isBlocked).length;
@@ -188,11 +188,11 @@ const SiteManagers: React.FC = () => {
           await toggleUserStatus(manager.id, newIsBlocked);
           setSiteManagers((prev) =>
             prev.map((m) =>
-              m.id === manager.id ? { ...m, isBlocked: newIsBlocked } : m
-            )
+              m.id === manager.id ? { ...m, isBlocked: newIsBlocked } : m,
+            ),
           );
           toast.success(
-            `Manager ${newIsBlocked ? "blocked" : "unblocked"} successfully!`
+            `Manager ${newIsBlocked ? "blocked" : "unblocked"} successfully!`,
           );
         } catch (err) {
           console.error("Error toggling status:", err);
@@ -231,8 +231,8 @@ const SiteManagers: React.FC = () => {
             });
           setSiteManagers((prev) =>
             prev.map((m) =>
-              m.id === manager.id ? { ...m, password: newPassword } : m
-            )
+              m.id === manager.id ? { ...m, password: newPassword } : m,
+            ),
           );
           toast.success("Password regenerated successfully!");
         } catch (err) {
@@ -265,12 +265,12 @@ const SiteManagers: React.FC = () => {
           const updatedSites = manager.sites.filter((s) => s.id !== siteId);
           await assignSitesToManager(
             managerId,
-            updatedSites.map((s) => s.id)
+            updatedSites.map((s) => s.id),
           );
           setSiteManagers((prev) =>
             prev.map((m) =>
-              m.id === managerId ? { ...m, sites: updatedSites } : m
-            )
+              m.id === managerId ? { ...m, sites: updatedSites } : m,
+            ),
           );
           toast.success("Site removed successfully!");
         } catch (err) {
@@ -290,12 +290,12 @@ const SiteManagers: React.FC = () => {
       const newSiteIds = [...new Set([...currentSiteIds, ...selectedSiteIds])];
       await assignSitesToManager(selectedManager.id, newSiteIds);
       const updatedSites = allSites.filter((site) =>
-        newSiteIds.includes(site.id)
+        newSiteIds.includes(site.id),
       );
       setSiteManagers((prev) =>
         prev.map((m) =>
-          m.id === selectedManager.id ? { ...m, sites: updatedSites } : m
-        )
+          m.id === selectedManager.id ? { ...m, sites: updatedSites } : m,
+        ),
       );
       toast.success("Sites assigned successfully!");
     } catch (err) {
@@ -318,7 +318,7 @@ const SiteManagers: React.FC = () => {
           password: user.password || "********",
           isBlocked: user.isBlocked,
           siteExpensesBalance: user.siteExpensesBalance,
-        }))
+        })),
       );
       setIsAssignFundsModalOpen(false);
       toast.success("Funds assigned successfully!");
@@ -473,7 +473,7 @@ const SiteManagers: React.FC = () => {
                     value={selectedSiteId || "All Sites"}
                     onChange={(e) => {
                       setSelectedSiteId(
-                        e.target.value === "All Sites" ? null : e.target.value
+                        e.target.value === "All Sites" ? null : e.target.value,
                       );
                       setCurrentPage(1);
                     }}
@@ -532,6 +532,12 @@ const SiteManagers: React.FC = () => {
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                     <div className="flex items-center space-x-2">
+                      <DollarSign size={16} />
+                      <span>Balance</span>
+                    </div>
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    <div className="flex items-center space-x-2">
                       <Mail size={16} />
                       <span>Contact</span>
                     </div>
@@ -561,7 +567,7 @@ const SiteManagers: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center space-x-3">
                         <div className="relative">
-                          <Link 
+                          <Link
                             to={`/admin/site-managers/${manager.id}/dashboard`}
                           >
                             <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-white font-medium">
@@ -620,6 +626,14 @@ const SiteManagers: React.FC = () => {
                         >
                           <Plus size={12} />
                         </button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <DollarSign size={16} className="text-emerald-500" />
+                        <span className="font-semibold text-emerald-700 text-lg">
+                          ₹{manager.siteExpensesBalance.toLocaleString("en-IN")}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -845,7 +859,7 @@ const SiteManagers: React.FC = () => {
                   password: user.password || "********",
                   isBlocked: user.isBlocked,
                   siteExpensesBalance: user.siteExpensesBalance,
-                }))
+                })),
               );
               setIsAddModalOpen(false);
               toast.success("Site manager added successfully!");
@@ -871,8 +885,8 @@ const SiteManagers: React.FC = () => {
                     prev.map((m) =>
                       m.id === selectedManager.id
                         ? { ...m, ...updatedManager }
-                        : m
-                    )
+                        : m,
+                    ),
                   );
                   setIsEditModalOpen(false);
                   toast.success("Site manager updated successfully!");
