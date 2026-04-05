@@ -8,7 +8,7 @@ import * as authService from "../services/authService";
 import * as emailService from "../services/emailService";
 import { SiteModel } from "@models/Site";
 import bcrypt from "bcryptjs";
-import { sendInitialPasswordEmail } from "services/emailService";
+import { sendInitialPasswordEmail } from "../services/emailService";
 import { CompanyModel } from "@models/Company";
 import { ActivityLogModel } from "@models/ActivityLog";
 
