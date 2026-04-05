@@ -10,7 +10,7 @@ import { Types } from "mongoose";
 const createContractor = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { name, email, phone, company } = req.body;
@@ -58,16 +58,123 @@ const createContractor = async (
 const getAllContractors = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     if (req.user?.role !== "admin")
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     const contractors = await ContractorModel.find({}).populate(
       "siteAssignments.site",
-      "name"
+      "name",
     );
     res.status(HttpStatus.OK).json(contractors);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateContractor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const { id } = req.params;
+    const { name, email, phone, company, status } = req.body;
+
+    // Check if contractor exists
+    const contractor = await ContractorModel.findById(id);
+    if (!contractor) {
+      throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
+    }
+
+    // If email is being changed, check for uniqueness
+    if (email && email !== contractor.email) {
+      const existingContractor = await ContractorModel.findOne({ email });
+      if (existingContractor) {
+        throw new ApiError(
+          "Email already in use by another contractor",
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+    }
+
+    // Update fields
+    if (name) contractor.name = name;
+    if (email) contractor.email = email;
+    if (phone !== undefined) contractor.phone = phone;
+    if (company !== undefined) contractor.company = company;
+    if (status) contractor.status = status;
+
+    await contractor.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "contractor",
+      resourceId: contractor._id,
+      details: `Updated contractor: ${contractor.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Contractor updated successfully",
+      contractor: {
+        id: contractor._id,
+        name: contractor.name,
+        email: contractor.email,
+        phone: contractor.phone,
+        company: contractor.company,
+        status: contractor.status,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteContractor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const { id } = req.params;
+
+    const contractor = await ContractorModel.findById(id);
+    if (!contractor) {
+      throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Optional: Prevent deletion if contractor has active site assignments or transactions
+    if (contractor.siteAssignments && contractor.siteAssignments.length > 0) {
+      throw new ApiError(
+        "Cannot delete contractor with active site assignments. Please remove assignments first.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    await ContractorTransactionModel.deleteMany({ contractor: id });
+    await contractor.deleteOne();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "delete",
+      resource: "contractor",
+      resourceId: id,
+      details: `Deleted contractor: ${contractor.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Contractor deleted successfully",
+    });
   } catch (error) {
     next(error);
   }
@@ -76,7 +183,7 @@ const getAllContractors = async (
 const assignSiteToContractor = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { contractorId, siteId } = req.body;
@@ -92,12 +199,12 @@ const assignSiteToContractor = async (
 
     if (
       contractor.siteAssignments.some(
-        (assignment) => assignment.site?.toString() === siteId
+        (assignment) => assignment.site?.toString() === siteId,
       )
     ) {
       throw new ApiError(
         "Site already assigned to contractor",
-        HttpStatus.BAD_REQUEST
+        HttpStatus.BAD_REQUEST,
       );
     }
 
@@ -115,7 +222,7 @@ const assignSiteToContractor = async (
 const addTransaction = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { contractorId, siteId, type, amount, description } = req.body;
@@ -130,7 +237,7 @@ const addTransaction = async (
     if (!siteExists) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
     let siteAssignment = contractor.siteAssignments.find(
-      (assignment) => assignment.site?.toString() === siteId
+      (assignment) => assignment.site?.toString() === siteId,
     );
     if (!siteAssignment) {
       // Automatically assign the site if not already assigned
@@ -179,7 +286,7 @@ const addTransaction = async (
 const getContractorTransactions = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { contractorId, siteId } = req.query;
@@ -228,6 +335,8 @@ const getContractorTransactions = async (
 export default {
   createContractor,
   getAllContractors,
+  updateContractor,
+  deleteContractor,
   addTransaction,
   getContractorTransactions,
   assignSiteToContractor,

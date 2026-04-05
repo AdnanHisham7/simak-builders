@@ -55,8 +55,14 @@ export const createContractor = async (data: {
   };
 };
 
-export const assignSiteToContractor = async (contractorId: string, siteId: string): Promise<void> => {
-  await privateClient.post("/contractors/assign-site", { contractorId, siteId });
+export const assignSiteToContractor = async (
+  contractorId: string,
+  siteId: string,
+): Promise<void> => {
+  await privateClient.post("/contractors/assign-site", {
+    contractorId,
+    siteId,
+  });
 };
 
 export const addTransaction = async (data: {
@@ -65,7 +71,10 @@ export const addTransaction = async (data: {
   type: "advance" | "expense" | "additional_payment";
   amount: number;
   description: string;
-}): Promise<{ transaction: ContractorTransaction; updatedContractor: Contractor }> => {
+}): Promise<{
+  transaction: ContractorTransaction;
+  updatedContractor: Contractor;
+}> => {
   const response = await privateClient.post("/contractors/transactions", data);
   const { transaction, updatedContractor } = response.data;
   return {
@@ -77,7 +86,10 @@ export const addTransaction = async (data: {
       amount: transaction.amount,
       description: transaction.description,
       date: transaction.date,
-      createdBy: { id: transaction.createdBy, name: transaction.createdByName || "" },
+      createdBy: {
+        id: transaction.createdBy,
+        name: transaction.createdByName || "",
+      },
     },
     updatedContractor: {
       id: updatedContractor._id,
@@ -86,17 +98,22 @@ export const addTransaction = async (data: {
       phone: updatedContractor.phone,
       company: updatedContractor.company,
       status: updatedContractor.status,
-      siteAssignments: updatedContractor.siteAssignments.map((assignment: any) => ({
-        site: { id: assignment.site._id || assignment.site, name: assignment.site.name || "" },
-        balance: assignment.balance,
-      })),
+      siteAssignments: updatedContractor.siteAssignments.map(
+        (assignment: any) => ({
+          site: {
+            id: assignment.site._id || assignment.site,
+            name: assignment.site.name || "",
+          },
+          balance: assignment.balance,
+        }),
+      ),
     },
   };
 };
 
 export const getContractorTransactions = async (
   contractorId: string,
-  siteId: string
+  siteId: string,
 ): Promise<ContractorTransaction[]> => {
   const response = await privateClient.get("/contractors/transactions", {
     params: { contractorId, siteId },
@@ -111,4 +128,30 @@ export const getContractorTransactions = async (
     date: tx.date,
     createdBy: { id: tx.createdBy._id, name: tx.createdBy.name },
   }));
+};
+
+export const updateContractor = async (
+  id: string,
+  data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    status?: "active" | "blocked";
+  },
+): Promise<Contractor> => {
+  const response = await privateClient.put(`/contractors/${id}`, data);
+  return {
+    id: response.data.contractor.id,
+    name: response.data.contractor.name,
+    email: response.data.contractor.email,
+    phone: response.data.contractor.phone,
+    company: response.data.contractor.company,
+    status: response.data.contractor.status,
+    siteAssignments: [], // Will be updated from main list if needed
+  };
+};
+
+export const deleteContractor = async (id: string): Promise<void> => {
+  await privateClient.delete(`/contractors/${id}`);
 };

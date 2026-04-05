@@ -1,10 +1,10 @@
 import React from "react";
-import { X, UserPlus, AlertCircle } from "lucide-react";
+import { X, UserPlus, UserPen, AlertCircle } from "lucide-react";
 
 interface AddContractorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (e: React.MouseEvent) => void;
+  onSubmit: (e: React.MouseEvent) => void; // Renamed from onAdd
   newContractor: {
     name: string;
     email: string;
@@ -25,29 +25,25 @@ interface AddContractorModalProps {
     phone: boolean;
     company: boolean;
   };
-  setInputErrors: React.Dispatch<
-    React.SetStateAction<{
-      name: boolean;
-      email: boolean;
-      phone: boolean;
-      company: boolean;
-    }>
-  >;
   isAnimating: boolean;
   sizeStyles: string;
+  isEditMode?: boolean; // New prop
+  contractorToEdit?: any;
 }
 
 const AddContractorModal: React.FC<AddContractorModalProps> = ({
   isOpen,
   onClose,
-  onAdd,
+  onSubmit,
   newContractor,
   setNewContractor,
   inputErrors,
   isAnimating,
   sizeStyles,
+  isEditMode = false,
 }) => {
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div
@@ -62,10 +58,14 @@ const AddContractorModal: React.FC<AddContractorModalProps> = ({
           <div className="flex justify-between items-center mb-6">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-                <UserPlus size={20} className="text-white" />
+                {isEditMode ? (
+                  <UserPen size={20} className="text-white" />
+                ) : (
+                  <UserPlus size={20} className="text-white" />
+                )}
               </div>
               <h2 className="text-2xl font-bold text-gray-900">
-                Add New Contractor
+                {isEditMode ? "Edit Contractor" : "Add New Contractor"}
               </h2>
             </div>
             <button
@@ -141,7 +141,7 @@ const AddContractorModal: React.FC<AddContractorModalProps> = ({
                   setNewContractor({ ...newContractor, phone: e.target.value })
                 }
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-                placeholder="+1 (555) 000-0000"
+                placeholder="+91 9876543210"
               />
             </div>
 
@@ -173,10 +173,10 @@ const AddContractorModal: React.FC<AddContractorModalProps> = ({
               Cancel
             </button>
             <button
-              onClick={onAdd}
+              onClick={onSubmit}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
             >
-              Add Contractor
+              {isEditMode ? "Update Contractor" : "Add Contractor"}
             </button>
           </div>
         </div>

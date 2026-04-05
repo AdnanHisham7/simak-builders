@@ -22,11 +22,14 @@ import {
   assignSiteToContractor,
   getContractorTransactions,
   addTransaction,
+  updateContractor,
+  deleteContractor,
 } from "@/services/contractorService";
 import { getSites } from "@/services/siteService";
 import AddContractorModal from "./AddContractorModal";
 import ContractorAssignSiteModal from "./ContractorAssignSiteModal";
 import AddTransactionModal from "./AddContractorTransactionModal";
+import DeleteContractorModal from "./DeleteContractorModal";
 
 interface Contractor {
   id: string;
@@ -66,6 +69,13 @@ const Contractors: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState("All Statuses");
   const [companies, setCompanies] = useState<string[]>(["All Companies"]);
   const [sites, setSites] = useState<Site[]>([]);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [contractorToEdit, setContractorToEdit] = useState<Contractor | null>(
+    null,
+  );
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [contractorToDelete, setContractorToDelete] =
+    useState<Contractor | null>(null);
 
   const [newContractor, setNewContractor] = useState({
     name: "",
@@ -282,6 +292,83 @@ const Contractors: React.FC = () => {
     return sortOrder === "asc" ? "↑" : "↓";
   };
 
+  const openEditModal = (contractor: Contractor) => {
+    setContractorToEdit(contractor);
+    setNewContractor({
+      name: contractor.name,
+      email: contractor.email,
+      phone: contractor.phone || "",
+      company: contractor.company || "",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleUpdateContractor = async (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    if (!contractorToEdit) return;
+
+    const errors = {
+      name: !newContractor.name.trim(),
+      email: !newContractor.email.trim() || !isValidEmail(newContractor.email),
+      phone: false,
+      company: false,
+    };
+
+    setInputErrors(errors);
+    if (errors.name || errors.email) return;
+
+    try {
+      const updated = await updateContractor(contractorToEdit.id, {
+        name: newContractor.name,
+        email: newContractor.email,
+        phone: newContractor.phone,
+        company: newContractor.company,
+      });
+
+      // Update local state
+      setContractors((prev) =>
+        prev.map((c) =>
+          c.id === contractorToEdit.id ? { ...c, ...updated } : c,
+        ),
+      );
+
+      setIsEditModalOpen(false);
+      setContractorToEdit(null);
+      setNewContractor({ name: "", email: "", phone: "", company: "" });
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to update contractor.");
+    }
+  };
+
+  const openDeleteModal = (contractor: Contractor) => {
+    setContractorToDelete(contractor);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteContractor = async () => {
+    if (!contractorToDelete) return;
+
+    try {
+      await deleteContractor(contractorToDelete.id);
+
+      setContractors((prev) =>
+        prev.filter((c) => c.id !== contractorToDelete.id),
+      );
+
+      setIsDeleteModalOpen(false);
+      setContractorToDelete(null);
+
+      // If currently viewing this contractor's details, go back
+      if (selectedContractor?.id === contractorToDelete.id) {
+        setViewMode("list");
+        setSelectedContractor(null);
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to delete contractor.");
+    }
+  };
+
   const getSizeStyles = () => "max-w-2xl w-full mx-4";
 
   const StatsCard = ({ icon: Icon, title, value, color }: any) => (
@@ -350,13 +437,28 @@ const Contractors: React.FC = () => {
               .toFixed(2)}
           </span>
         </div>
-        <button
-          onClick={() => openDetails(contractor)}
-          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
-        >
-          <Eye size={14} />
-          <span>View Details</span>
-        </button>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => openEditModal(contractor)}
+            className="px-4 py-2 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-all text-sm"
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => openDeleteModal(contractor)}
+            className="px-4 py-2 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-all text-sm"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => openDetails(contractor)}
+            className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 flex items-center space-x-2"
+          >
+            <Eye size={14} />
+            <span>View</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -898,12 +1000,28 @@ const Contractors: React.FC = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
-                            <button
-                              onClick={() => openDetails(contractor)}
-                              className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200"
-                            >
-                              View Details
-                            </button>
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => openDetails(contractor)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200"
+                              >
+                                View
+                              </button>
+
+                              <button
+                                onClick={() => openEditModal(contractor)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200"
+                              >
+                                Edit
+                              </button>
+
+                              <button
+                                onClick={() => openDeleteModal(contractor)}
+                                className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-rose-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -992,13 +1110,35 @@ const Contractors: React.FC = () => {
               company: false,
             });
           }}
-          onAdd={handleAddContractor}
+          onSubmit={handleAddContractor}
           newContractor={newContractor}
           setNewContractor={setNewContractor}
           inputErrors={inputErrors}
-          setInputErrors={setInputErrors}
           isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
+        />
+
+        {/* Edit Modal - Reuse the same component */}
+        <AddContractorModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setContractorToEdit(null);
+            setNewContractor({ name: "", email: "", phone: "", company: "" });
+            setInputErrors({
+              name: false,
+              email: false,
+              phone: false,
+              company: false,
+            });
+          }}
+          onSubmit={handleUpdateContractor}
+          newContractor={newContractor}
+          setNewContractor={setNewContractor}
+          inputErrors={inputErrors}
+          isAnimating={isAnimating}
+          sizeStyles={getSizeStyles()}
+          isEditMode={true} // Important!
         />
 
         <ContractorAssignSiteModal
@@ -1017,6 +1157,16 @@ const Contractors: React.FC = () => {
           onClose={() => setIsAddTransactionModalOpen(false)}
           contractor={selectedContractor}
           onAddTransaction={handleAddTransaction}
+        />
+
+        <DeleteContractorModal
+          isOpen={isDeleteModalOpen}
+          onClose={() => {
+            setIsDeleteModalOpen(false);
+            setContractorToDelete(null);
+          }}
+          onConfirm={handleDeleteContractor}
+          contractorName={contractorToDelete?.name || ""}
         />
       </div>
     </div>
