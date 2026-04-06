@@ -41,7 +41,6 @@ const storage = new CloudinaryStorage({
       folder: "uploads", // organized folder
       resource_type: "auto", // IMPORTANT (handles pdf, images, etc.)
       public_id: `${file.fieldname}-${Date.now()}`,
-      format: ext,
     };
   },
 });
