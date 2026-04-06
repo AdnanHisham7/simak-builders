@@ -15,7 +15,7 @@ const getProjects = async (req: Request, res: Response, next: NextFunction) => {
 const getProjectById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -32,7 +32,7 @@ const getProjectById = async (
 const createProject = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { title, category, description } = req.body;
@@ -47,6 +47,7 @@ const createProject = async (
     const newProject = await ProjectModel.create({
       title,
       imagePath,
+      imagePublicId: req.file.filename,
       category,
       description,
     });
@@ -59,7 +60,7 @@ const createProject = async (
 const updateProject = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;
@@ -69,6 +70,7 @@ const updateProject = async (
     // Update imagePath only if a new file is uploaded
     if (req.file) {
       updates.imagePath = req.file.path;
+      updates.imagePublicId = req.file.filename;
     }
     const updatedProject = await ProjectModel.findByIdAndUpdate(id, updates, {
       new: true,
@@ -86,7 +88,7 @@ const updateProject = async (
 const deleteProject = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { id } = req.params;

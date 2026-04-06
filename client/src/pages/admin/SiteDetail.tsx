@@ -1442,7 +1442,7 @@ const SiteDetail: React.FC = () => {
                             {purchase.billUpload && purchase.billUpload.url && (
                               <div>
                                 <a
-                                  href={`${import.meta.env.VITE_API_URL}${
+                                  href={`${
                                     purchase.billUpload.url
                                   }`}
                                   target="_blank"
@@ -1714,7 +1714,7 @@ const SiteDetail: React.FC = () => {
                           </div>
                           <div className="flex items-center space-x-2">
                             <a
-                              href={`${import.meta.env.VITE_API_URL}${doc.url}`}
+                              href={`${doc.url}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 hover:bg-gray-200 rounded"
@@ -1786,7 +1786,7 @@ const SiteDetail: React.FC = () => {
                           </div>
                           <div className="flex items-center space-x-2">
                             <a
-                              href={`${import.meta.env.VITE_API_URL}${doc.url}`}
+                              href={`${doc.url}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1 hover:bg-gray-200 rounded"

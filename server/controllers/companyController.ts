@@ -411,7 +411,8 @@ const createSiteWithBulkData = async (
           name: docFile.originalname,
           size: docFile.size,
           type: docFile.mimetype,
-          url: `/uploads/${docFile.filename}`,
+          url: docFile.path,
+          public_id: docFile.filename,
           uploadedBy: new Types.ObjectId(adminUser.userId),
           uploadDate: new Date(),
         };
@@ -430,7 +431,8 @@ const createSiteWithBulkData = async (
               size: billFile.size,
               type: billFile.mimetype,
               uploadDate: new Date().toISOString(),
-              url: `/uploads/${billFile.filename}`,
+              url: billFile.path,
+              public_id: billFile.filename,
             };
           }
 

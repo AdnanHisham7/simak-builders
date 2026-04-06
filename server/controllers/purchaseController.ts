@@ -11,6 +11,7 @@ import { ActivityLogModel } from "@models/ActivityLog";
 import { NotificationModel } from "@models/Notification";
 import * as fs from "fs/promises";
 import * as path from "path";
+import cloudinary from "../services/cloudinaryService";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -97,7 +98,8 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
           size: file.size,
           type: file.mimetype,
           uploadDate: new Date().toISOString(),
-          url: `/uploads/${file.filename}`,
+          url: file.path,
+          public_id: (file as any).filename || (file as any).path, // optional
         }
       : null;
 
@@ -352,28 +354,33 @@ const deleteBillUpload = async (
 ) => {
   try {
     const { purchaseId } = req.params;
-    const user = req.user;
-    if (user?.role !== "admin") {
+
+    if (req.user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
-    const purchase = await PurchaseModel.findById(purchaseId);
+
+    const purchase: any = await PurchaseModel.findById(purchaseId);
     if (!purchase) {
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
     }
+
     if (!purchase.billUpload) {
       throw new ApiError("No bill upload found", HttpStatus.BAD_REQUEST);
     }
-    const filename = purchase.billUpload?.url?.split("/").pop();
-    const filePath = path.join(process.cwd(), "uploads", filename!);
-    try {
-      await fs.unlink(filePath);
-    } catch (err) {
-      console.error("Error deleting file:", err);
+
+    // ✅ DELETE FROM CLOUDINARY
+    if (purchase.billUpload.public_id) {
+      await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
+        resource_type: "auto", // IMPORTANT
+      });
     }
+
+    // ✅ REMOVE FROM DB
     await PurchaseModel.updateOne(
       { _id: purchaseId },
       { $unset: { billUpload: "" } },
     );
+
     res.status(HttpStatus.OK).json({ message: "Bill upload deleted" });
   } catch (error) {
     next(error);

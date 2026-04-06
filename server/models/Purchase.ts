@@ -26,6 +26,7 @@ const PurchaseSchema = new Schema<Purchase>(
       type: { type: String, required: false },
       uploadDate: { type: String, required: false },
       url: { type: String, required: false },
+      public_id: { type: String, required: false },
     },
     addedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     status: { type: String, enum: ["pending", "verified"], default: "pending" },

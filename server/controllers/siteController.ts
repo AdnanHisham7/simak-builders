@@ -10,6 +10,8 @@ import archiver from "archiver";
 import { createReadStream } from "fs";
 import { join } from "path";
 import * as fs from "fs/promises";
+import axios from "axios";
+import cloudinary from "../services/cloudinaryService";
 
 const createSite = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -49,7 +51,7 @@ const createSite = async (req: Request, res: Response, next: NextFunction) => {
 
     await UserModel.findByIdAndUpdate(
       clientId,
-      { $addToSet: { assignedSites: site._id } } // Add site ID to assignedSites array
+      { $addToSet: { assignedSites: site._id } }, // Add site ID to assignedSites array
     );
 
     await ActivityLogModel.create({
@@ -87,7 +89,7 @@ const createSite = async (req: Request, res: Response, next: NextFunction) => {
     if (usersToUpdate.length) {
       await UserModel.updateMany(
         { _id: { $in: usersToUpdate } },
-        { $push: { assignedSites: site._id } }
+        { $push: { assignedSites: site._id } },
       );
     }
 
@@ -116,11 +118,11 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
     if (clientId && clientId !== site.client.toString()) {
       await UserModel.updateOne(
         { _id: site.client },
-        { $pull: { assignedSites: site._id } }
+        { $pull: { assignedSites: site._id } },
       );
       await UserModel.updateOne(
         { _id: clientId },
-        { $push: { assignedSites: site._id } }
+        { $push: { assignedSites: site._id } },
       );
       site.client = clientId;
     }
@@ -130,20 +132,20 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
     const updateAssignedSites = async (
       ids: string[],
       role: string,
-      currentIds: string[]
+      currentIds: string[],
     ) => {
       const toRemove = currentIds.filter((id) => !ids.includes(id));
       const toAdd = ids.filter((id) => !currentIds.includes(id));
       if (toRemove.length) {
         await UserModel.updateMany(
           { _id: { $in: toRemove }, role },
-          { $pull: { assignedSites: siteId } }
+          { $pull: { assignedSites: siteId } },
         );
       }
       if (toAdd.length) {
         await UserModel.updateMany(
           { _id: { $in: toAdd }, role },
-          { $push: { assignedSites: siteId } }
+          { $push: { assignedSites: siteId } },
         );
       }
     };
@@ -166,7 +168,7 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
       await updateAssignedSites(
         supervisorIds,
         "supervisor",
-        currentSupervisors
+        currentSupervisors,
       );
 
     await site.save();
@@ -179,13 +181,13 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
 const getSiteDetails = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
     const site = await SiteModel.findById(siteId).populate(
       "documents.uploadedBy",
-      "name"
+      "name",
     );
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
     const siteManagers = await UserModel.find({
@@ -368,7 +370,7 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
 const updatePhaseStatus = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId, phaseId } = req.params;
@@ -441,7 +443,7 @@ const updatePhaseStatus = async (
 const approvePhase = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { phaseId } = req.params;
@@ -508,7 +510,7 @@ const rejectPhase = async (req: Request, res: Response, next: NextFunction) => {
 const uploadDocument = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
@@ -531,12 +533,13 @@ const uploadDocument = async (
       throw new ApiError("Invalid or missing category", HttpStatus.BAD_REQUEST);
     }
 
-    const document:any = {
+    const document: any = {
       name: file.originalname,
       size: file.size,
       type: file.mimetype,
       uploadDate: new Date(),
-      url: `/uploads/${file.filename}`,
+      url: file.path,
+      public_id: file.filename,
       uploadedBy: req.user?.userId,
       category: category,
     };
@@ -555,17 +558,17 @@ const uploadDocument = async (
 const getSiteByClient = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { clientId } = req.params;
     const site = await SiteModel.findOne({ client: clientId }).populate(
-      "client"
+      "client",
     );
     if (!site)
       throw new ApiError(
         "Site not found for this client",
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     res.status(HttpStatus.OK).json(site);
   } catch (error) {
@@ -576,14 +579,15 @@ const getSiteByClient = async (
 const downloadSiteDocumentsZip = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
-    const site = await SiteModel.findById(siteId);
+
+    const site: any = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    const documents:any = site.documents;
+    const documents = site.documents;
     if (documents.length === 0) {
       res.status(HttpStatus.NO_CONTENT).send("No documents to download");
       return;
@@ -592,18 +596,19 @@ const downloadSiteDocumentsZip = async (
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=site_${site?.name}_documents.zip`
+      `attachment; filename=site_${site?.name}_documents.zip`,
     );
 
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.pipe(res);
 
     for (const doc of documents) {
-      const filePath = join(process.cwd(), "uploads", doc.url.split("/").pop());
-      archive.append(createReadStream(filePath), { name: doc.name });
+      const response = await axios.get(doc.url, { responseType: "stream" });
+
+      archive.append(response.data, { name: doc.name });
     }
 
-    archive.finalize();
+    await archive.finalize();
   } catch (error) {
     next(error);
   }
@@ -612,41 +617,40 @@ const downloadSiteDocumentsZip = async (
 const downloadPurchaseBillsZip = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
-    const purchases = await PurchaseModel.find({ site: siteId });
-    const billUploads:any = purchases
-      .filter((p) => p.billUpload?.url)
-      .map((p) => p.billUpload);
+
+    const purchases: any = await PurchaseModel.find({ site: siteId });
+
+    const billUploads = purchases
+      .filter((p: any) => p.billUpload?.url)
+      .map((p: any) => p.billUpload);
 
     if (billUploads.length === 0) {
       res.status(HttpStatus.NO_CONTENT).send("No bills to download");
       return;
     }
 
-    const site = await SiteModel.findById(siteId);
+    const site: any = await SiteModel.findById(siteId);
 
     res.setHeader("Content-Type", "application/zip");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=site_${site?.name}_purchase_bills.zip`
+      `attachment; filename=site_${site?.name}_purchase_bills.zip`,
     );
 
     const archive = archiver("zip", { zlib: { level: 9 } });
     archive.pipe(res);
 
     for (const bill of billUploads) {
-      const filePath = join(
-        process.cwd(),
-        "uploads",
-        bill.url.split("/").pop()
-      );
-      archive.append(createReadStream(filePath), { name: bill.name });
+      const response = await axios.get(bill.url, { responseType: "stream" });
+
+      archive.append(response.data, { name: bill.name });
     }
 
-    archive.finalize();
+    await archive.finalize();
   } catch (error) {
     next(error);
   }
@@ -655,7 +659,7 @@ const downloadPurchaseBillsZip = async (
 const markSiteAsCompleted = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { siteId } = req.params;
@@ -665,7 +669,7 @@ const markSiteAsCompleted = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    const site:any = await SiteModel.findById(siteId);
+    const site: any = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
     if (site.status === "Completed") {
@@ -674,41 +678,37 @@ const markSiteAsCompleted = async (
 
     if (deleteSiteDocuments) {
       for (const doc of site.documents) {
-        const filePath = join(
-          process.cwd(),
-          "uploads",
-          doc.url.split("/").pop()
-        );
-        try {
-          await fs.unlink(filePath);
-        } catch (err) {
-          console.error(`Error deleting file ${filePath}:`, err);
+        if (doc.public_id) {
+          try {
+            await cloudinary.uploader.destroy(doc.public_id, {
+              resource_type: "auto",
+            });
+          } catch (err) {
+            console.error(`Cloudinary delete failed:`, err);
+          }
         }
       }
+
       site.documents = [];
     }
 
     if (deletePurchaseBills) {
-      const purchases:any = await PurchaseModel.find({ site: siteId });
+      const purchases: any = await PurchaseModel.find({ site: siteId });
+
       for (const purchase of purchases) {
-        console.log("filePath", purchase);
-        if (purchase.billUpload?.url) {
-          console.log("hi push");
-          const filePath = join(
-            process.cwd(),
-            "uploads",
-            purchase.billUpload.url.split("/").pop()
-          );
+        if (purchase.billUpload?.public_id) {
           try {
-            await fs.unlink(filePath);
+            await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
+              resource_type: "auto",
+            });
           } catch (err) {
-            console.error(`Error deleting file ${filePath}:`, err);
+            console.error("Cloudinary delete failed:", err);
           }
+
           await PurchaseModel.updateOne(
             { _id: purchase._id },
-            { $unset: { billUpload: "" } }
+            { $unset: { billUpload: "" } },
           );
-          await purchase.save();
         }
       }
     }

@@ -3,6 +3,7 @@ import { Schema, model } from "mongoose";
 interface Project {
   title: string;
   imagePath: string;
+  imagePublicId: string;
   category: string;
   description: string;
 }
@@ -11,6 +12,7 @@ const ProjectSchema = new Schema<Project>(
   {
     title: { type: String, required: true },
     imagePath: { type: String, required: true },
+    imagePublicId: { type: String, required: false },
     category: { type: String, required: true },
     description: { type: String, required: true },
   },

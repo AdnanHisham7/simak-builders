@@ -387,7 +387,7 @@ const CompanyPortfolio = () => {
                 )}
                 <div className="relative aspect-[4/3] overflow-hidden">
                   <img
-                    src={`${import.meta.env.VITE_API_URL}/${project.imagePath}`}
+                    src={`${project.imagePath}`}
                     alt={project.title}
                     className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
@@ -505,7 +505,7 @@ const CompanyPortfolio = () => {
                           Current Image:
                         </p>
                         <img
-                          src={`${import.meta.env.VITE_API_URL}/${
+                          src={`${
                             currentProject.imagePath
                           }`}
                           alt="Current project image"

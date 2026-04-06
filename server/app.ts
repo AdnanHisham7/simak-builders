@@ -46,8 +46,6 @@ app.use(
   }),
 );
 
-app.use("/api/uploads", express.static("uploads"));
-
 setupCronJobs();
 
 // Routes

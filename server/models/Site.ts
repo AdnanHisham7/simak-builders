@@ -49,6 +49,7 @@ const SiteSchema = new Schema<Site>(
         type: { type: String, required: true },
         uploadDate: { type: Date, default: Date.now },
         url: { type: String, required: true },
+        public_id: { type: String, required: false },
         uploadedBy: {
           type: Schema.Types.ObjectId,
           ref: "User",

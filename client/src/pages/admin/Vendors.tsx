@@ -826,7 +826,7 @@ const Vendors: React.FC = () => {
                               Bill Upload
                             </p>
                             <a
-                              href={`${import.meta.env.VITE_API_URL}${
+                              href={`${
                                 purchase.billUpload?.url
                               }`}
                               target="_blank"

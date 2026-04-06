@@ -272,7 +272,7 @@ const ArchitectDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <a
-                          href={`${import.meta.env.VITE_API_URL}${doc.url}`}
+                          href={`${doc.url}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1 hover:bg-gray-200 rounded"
@@ -344,7 +344,7 @@ const ArchitectDashboard: React.FC = () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <a
-                          href={`${import.meta.env.VITE_API_URL}${doc.url}`}
+                          href={`${doc.url}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="p-1 hover:bg-gray-200 rounded"
@@ -585,7 +585,7 @@ const ArchitectDashboard: React.FC = () => {
                         </div>
                       </div>
                       <a
-                        href={`${import.meta.env.VITE_API_URL}${doc.url}`}
+                        href={`${doc.url}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"

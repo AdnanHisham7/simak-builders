@@ -1,5 +1,7 @@
-import multer from 'multer';
-import path from 'path';
+import multer from "multer";
+import path from "path";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import cloudinary from "../services/cloudinaryService";
 
 // Define allowed MIME types for each file extension
 const allowedMimeTypes: { [key: string]: string[] } = {
@@ -30,14 +32,17 @@ const allowedMimeTypes: { [key: string]: string[] } = {
 const allowedExtensions = Object.keys(allowedMimeTypes);
 
 // Configure Multer storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/'); // Make sure this directory exists
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const extension = path.extname(file.originalname).toLowerCase().slice(1);
-    cb(null, `${file.fieldname}-${uniqueSuffix}.${extension}`);
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const ext = path.extname(file.originalname).toLowerCase().slice(1);
+
+    return {
+      folder: "uploads", // organized folder
+      resource_type: "auto", // IMPORTANT (handles pdf, images, etc.)
+      public_id: `${file.fieldname}-${Date.now()}`,
+      format: ext,
+    };
   },
 });
 
