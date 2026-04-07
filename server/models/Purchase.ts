@@ -17,9 +17,11 @@ const PurchaseSchema = new Schema<Purchase>(
         category: { type: String, required: true },
         quantity: { type: Number, required: true },
         price: { type: Number, required: true },
+        totalAmount: { type: Number, required: true },
       },
     ],
     totalAmount: { type: Number, required: true },
+    transportationFee: { type: Number, default: 0 },
     billUpload: {
       name: { type: String, required: false },
       size: { type: Number, required: false },

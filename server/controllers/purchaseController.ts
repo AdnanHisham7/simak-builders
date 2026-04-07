@@ -12,10 +12,17 @@ import { NotificationModel } from "@models/Notification";
 import * as fs from "fs/promises";
 import * as path from "path";
 import cloudinary from "../services/cloudinaryService";
+import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { siteId, vendorId, paymentMethod, date: dateStr } = req.body;
+    const {
+      siteId,
+      vendorId,
+      paymentMethod,
+      date: dateStr,
+      transportationFee: transFeeStr,
+    } = req.body;
     const file = req.file;
     const user = await UserModel.findById(req.user?.userId);
     if (!user) throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
@@ -25,39 +32,50 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
     }
 
     const totalAmount = parseFloat(req.body.totalAmount);
-    if (isNaN(totalAmount) || !isFinite(totalAmount) || totalAmount <= 0) {
+    if (isNaN(totalAmount) || totalAmount <= 0) {
       throw new ApiError("Invalid total amount", HttpStatus.BAD_REQUEST);
+    }
+
+    const transportationFee = parseFloat(transFeeStr || "0");
+    if (isNaN(transportationFee) || transportationFee < 0) {
+      throw new ApiError("Invalid transportation fee", HttpStatus.BAD_REQUEST);
     }
 
     let purchaseDate = new Date();
     if (dateStr) {
       const parsed = new Date(dateStr);
-      if (!isNaN(parsed.getTime())) {
-        purchaseDate = parsed;
-      }
+      if (!isNaN(parsed.getTime())) purchaseDate = parsed;
     }
 
-    const items =
+    let items =
       typeof req.body.items === "string"
         ? JSON.parse(req.body.items)
         : req.body.items;
+
     for (const item of items) {
       const quantity = parseFloat(item.quantity);
       const price = parseFloat(item.price);
-      if (isNaN(quantity) || !isFinite(quantity) || quantity <= 0) {
+      const itemTotal = parseFloat(item.totalAmount);
+
+      if (isNaN(quantity) || quantity <= 0)
         throw new ApiError(
           `Invalid quantity for item ${item.name}`,
           HttpStatus.BAD_REQUEST,
         );
-      }
-      if (isNaN(price) || !isFinite(price) || price <= 0) {
+      if (isNaN(price) || price <= 0)
         throw new ApiError(
-          `Invalid price for item ${item.name}`,
+          `Invalid unit price for item ${item.name}`,
           HttpStatus.BAD_REQUEST,
         );
-      }
+      if (isNaN(itemTotal) || itemTotal <= 0)
+        throw new ApiError(
+          `Invalid total amount for item ${item.name}`,
+          HttpStatus.BAD_REQUEST,
+        );
+
       item.quantity = quantity;
       item.price = price;
+      item.totalAmount = itemTotal;
     }
 
     let site;
@@ -105,7 +123,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
 
     const payment = {
       method: paymentMethod,
-      isPaid: paymentMethod === "cash" ? true : false,
+      isPaid: paymentMethod === "cash",
     };
 
     const purchase = new PurchaseModel({
@@ -114,11 +132,28 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       vendor: vendorId,
       items,
       totalAmount,
+      transportationFee,
       billUpload,
       addedBy: req.user?.userId,
       payment,
     });
     await purchase.save();
+
+    if (transportationFee > 0 && siteId) {
+      const misc = new MiscellaneousExpenseModel({
+        site: siteId,
+        category: "service",
+        name: "Transportation Fee",
+        amount: transportationFee,
+        tip: 0,
+        notes: `from purchase`,
+        purchaseId: purchase._id,
+        date: purchaseDate,
+        addedBy: req.user?.userId,
+        status: "pending",
+      });
+      await misc.save();
+    }
 
     const admins = await UserModel.find({ role: "admin" });
     for (const admin of admins) {

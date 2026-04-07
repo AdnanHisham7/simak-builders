@@ -189,6 +189,7 @@ const getMiscellaneousExpensesBySite = async (
 
     const expenses = await MiscellaneousExpenseModel.find({ site: siteId })
       .populate("addedBy", "name")
+      .populate("purchaseId", "totalAmount date")
       .sort({ date: -1 });
 
     res.status(HttpStatus.OK).json(expenses);

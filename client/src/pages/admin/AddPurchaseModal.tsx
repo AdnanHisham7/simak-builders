@@ -27,7 +27,8 @@ interface PurchaseItem {
   unit: string;
   category: string;
   quantity: string | number;
-  price: string | number;
+  price: string | number; // unit price
+  totalAmount: string | number; // NEW: per-item total amount
 }
 
 const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
@@ -44,9 +45,17 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   const [newVendorEmail, setNewVendorEmail] = useState("");
   const [newVendorPhone, setNewVendorPhone] = useState("");
   const [items, setItems] = useState<PurchaseItem[]>([
-    { name: "", unit: "", category: "", quantity: "", price: "" },
+    {
+      name: "",
+      unit: "",
+      category: "",
+      quantity: "",
+      price: "",
+      totalAmount: "",
+    },
   ]);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [transportationFee, setTransportationFee] = useState<string>(""); // NEW: optional transportation fee
   const [billFile, setBillFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -111,7 +120,14 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   const addItem = () => {
     setItems([
       ...items,
-      { name: "", unit: "", category: "", quantity: "", price: "" },
+      {
+        name: "",
+        unit: "",
+        category: "",
+        quantity: "",
+        price: "",
+        totalAmount: "",
+      },
     ]);
   };
 
@@ -128,15 +144,36 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     value: string,
   ) => {
     const newItems = [...items];
+    const item = newItems[index];
     newItems[index][field] = value;
+
+    const qty = parseFloat(item.quantity as string) || 0;
+    const price = parseFloat(item.price as string) || 0;
+    const total = parseFloat(item.totalAmount as string) || 0;
+
+    if (field === "totalAmount") {
+      // User manually entered total amount → auto-calculate unit price (if qty > 0)
+      if (qty > 0) {
+        newItems[index].price = (total / qty).toFixed(2);
+      }
+    } else if (field === "quantity" || field === "price") {
+      // User changed qty or unit price → auto-calculate total amount
+      newItems[index].totalAmount = (qty * price).toFixed(2);
+    }
+
     setItems(newItems);
+    setErrors((prev) => ({
+      ...prev,
+      [`item_${index}_quantity`]: "",
+      [`item_${index}_price`]: "",
+      [`item_${index}_totalAmount`]: "",
+    }));
   };
 
   const calculateTotal = () => {
     const total = items.reduce((sum, item) => {
-      const quantity = parseFloat(item.quantity as string) || 0;
-      const price = parseFloat(item.price as string) || 0;
-      return sum + quantity * price;
+      const itemTotal = parseFloat(item.totalAmount as string) || 0;
+      return sum + itemTotal;
     }, 0);
     setTotalAmount(total);
   };
@@ -161,14 +198,12 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     items.forEach((item, index) => {
       if (!item.name) newErrors[`item_${index}_name`] = "Item name is required";
 
-      // Updated unit validation to support "Other" + custom input
       if (!item.unit) {
         newErrors[`item_${index}_unit`] = "Unit is required";
       } else if (item.unit === "Other") {
         newErrors[`item_${index}_unit`] = "Custom unit is required";
       }
 
-      // Updated category validation to support "Other" + custom input
       if (!item.category) {
         newErrors[`item_${index}_category`] = "Category is required";
       } else if (item.category === "Other") {
@@ -179,7 +214,11 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
         newErrors[`item_${index}_quantity`] = "Valid quantity is required";
       }
       if (!item.price || parseFloat(item.price as string) <= 0) {
-        newErrors[`item_${index}_price`] = "Valid price is required";
+        newErrors[`item_${index}_price`] = "Valid unit price is required";
+      }
+      if (!item.totalAmount || parseFloat(item.totalAmount as string) <= 0) {
+        newErrors[`item_${index}_totalAmount`] =
+          "Valid total amount is required";
       }
     });
 
@@ -230,6 +269,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       formData.append("vendorId", vendorId);
       formData.append("items", JSON.stringify(items));
       formData.append("totalAmount", totalAmount.toString());
+      formData.append("transportationFee", transportationFee || "0"); // NEW
       formData.append("billUpload", billFile!);
       formData.append("paymentMethod", paymentMethod);
       formData.append("date", purchaseDate);
@@ -318,6 +358,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
 
         <div className="overflow-y-auto max-h-[calc(90vh-120px)] px-6 py-4">
           <div className="space-y-6 mb-10">
+            {/* Vendor Information */}
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100">
               <div className="flex items-center mb-3">
                 <User size={18} className="text-blue-600 mr-2" />
@@ -422,6 +463,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
               </div>
             </div>
 
+            {/* Payment Method */}
             <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-xl p-4 border border-yellow-100">
               <div className="flex items-center mb-3">
                 <DollarSign size={18} className="text-yellow-600 mr-2" />
@@ -451,6 +493,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
               )}
             </div>
 
+            {/* Purchase Date (Admin only) */}
             {isAdmin && (
               <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-4 border border-indigo-100">
                 <div className="flex items-center mb-3">
@@ -469,6 +512,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
               </div>
             )}
 
+            {/* Purchase Items - Updated with per-item Total Amount */}
             <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-100">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center">
@@ -499,7 +543,8 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                         <Trash2 size={16} />
                       </button>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+                      {/* Item Name */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Item Name *
@@ -528,7 +573,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                         )}
                       </div>
 
-                      {/* === UPDATED UNIT FIELD WITH "OTHER" SUPPORT === */}
+                      {/* Unit with "Other" support */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Unit *
@@ -570,7 +615,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           <option value="Other">Other</option>
                         </select>
 
-                        {/* Custom unit input appears when "Other" is selected or a custom value exists */}
+                        {/* Custom unit input */}
                         {(item.unit === "Other" ||
                           (item.unit && !units.includes(item.unit))) && (
                           <input
@@ -599,7 +644,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                         )}
                       </div>
 
-                      {/* === UPDATED CATEGORY FIELD WITH "OTHER" SUPPORT === */}
+                      {/* Category with "Other" support */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Category *
@@ -641,7 +686,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           <option value="Other">Other</option>
                         </select>
 
-                        {/* Custom category input appears when "Other" is selected or a custom value exists */}
+                        {/* Custom category input */}
                         {(item.category === "Other" ||
                           (item.category &&
                             !categories.includes(item.category))) && (
@@ -677,6 +722,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                         )}
                       </div>
 
+                      {/* Quantity */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Quantity *
@@ -687,13 +733,9 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           min="0"
                           step="0.01"
                           value={item.quantity}
-                          onChange={(e) => {
-                            handleItemChange(index, "quantity", e.target.value);
-                            setErrors((prev) => ({
-                              ...prev,
-                              [`item_${index}_quantity`]: "",
-                            }));
-                          }}
+                          onChange={(e) =>
+                            handleItemChange(index, "quantity", e.target.value)
+                          }
                           className={`w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
                             errors[`item_${index}_quantity`]
                               ? "border-red-300 bg-red-50"
@@ -706,9 +748,11 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           </p>
                         )}
                       </div>
+
+                      {/* Unit Price */}
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Price *
+                          Unit Price *
                         </label>
                         <input
                           type="number"
@@ -716,13 +760,9 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           min="0"
                           step="0.01"
                           value={item.price}
-                          onChange={(e) => {
-                            handleItemChange(index, "price", e.target.value);
-                            setErrors((prev) => ({
-                              ...prev,
-                              [`item_${index}_price`]: "",
-                            }));
-                          }}
+                          onChange={(e) =>
+                            handleItemChange(index, "price", e.target.value)
+                          }
                           className={`w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
                             errors[`item_${index}_price`]
                               ? "border-red-300 bg-red-50"
@@ -735,6 +775,37 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           </p>
                         )}
                       </div>
+
+                      {/* Total Amount (NEW) */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Total Amount *
+                        </label>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          min="0"
+                          step="0.01"
+                          value={item.totalAmount}
+                          onChange={(e) =>
+                            handleItemChange(
+                              index,
+                              "totalAmount",
+                              e.target.value,
+                            )
+                          }
+                          className={`w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
+                            errors[`item_${index}_totalAmount`]
+                              ? "border-red-300 bg-red-50"
+                              : "border-gray-200"
+                          }`}
+                        />
+                        {errors[`item_${index}_totalAmount`] && (
+                          <p className="text-red-500 text-xs mt-1">
+                            {errors[`item_${index}_totalAmount`]}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -742,7 +813,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
               <div className="mt-4 p-4 bg-white rounded-lg border-2 border-green-300">
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold text-gray-700">
-                    Total Amount:
+                    Total Purchase Amount:
                   </span>
                   <span className="text-2xl font-bold text-green-600">
                     ₹
@@ -754,6 +825,35 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
               </div>
             </div>
 
+            {/* Transportation Fee (NEW) */}
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl p-4 border border-amber-100">
+              <div className="flex items-center mb-3">
+                <DollarSign size={18} className="text-amber-600 mr-2" />
+                <h3 className="font-semibold text-gray-900">
+                  Transportation Fee{" "}
+                  <span className="text-amber-500 text-sm font-normal">
+                    (Optional)
+                  </span>
+                </h3>
+              </div>
+              <input
+                type="number"
+                placeholder="0.00"
+                min="0"
+                step="0.01"
+                value={transportationFee}
+                onChange={(e) => setTransportationFee(e.target.value)}
+                className="w-full px-4 py-3 border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white text-sm"
+              />
+              <p className="text-xs text-amber-600 mt-2">
+                This will NOT affect the purchase total. It will be
+                automatically recorded as a separate
+                <span className="font-medium"> "service" </span> miscellaneous
+                expense (Transportation service).
+              </p>
+            </div>
+
+            {/* Upload Bill */}
             <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100">
               <div className="flex items-center mb-3">
                 <Upload size={18} className="text-purple-600 mr-2" />

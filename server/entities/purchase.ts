@@ -27,6 +27,7 @@ export interface Purchase {
   vendor: Types.ObjectId;
   items: PurchaseItem[];
   totalAmount: number;
+  transportationFee?: number;
   billUpload?: BillUpload;
   addedBy: Types.ObjectId;
   status?: "pending" | "verified";

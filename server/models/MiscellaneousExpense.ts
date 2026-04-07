@@ -13,6 +13,7 @@ const MiscellaneousExpenseSchema = new Schema(
     tip: { type: Number, default: 0 },
     notes: { type: String, default: "" },
     date: { type: Date, required: true },
+    purchaseId: { type: Schema.Types.ObjectId, ref: "Purchase", required: false },
     addedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     status: { type: String, enum: ["pending", "verified"], default: "pending" },
   },

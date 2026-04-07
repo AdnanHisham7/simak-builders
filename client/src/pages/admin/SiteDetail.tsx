@@ -37,6 +37,8 @@ import {
   FileText,
   Upload,
   User,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import RequestTransferModal from "./RequestTransferModal";
 import {
@@ -147,6 +149,9 @@ const SiteDetail: React.FC = () => {
   const [isManualPaymentModalOpen, setIsManualPaymentModalOpen] =
     useState(false);
   const [manualAmount, setManualAmount] = useState("");
+  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(
+    new Set(),
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -667,6 +672,15 @@ const SiteDetail: React.FC = () => {
       }
     });
     return weeks;
+  };
+
+  const togglePurchaseExpand = (purchaseId: string) => {
+    setExpandedPurchases((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(purchaseId)) newSet.delete(purchaseId);
+      else newSet.add(purchaseId);
+      return newSet;
+    });
   };
 
   const canAddPurchase =
@@ -1360,9 +1374,7 @@ const SiteDetail: React.FC = () => {
 
         {selectedTab === "purchases" && (
           <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
+            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"}`}
             style={{ transitionDelay: "500ms" }}
           >
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
@@ -1382,10 +1394,12 @@ const SiteDetail: React.FC = () => {
                   </button>
                 )}
               </div>
+
               {purchases.length > 0 ? (
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
+                      <th className="px-6 py-3 w-10"></th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Date
                       </th>
@@ -1404,71 +1418,164 @@ const SiteDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {purchases.map((purchase) => (
-                      <tr key={purchase.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {new Date(
-                            purchase.date || purchase.createdAt,
-                          ).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          ₹{purchase.totalAmount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {purchase.vendor?.name || purchase.vendor}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              purchase.status === "verified"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
+                    {purchases.map((purchase: any) => {
+                      const isExpanded = expandedPurchases.has(purchase._id);
+                      return (
+                        <React.Fragment key={purchase._id}>
+                          <tr
+                            className={`cursor-pointer hover:bg-gray-50 ${isExpanded ? "bg-blue-50" : ""}`}
+                            onClick={() => togglePurchaseExpand(purchase._id)}
                           >
-                            {purchase.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center space-x-2">
-                            {canVerifyPurchase &&
-                              purchase.status === "pending" && (
-                                <button
-                                  onClick={() => handleVerify(purchase._id)}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                >
-                                  Verify
-                                </button>
+                            <td className="px-6 py-4">
+                              {isExpanded ? (
+                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                              ) : (
+                                <ChevronRight className="w-4 h-4 text-gray-400" />
                               )}
-                            {purchase.billUpload && purchase.billUpload.url && (
-                              <div>
-                                <a
-                                  href={`${
-                                    purchase.billUpload.url
-                                  }`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:text-blue-800"
-                                  title="View Bill"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </a>
-                              </div>
-                            )}
-                            {userType === "admin" && purchase.billUpload && (
-                              <button
-                                onClick={() =>
-                                  handleDeleteBillUpload(purchase._id)
-                                }
-                                className="text-red-600 hover:text-red-800"
-                                title="Delete Bill Upload"
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {new Date(
+                                purchase.date || purchase.createdAt,
+                              ).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap font-semibold">
+                              ₹{purchase.totalAmount.toLocaleString("en-IN")}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {purchase.vendor?.name || purchase.vendor}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span
+                                className={`px-2 py-1 text-xs font-medium rounded-full ${purchase.status === "verified" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}
                               >
-                                <X className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                {purchase.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center space-x-2">
+                                {canVerifyPurchase &&
+                                  purchase.status === "pending" && (
+                                    <button
+                                      onClick={() => handleVerify(purchase._id)}
+                                      className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                    >
+                                      Verify
+                                    </button>
+                                  )}
+                                {purchase.billUpload &&
+                                  purchase.billUpload.url && (
+                                    <div>
+                                      <a
+                                        href={`${purchase.billUpload.url}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800"
+                                        title="View Bill"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </a>
+                                    </div>
+                                  )}
+                                {userType === "admin" &&
+                                  purchase.billUpload && (
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteBillUpload(purchase._id)
+                                      }
+                                      className="text-red-600 hover:text-red-800"
+                                      title="Delete Bill Upload"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                              </div>
+                            </td>
+                          </tr>
+                          {/* EXPANDED ROW WITH ITEMS */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={6} className="bg-gray-50 p-6">
+                                <h4 className="font-semibold text-gray-700 mb-4 flex items-center">
+                                  <Package className="w-5 h-5 mr-2" />
+                                  Purchased Items
+                                </h4>
+                                <div className="space-y-4">
+                                  {purchase.items.map(
+                                    (item: any, idx: number) => (
+                                      <div
+                                        key={idx}
+                                        className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100"
+                                      >
+                                        <div className="flex-1">
+                                          <div className="font-medium">
+                                            {item.name}
+                                          </div>
+                                          <div className="text-xs text-gray-500">
+                                            {item.category} • {item.unit}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-8 text-right">
+                                          <div>
+                                            <div className="text-xs text-gray-500">
+                                              Qty
+                                            </div>
+                                            <div className="font-semibold">
+                                              {item.quantity} {item.unit}
+                                            </div>
+                                          </div>
+                                          <div>
+                                            <div className="text-xs text-gray-500">
+                                              Unit Price
+                                            </div>
+                                            <div className="font-medium">
+                                              ₹
+                                              {parseFloat(item.price).toFixed(
+                                                2,
+                                              )}
+                                            </div>
+                                          </div>
+                                          <div className="text-emerald-600 font-bold text-lg">
+                                            ₹
+                                            {(
+                                              parseFloat(item.quantity) *
+                                              parseFloat(item.price)
+                                            ).toLocaleString("en-IN", {
+                                              minimumFractionDigits: 2,
+                                            })}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ),
+                                  )}
+                                </div>
+
+                                {purchase.transportationFee &&
+                                  parseFloat(purchase.transportationFee) >
+                                    0 && (
+                                    <div className="mt-6 flex justify-between items-center bg-amber-50 border border-amber-200 p-4 rounded-2xl">
+                                      <div className="flex items-center">
+                                        <DollarSign className="w-5 h-5 text-amber-600 mr-3" />
+                                        <span className="font-medium text-amber-700">
+                                          Transportation Fee (recorded as
+                                          miscellaneous service)
+                                        </span>
+                                      </div>
+                                      <span className="font-semibold text-amber-700 text-xl">
+                                        ₹
+                                        {parseFloat(
+                                          purchase.transportationFee,
+                                        ).toLocaleString("en-IN", {
+                                          minimumFractionDigits: 2,
+                                        })}
+                                      </span>
+                                    </div>
+                                  )}
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               ) : (
@@ -1588,7 +1695,7 @@ const SiteDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {miscellaneousExpenses.map((exp) => (
+                    {miscellaneousExpenses.map((exp: any) => (
                       <tr key={exp._id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {new Date(exp.date).toLocaleDateString()}
@@ -1608,7 +1715,11 @@ const SiteDetail: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${exp.status === "verified" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}
+                            className={`px-2 py-1 text-xs font-medium rounded-full ${
+                              exp.status === "verified"
+                                ? "bg-green-100 text-green-800"
+                                : "bg-yellow-100 text-yellow-800"
+                            }`}
                           >
                             {exp.status}
                           </span>
@@ -1622,9 +1733,25 @@ const SiteDetail: React.FC = () => {
                               Verify
                             </button>
                           )}
+
+                          {/* === UPDATED NOTES WITH PURCHASE ID TOOLTIP === */}
                           {exp.notes && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Notes: {exp.notes}
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                              Notes:{" "}
+                              {exp.notes === "from purchase" &&
+                              exp.purchaseId ? (
+                                <span
+                                  className="inline-flex items-center gap-1 cursor-help hover:text-blue-600 transition-colors underline decoration-dotted"
+                                  title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
+                                >
+                                  from purchase
+                                  <span className="text-[10px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                                    ID
+                                  </span>
+                                </span>
+                              ) : (
+                                exp.notes
+                              )}
                             </p>
                           )}
                         </td>
