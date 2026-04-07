@@ -465,11 +465,12 @@ const deleteBillUpload = async (
     }
 
     // ✅ DELETE FROM CLOUDINARY
-    if (purchase.billUpload.public_id) {
-      await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
-        resource_type: "auto", // IMPORTANT
-      });
-    }
+    const resourceType =
+      purchase.billUpload.type === "application/pdf" ? "raw" : "image";
+
+    await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
+      resource_type: resourceType,
+    });
 
     // ✅ REMOVE FROM DB
     await PurchaseModel.updateOne(
