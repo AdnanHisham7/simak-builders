@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { addPurchase } from "@/services/purchaseService";
 import { getVendors, createVendor, Vendor } from "@/services/vendorService";
+import { privateClient } from "@/api";
+import { getSiteDetails } from "@/services/siteService";
 
 interface AddPurchaseModalProps {
   siteId: string | null; // null for company-level purchases
@@ -64,6 +66,11 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   const [purchaseDate, setPurchaseDate] = useState<string>(
     new Date().toISOString().split("T")[0],
   );
+  const [sourceOfFunds, setSourceOfFunds] = useState<"company" | "siteManager">(
+    "company",
+  );
+  const [selectedSiteManagerId, setSelectedSiteManagerId] = useState("");
+  const [siteManagers, setSiteManagers] = useState<any[]>([]);
 
   const categories = [
     "Earth Work",
@@ -110,6 +117,23 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     };
     fetchVendors();
   }, []);
+
+  useEffect(() => {
+    const fetchSiteManagers = async () => {
+      if (!isAdmin || !siteId) return;
+      try {
+        const response = await privateClient.get("/users", {
+          params: { role: "siteManager", siteId },
+        });
+        const site = await getSiteDetails(siteId!)
+        setSiteManagers(site.siteManagers || []);
+        console.log(site.siteManagers, "site managers");
+      } catch (error) {
+        console.error("Error fetching site managers:", error);
+      }
+    };
+    fetchSiteManagers();
+  }, [isAdmin, siteId]);
 
   useEffect(() => {
     calculateTotal();
@@ -226,6 +250,14 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       newErrors.billFile = "Please upload a bill";
     }
 
+    if (isAdmin && paymentMethod === "cash") {
+      if (!sourceOfFunds)
+        newErrors.sourceOfFunds = "Source of funds is required";
+      if (sourceOfFunds === "siteManager" && !selectedSiteManagerId) {
+        newErrors.selectedSiteManager = "Please select a site manager";
+      }
+    }
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -274,6 +306,16 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       formData.append("paymentMethod", paymentMethod);
       formData.append("date", purchaseDate);
       if (siteId) formData.append("siteId", siteId);
+
+      const finalSource = isAdmin ? sourceOfFunds : "siteManager";
+      formData.append("sourceOfFunds", finalSource);
+      if (finalSource === "siteManager") {
+        if (selectedSiteManagerId) {
+          formData.append("deductFromUserId", selectedSiteManagerId);
+        } else if (!isAdmin) {
+          // site manager using their own account – backend will use req.user
+        }
+      }
 
       await addPurchase(formData);
 
@@ -492,6 +534,80 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                 </p>
               )}
             </div>
+
+            {isAdmin && paymentMethod === "cash" && (
+              <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
+                <div className="flex items-center mb-3">
+                  <DollarSign size={18} className="text-emerald-600 mr-2" />
+                  <h3 className="font-semibold text-gray-900">
+                    Source of Funds *
+                  </h3>
+                </div>
+                <select
+                  value={sourceOfFunds}
+                  onChange={(e) => {
+                    const val = e.target.value as "company" | "siteManager";
+                    setSourceOfFunds(val);
+                    setSelectedSiteManagerId("");
+                    setErrors((prev) => ({
+                      ...prev,
+                      sourceOfFunds: "",
+                      selectedSiteManager: "",
+                    }));
+                  }}
+                  className={`w-full px-4 py-3 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    errors.sourceOfFunds
+                      ? "border-red-300 bg-red-50"
+                      : "border-gray-200"
+                  }`}
+                >
+                  <option value="company">Company Funds</option>
+                  <option value="siteManager">Site Manager Funds</option>
+                </select>
+                {errors.sourceOfFunds && (
+                  <p className="text-red-500 text-sm mt-1 flex items-center">
+                    <AlertCircle size={14} className="mr-1" />
+                    {errors.sourceOfFunds}
+                  </p>
+                )}
+
+                {sourceOfFunds === "siteManager" && (
+                  <div className="mt-4">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Select Site Manager *
+                    </label>
+                    <select
+                      value={selectedSiteManagerId}
+                      onChange={(e) => {
+                        setSelectedSiteManagerId(e.target.value);
+                        setErrors((prev) => ({
+                          ...prev,
+                          selectedSiteManager: "",
+                        }));
+                      }}
+                      className={`w-full px-4 py-3 border rounded-xl transition-all duration-200 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                        errors.selectedSiteManager
+                          ? "border-red-300 bg-red-50"
+                          : "border-gray-200"
+                      }`}
+                    >
+                      <option value="">Select Site Manager</option>
+                      {siteManagers.map((mgr: any) => (
+                        <option key={mgr.id} value={mgr.id}>
+                          {mgr.name}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.selectedSiteManager && (
+                      <p className="text-red-500 text-sm mt-1 flex items-center">
+                        <AlertCircle size={14} className="mr-1" />
+                        {errors.selectedSiteManager}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Purchase Date (Admin only) */}
             {isAdmin && (

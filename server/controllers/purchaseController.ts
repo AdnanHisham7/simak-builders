@@ -20,9 +20,12 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       siteId,
       vendorId,
       paymentMethod,
+      sourceOfFunds,
+      deductFromUserId,
       date: dateStr,
       transportationFee: transFeeStr,
     } = req.body;
+
     const file = req.file;
     const user = await UserModel.findById(req.user?.userId);
     if (!user) throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
@@ -41,6 +44,59 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       throw new ApiError("Invalid transportation fee", HttpStatus.BAD_REQUEST);
     }
 
+    const totalToDeduct = totalAmount + transportationFee;
+
+    let deductingUser: any = null;
+    let isCompanyDeduction = false;
+
+    // ====================== BALANCE VALIDATION (includes transportation) ======================
+    if (paymentMethod === "cash") {
+      if (user.role === "admin") {
+        if (!sourceOfFunds)
+          throw new ApiError(
+            "Source of funds is required",
+            HttpStatus.BAD_REQUEST,
+          );
+
+        if (sourceOfFunds === "company") {
+          isCompanyDeduction = true;
+          const company = await CompanyModel.findOne();
+          if (!company || company.totalAmount < totalToDeduct) {
+            throw new ApiError(
+              "Insufficient company funds",
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+        } else if (sourceOfFunds === "siteManager") {
+          if (!deductFromUserId)
+            throw new ApiError(
+              "Site manager ID required",
+              HttpStatus.BAD_REQUEST,
+            );
+          deductingUser = await UserModel.findById(deductFromUserId);
+          if (!deductingUser || deductingUser.role !== "siteManager") {
+            throw new ApiError("Invalid site manager", HttpStatus.BAD_REQUEST);
+          }
+          if (deductingUser.siteExpensesBalance < totalToDeduct) {
+            throw new ApiError(
+              "Insufficient site manager funds",
+              HttpStatus.BAD_REQUEST,
+            );
+          }
+        }
+      } else if (user.role === "siteManager") {
+        deductingUser = user;
+        if (user.siteExpensesBalance < totalToDeduct) {
+          throw new ApiError(
+            "Insufficient site expenses balance",
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      } else {
+        throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+      }
+    }
+
     let purchaseDate = new Date();
     if (dateStr) {
       const parsed = new Date(dateStr);
@@ -55,7 +111,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
     for (const item of items) {
       const quantity = parseFloat(item.quantity);
       const price = parseFloat(item.price);
-      const itemTotal = parseFloat(item.totalAmount);
+      const itemTotal = parseFloat(item.totalAmount || "0");
 
       if (isNaN(quantity) || quantity <= 0)
         throw new ApiError(
@@ -84,32 +140,6 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
     }
 
-    if (paymentMethod === "cash") {
-      if (user.role === "siteManager") {
-        if (user.siteExpensesBalance < totalAmount) {
-          throw new ApiError(
-            "Insufficient site expenses balance",
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-      } else if (user.role === "admin") {
-        const company = await CompanyModel.findOne();
-        if (!company)
-          throw new ApiError(
-            "Company not found",
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        if (company.totalAmount < totalAmount) {
-          throw new ApiError(
-            "Insufficient company funds",
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-      } else {
-        throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
-      }
-    }
-
     const billUpload = file
       ? {
           name: file.originalname,
@@ -117,7 +147,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
           type: file.mimetype,
           uploadDate: new Date().toISOString(),
           url: file.path,
-          public_id: (file as any).filename || (file as any).path, // optional
+          public_id: (file as any).filename || (file as any).path,
         }
       : null;
 
@@ -139,6 +169,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
     });
     await purchase.save();
 
+    // Create transportation as a separate pending miscellaneous expense (for verification flow)
     if (transportationFee > 0 && siteId) {
       const misc = new MiscellaneousExpenseModel({
         site: siteId,
@@ -155,13 +186,14 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       await misc.save();
     }
 
+    // Notifications & Activity Log
     const admins = await UserModel.find({ role: "admin" });
     for (const admin of admins) {
       const notification = new NotificationModel({
         user: admin._id,
         type: "purchase_verification",
         relatedId: purchase._id,
-        message: `New purchase of $${purchase.totalAmount} needs verification for site ${site?.name || purchase.site || "company"}`,
+        message: `New purchase of ₹${purchase.totalAmount} (incl. transportation ₹${transportationFee}) needs verification for site ${site?.name || "company"}`,
         status: "pending",
       });
       await notification.save();
@@ -175,35 +207,64 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       details: `Added purchase for site: ${site?.name || purchase.site || "company"}`,
     });
 
+    // ====================== DEDUCTION - TWO SEPARATE TRANSACTIONS ======================
     if (paymentMethod === "cash") {
-      if (user.role === "siteManager") {
-        const transaction: any = {
+      if (isCompanyDeduction) {
+        const company = await CompanyModel.findOne();
+        if (company) {
+          company.totalAmount -= totalToDeduct;
+
+          // 1. Purchase transaction
+          company.transactions.push({
+            date: new Date(),
+            amount: -totalAmount,
+            type: "expenditure",
+            description: `Purchase${siteId ? ` for site ${site?.name || siteId}` : ""}`,
+            site: siteId || null,
+          });
+
+          // 2. Transportation transaction (service)
+          if (transportationFee > 0) {
+            company.transactions.push({
+              date: new Date(),
+              amount: -transportationFee,
+              type: "expenditure",
+              description: "Transportation Fee (Service)",
+              site: siteId || null,
+            });
+          }
+
+          await company.save();
+        }
+      } else if (deductingUser) {
+        // Deduct total from site manager balance
+        deductingUser.siteExpensesBalance -= totalToDeduct;
+
+        // 1. Purchase transaction
+        const purchaseTrans: any = {
           date: new Date(),
           amount: -totalAmount,
           type: "expenditure",
           description: `Purchase for site ${site?.name || siteId || "company"}`,
           site: siteId || null,
+          givenBy: user.role === "admin" ? user._id : undefined,
         };
-        user.siteExpensesTransactions.push(transaction);
-        user.siteExpensesBalance -= totalAmount;
-        await user.save();
-      } else if (user.role === "admin") {
-        const company = await CompanyModel.findOne();
-        if (!company)
-          throw new ApiError(
-            "Company not found",
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        company.totalAmount -= totalAmount;
-        const transaction = {
-          date: new Date(),
-          amount: -totalAmount,
-          type: "expenditure",
-          description: `Purchase added${siteId ? ` for site ${site?.name || siteId}` : ""}`,
-          site: siteId || null,
-        };
-        company.transactions.push(transaction);
-        await company.save();
+        deductingUser.siteExpensesTransactions.push(purchaseTrans);
+
+        // 2. Transportation transaction (service)
+        if (transportationFee > 0) {
+          const transTrans: any = {
+            date: new Date(),
+            amount: -transportationFee,
+            type: "expenditure",
+            description: "Transportation Fee (Service)",
+            site: siteId || null,
+            givenBy: user.role === "admin" ? user._id : undefined,
+          };
+          deductingUser.siteExpensesTransactions.push(transTrans);
+        }
+
+        await deductingUser.save();
       }
     }
 

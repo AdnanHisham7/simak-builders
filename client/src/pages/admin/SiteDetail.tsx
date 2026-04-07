@@ -247,9 +247,9 @@ const SiteDetail: React.FC = () => {
 
   const fetchMiscellaneousExpenses = async () => {
     try {
-      const data = await getMiscellaneousExpensesBySite(siteId!); // update service
-      const sortedData = data.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      const data = await getMiscellaneousExpensesBySite(siteId!);
+      const sortedData = [...data].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       setMiscellaneousExpenses(sortedData);
     } catch (err) {
