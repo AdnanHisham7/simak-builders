@@ -2,8 +2,13 @@ import { privateClient } from "@/api";
 
 export const addMiscellaneousExpense = async (data: {
   siteId: string | null;
-  description: string;
+  name: string;
+  category: string;
+  tip: number;
+  notes: string;
   amount: number;
+  sourceOfFunds: "company" | "siteManager";
+  deductFromUserId?: string;
   date: string;
 }) => {
   const response = await privateClient.post("/miscellaneous-expenses", data);
@@ -22,4 +27,8 @@ export const verifyMiscellaneousExpense = async (expenseId: string) => {
     `/miscellaneous-expenses/${expenseId}/verify`,
   );
   return response.data;
+};
+
+export const deleteMiscellaneousExpense = async (expenseId: string) => {
+  await privateClient.delete(`/miscellaneous-expenses/${expenseId}`);
 };

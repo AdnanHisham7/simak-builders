@@ -63,6 +63,7 @@ import MarkAttendanceModal from "./MarkAttendanceModal";
 import AttendanceByDay from "./AttendanceByDay";
 import AddMiscellaneousExpenseModal from "./AddMiscellaneousExpenseModal";
 import {
+  deleteMiscellaneousExpense,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
 } from "@/services/miscellaneousExpenseService";
@@ -415,6 +416,22 @@ const SiteDetail: React.FC = () => {
     } catch (err: any) {
       console.error("Error deleting purchase:", err);
       toast.error(err.response?.data?.message || "Failed to delete purchase.");
+    }
+  };
+
+  const handleDeleteMiscellaneous = async (expenseId: string) => {
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this unverified miscellaneous expense?",
+      )
+    )
+      return;
+    try {
+      await deleteMiscellaneousExpense(expenseId);
+      fetchMiscellaneousExpenses();
+      toast.success("Miscellaneous expense deleted successfully");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to delete expense");
     }
   };
 
@@ -1752,6 +1769,16 @@ const SiteDetail: React.FC = () => {
                             </button>
                           )}
 
+                          {exp.status === "pending" && (
+                            <button
+                              onClick={() => handleDeleteMiscellaneous(exp._id)}
+                              className="ml-2 text-red-600 hover:text-red-800"
+                              title="Delete unverified expense"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+
                           {/* === UPDATED NOTES WITH PURCHASE ID TOOLTIP === */}
                           {exp.notes && (
                             <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
@@ -2017,6 +2044,7 @@ const SiteDetail: React.FC = () => {
         {isAddMiscellaneousModalOpen && (
           <AddMiscellaneousExpenseModal
             siteId={siteId!}
+            isAdmin={userType === "admin"}
             onClose={() => {
               setIsAddMiscellaneousModalOpen(false);
               if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();

@@ -22,7 +22,10 @@ const addMiscellaneousExpense = async (
       tip = 0,
       notes = "",
       date,
+      sourceOfFunds: reqSource,
+      deductFromUserId,
     } = req.body;
+
     const user = await UserModel.findById(req.user?.userId);
     if (!user) throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
 
@@ -38,22 +41,28 @@ const addMiscellaneousExpense = async (
     const site = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    // Balance check (on amount only)
-    if (user.role === "siteManager") {
-      if (user.siteExpensesBalance < parsedAmount) {
+    // Determine source (no balance check, no deduction)
+    let sourceOfFunds: string | undefined;
+    let deductUserId: string | undefined;
+
+    if (user.role === "admin") {
+      if (!reqSource)
         throw new ApiError(
-          "Insufficient site expenses balance",
+          "Source of funds is required",
           HttpStatus.BAD_REQUEST,
         );
+      sourceOfFunds = reqSource;
+      if (sourceOfFunds === "siteManager") {
+        if (!deductFromUserId)
+          throw new ApiError(
+            "Site manager ID required",
+            HttpStatus.BAD_REQUEST,
+          );
+        deductUserId = deductFromUserId;
       }
-    } else if (user.role === "admin") {
-      const company = await CompanyModel.findOne();
-      if (company && company.totalAmount < parsedAmount) {
-        throw new ApiError(
-          "Insufficient company funds",
-          HttpStatus.BAD_REQUEST,
-        );
-      }
+    } else if (user.role === "siteManager") {
+      sourceOfFunds = "siteManager";
+      deductUserId = req.user?.userId;
     } else {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
@@ -68,10 +77,13 @@ const addMiscellaneousExpense = async (
       date: new Date(date),
       addedBy: req.user?.userId,
       status: "pending",
+      sourceOfFunds,
+      deductFromUserId,
     });
+
     await expense.save();
 
-    // Notifications & Activity Log (update messages)
+    // Notifications & Activity Log
     const admins = await UserModel.find({ role: "admin" });
     for (const admin of admins) {
       const notification = new NotificationModel({
@@ -92,35 +104,8 @@ const addMiscellaneousExpense = async (
       details: `Added ${category} expense for site: ${site.name}`,
     });
 
-    // Deduct from balance (amount only)
-    if (user.role === "siteManager") {
-      const transaction: any = {
-        date: new Date(),
-        amount: -parsedAmount,
-        type: "expenditure",
-        description: `${category} - ${name}`,
-        site: siteId,
-      };
-      user.siteExpensesTransactions.push(transaction);
-      user.siteExpensesBalance -= parsedAmount;
-      await user.save();
-    } else if (user.role === "admin") {
-      const company = await CompanyModel.findOne();
-      if (company) {
-        company.totalAmount -= parsedAmount;
-        company.transactions.push({
-          date: new Date(),
-          amount: -parsedAmount,
-          type: "expenditure",
-          description: `${category} - ${name} for site ${site.name}`,
-          site: siteId,
-        });
-        await company.save();
-      }
-    }
-
     res.status(HttpStatus.CREATED).json({
-      message: "Miscellaneous expense added",
+      message: "Miscellaneous expense added (pending verification)",
       expenseId: expense._id,
     });
   } catch (error) {
@@ -135,9 +120,9 @@ const verifyMiscellaneousExpense = async (
 ) => {
   try {
     const { expenseId } = req.params;
-    const user = req.user;
-    if (user?.role !== "admin")
+    if (req.user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
 
     const expense: any =
       await MiscellaneousExpenseModel.findById(expenseId).populate("site");
@@ -146,32 +131,109 @@ const verifyMiscellaneousExpense = async (
     expense.status = "verified";
     await expense.save();
 
-    // Update notifications...
-
     const totalExpense = expense.amount + (expense.tip || 0);
 
+    // Site record
     if (expense.site) {
       const site = await SiteModel.findById(expense.site._id);
       const addedByUser = await UserModel.findById(expense.addedBy);
-
       if (site) {
-        site.expenses += totalExpense; // ← Total (amount + tip)
-
+        site.expenses += totalExpense;
         site.transactions.push({
           date: new Date(),
           amount: totalExpense,
-          type: "miscellaneous", // or keep "rental" if you prefer
+          type: "miscellaneous",
           description: `${expense.category} - ${expense.name} by ${addedByUser?.name}`,
           relatedId: expense._id,
-          user: addedByUser?._id.toString(),
+          user: addedByUser?._id,
         });
         await site.save();
       }
     }
 
+    // DEDUCTION ONLY ON VERIFICATION
+    if (expense.sourceOfFunds) {
+      if (expense.sourceOfFunds === "company") {
+        const company = await CompanyModel.findOne();
+        if (company) {
+          company.totalAmount -= totalExpense; // can go negative
+          company.transactions.push({
+            date: new Date(),
+            amount: -totalExpense,
+            type: "expenditure",
+            description: `${expense.category} - ${expense.name} for site ${expense.site?.name}`,
+            site: expense.site?._id,
+          });
+          await company.save();
+        }
+      } else if (
+        expense.sourceOfFunds === "siteManager" &&
+        expense.deductFromUserId
+      ) {
+        const deductingUser = await UserModel.findById(
+          expense.deductFromUserId,
+        );
+        if (deductingUser) {
+          deductingUser.siteExpensesBalance -= totalExpense; // can go negative
+          deductingUser.siteExpensesTransactions.push({
+            date: new Date(),
+            amount: -totalExpense,
+            type: "expenditure",
+            description: `${expense.category} - ${expense.name} for site ${expense.site?.name}`,
+            site: expense.site?._id,
+            givenBy: expense.addedBy,
+          });
+          await deductingUser.save();
+        }
+      }
+    }
+
     res
       .status(HttpStatus.OK)
-      .json({ message: "Expense verified successfully" });
+      .json({ message: "Expense verified and funds deducted" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete only unverified (no refund needed because nothing was deducted on add)
+const deleteMiscellaneousExpense = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { expenseId } = req.params;
+    const expense: any = await MiscellaneousExpenseModel.findById(expenseId);
+    if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+
+    if (expense.status === "verified") {
+      throw new ApiError(
+        "Cannot delete a verified miscellaneous expense",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (
+      req.user?.role !== "admin" &&
+      req.user?.userId !== expense.addedBy.toString()
+    ) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    await MiscellaneousExpenseModel.findByIdAndDelete(expenseId);
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "delete",
+      resource: "miscellaneousExpense",
+      resourceId: expense._id,
+      details: `Deleted pending miscellaneous expense`,
+    });
+
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Miscellaneous expense deleted successfully" });
   } catch (error) {
     next(error);
   }
@@ -186,12 +248,10 @@ const getMiscellaneousExpensesBySite = async (
     const { siteId } = req.query;
     if (!siteId)
       throw new ApiError("siteId is required", HttpStatus.BAD_REQUEST);
-
     const expenses = await MiscellaneousExpenseModel.find({ site: siteId })
       .populate("addedBy", "name")
       .populate("purchaseId", "totalAmount date")
       .sort({ date: -1 });
-
     res.status(HttpStatus.OK).json(expenses);
   } catch (error) {
     next(error);
@@ -202,4 +262,5 @@ export default {
   addMiscellaneousExpense,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
+  deleteMiscellaneousExpense,
 };

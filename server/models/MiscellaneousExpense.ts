@@ -16,11 +16,17 @@ const MiscellaneousExpenseSchema = new Schema(
     purchaseId: { type: Schema.Types.ObjectId, ref: "Purchase", required: false },
     addedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
     status: { type: String, enum: ["pending", "verified"], default: "pending" },
+    sourceOfFunds: {
+      type: String,
+      enum: ["company", "siteManager"],
+      required: false,
+    },
+    deductFromUserId: { type: Schema.Types.ObjectId, ref: "User", required: false },
   },
   { timestamps: true },
 );
 
 export const MiscellaneousExpenseModel = model(
   "MiscellaneousExpense",
-  MiscellaneousExpenseSchema,
+  MiscellaneousExpenseSchema
 );

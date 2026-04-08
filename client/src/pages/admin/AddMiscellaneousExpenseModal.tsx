@@ -1,31 +1,64 @@
-// components/AddMiscellaneousModal.tsx
-import React, { useState } from "react";
-import { X, Plus, AlertCircle } from "lucide-react";
-import { addMiscellaneousExpense } from "@/services/miscellaneousExpenseService";  // update service
+import React, { useState, useEffect } from "react";
+import { X, Plus, AlertCircle, DollarSign } from "lucide-react";
+import { addMiscellaneousExpense } from "@/services/miscellaneousExpenseService";
+import { privateClient } from "@/api";
+import { getSiteDetails } from "@/services/siteService";
 
 interface Props {
   siteId: string;
+  isAdmin?: boolean;
   onClose: () => void;
 }
 
-const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
-  const [category, setCategory] = useState<"machinery" | "rental" | "service">("machinery");
+const AddMiscellaneousExpenseModal: React.FC<Props> = ({
+  siteId,
+  isAdmin = false,
+  onClose,
+}) => {
+  const [category, setCategory] = useState<"machinery" | "rental" | "service">(
+    "machinery",
+  );
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [tip, setTip] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+
+  // Source of funds (admin only)
+  const [sourceOfFunds, setSourceOfFunds] = useState<"company" | "siteManager">(
+    "company",
+  );
+  const [selectedSiteManagerId, setSelectedSiteManagerId] = useState("");
+  const [siteManagers, setSiteManagers] = useState<any[]>([]);
+
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin && siteId) {
+      const fetchManagers = async () => {
+        const site = await getSiteDetails(siteId);
+        setSiteManagers(site.siteManagers || []);
+      };
+      fetchManagers();
+    }
+  }, [isAdmin, siteId]);
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
     if (!name.trim()) newErrors.name = "Name is required";
     const parsedAmount = parseFloat(amount);
-    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0) {
+    if (!amount || isNaN(parsedAmount) || parsedAmount <= 0)
       newErrors.amount = "Valid amount is required";
-    }
     if (!date) newErrors.date = "Date is required";
+
+    if (isAdmin) {
+      if (!sourceOfFunds)
+        newErrors.sourceOfFunds = "Source of funds is required";
+      if (sourceOfFunds === "siteManager" && !selectedSiteManagerId) {
+        newErrors.selectedSiteManager = "Please select a site manager";
+      }
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -42,11 +75,17 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
         tip: tip ? parseFloat(tip) : 0,
         notes: notes.trim(),
         date,
+        sourceOfFunds: isAdmin ? sourceOfFunds : "siteManager",
+        deductFromUserId:
+          isAdmin && sourceOfFunds === "siteManager"
+            ? selectedSiteManagerId
+            : undefined,
       });
       onClose();
-      // toast.success("Expense added successfully"); if you use sonner
     } catch (error: any) {
-      setErrors({ submit: error.response?.data?.message || "Failed to add expense" });
+      setErrors({
+        submit: error.response?.data?.message || "Failed to add expense",
+      });
     } finally {
       setLoading(false);
     }
@@ -67,7 +106,9 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Category *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Category *
+            </label>
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value as any)}
@@ -80,7 +121,9 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name / Description *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Name / Description *
+            </label>
             <input
               type="text"
               value={name}
@@ -88,12 +131,79 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
               className={`w-full px-3 py-2 border rounded-lg ${errors.name ? "border-red-300" : "border-gray-200"}`}
               placeholder="e.g., JCB Hire, Generator Service"
             />
-            {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+            {errors.name && (
+              <p className="text-red-500 text-sm mt-1">{errors.name}</p>
+            )}
           </div>
+
+          {isAdmin && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+              <div className="flex items-center mb-3">
+                <DollarSign className="w-5 h-5 text-emerald-600 mr-2" />
+                <h3 className="font-semibold text-gray-900">
+                  Source of Funds *
+                </h3>
+              </div>
+              <select
+                value={sourceOfFunds}
+                onChange={(e) => {
+                  setSourceOfFunds(e.target.value as "company" | "siteManager");
+                  setSelectedSiteManagerId("");
+                  setErrors((prev) => ({
+                    ...prev,
+                    sourceOfFunds: "",
+                    selectedSiteManager: "",
+                  }));
+                }}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500"
+              >
+                <option value="company">Company Funds</option>
+                <option value="siteManager">Site Manager Funds</option>
+              </select>
+              {errors.sourceOfFunds && (
+                <p className="text-red-500 text-sm mt-1">
+                  {errors.sourceOfFunds}
+                </p>
+              )}
+
+              {sourceOfFunds === "siteManager" && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Site Manager *
+                  </label>
+                  <select
+                    value={selectedSiteManagerId}
+                    onChange={(e) => {
+                      setSelectedSiteManagerId(e.target.value);
+                      setErrors((prev) => ({
+                        ...prev,
+                        selectedSiteManager: "",
+                      }));
+                    }}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="">Select Site Manager</option>
+                    {siteManagers.map((mgr: any) => (
+                      <option key={mgr.id} value={mgr.id}>
+                        {mgr.name}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.selectedSiteManager && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors.selectedSiteManager}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₹) *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Amount (₹) *
+              </label>
               <input
                 type="number"
                 value={amount}
@@ -102,10 +212,14 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
                 placeholder="0.00"
                 step="0.01"
               />
-              {errors.amount && <p className="text-red-500 text-sm mt-1">{errors.amount}</p>}
+              {errors.amount && (
+                <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
+              )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tip (₹) Optional</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Tip (₹) Optional
+              </label>
               <input
                 type="number"
                 value={tip}
@@ -118,7 +232,9 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Notes (Optional)
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -128,7 +244,9 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({ siteId, onClose }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date *
+            </label>
             <input
               type="date"
               value={date}
