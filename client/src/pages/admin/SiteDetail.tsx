@@ -1536,16 +1536,13 @@ const SiteDetail: React.FC = () => {
                                           </div>
                                           <div className="text-emerald-600 font-bold text-lg">
                                             ₹
-                                            {(
-                                              parseFloat(item.quantity) *
-                                              parseFloat(item.price)
-                                            ).toLocaleString("en-IN", {
-                                              minimumFractionDigits: 2,
-                                            })}
+                                            {parseFloat(item.totalAmount).toFixed(
+                                                2,
+                                              )}
                                           </div>
                                         </div>
                                       </div>
-                                    ),
+                                    )
                                   )}
                                 </div>
 
