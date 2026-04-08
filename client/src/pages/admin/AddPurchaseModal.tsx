@@ -83,14 +83,15 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     "Floor Work",
     "Interior work",
     "Paint Work",
+    "Masonry Work",
     "Other",
   ];
 
   const units = [
     "kg",
-    "m²",
-    "m³",
-    "m",
+    "Ft",
+    "Nos",
+    "Load",
     "bag",
     "sheet",
     "hour",
@@ -99,6 +100,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     "kintel",
     "ton",
     "length",
+    "N/A",
     "Other",
   ];
 
