@@ -32,6 +32,8 @@ export interface Purchase {
   addedBy: Types.ObjectId;
   status?: "pending" | "verified";
   payment: Payment;
+  sourceOfFunds?: "company" | "siteManager";
+  deductFromUserId?: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;
 }

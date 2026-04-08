@@ -24,7 +24,7 @@ export interface Site {
     type: "purchase" | "attendance" | "stockTransfer" | "contractor_payment" | "miscellaneous";
     description?: string;
     relatedId?: Types.ObjectId;
-    user?: string;
+    user?: Types.ObjectId;
   }>;
   documents: Array<{
     name: string;

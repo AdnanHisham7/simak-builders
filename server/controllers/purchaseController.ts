@@ -20,7 +20,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       siteId,
       vendorId,
       paymentMethod,
-      sourceOfFunds,
+      sourceOfFunds: reqSource,
       deductFromUserId,
       date: dateStr,
       transportationFee: transFeeStr,
@@ -44,54 +44,31 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       throw new ApiError("Invalid transportation fee", HttpStatus.BAD_REQUEST);
     }
 
-    const totalToDeduct = totalAmount + transportationFee;
+    // Determine funding source WITHOUT any balance check (deduction moved to verify)
+    let sourceOfFunds: string | undefined;
+    let deductUserId: string | undefined;
 
-    let deductingUser: any = null;
-    let isCompanyDeduction = false;
-
-    // ====================== BALANCE VALIDATION (includes transportation) ======================
     if (paymentMethod === "cash") {
       if (user.role === "admin") {
-        if (!sourceOfFunds)
+        if (!reqSource)
           throw new ApiError(
             "Source of funds is required",
             HttpStatus.BAD_REQUEST,
           );
-
-        if (sourceOfFunds === "company") {
-          isCompanyDeduction = true;
-          const company = await CompanyModel.findOne();
-          if (!company || company.totalAmount < totalToDeduct) {
-            throw new ApiError(
-              "Insufficient company funds",
-              HttpStatus.BAD_REQUEST,
-            );
-          }
-        } else if (sourceOfFunds === "siteManager") {
+        sourceOfFunds = reqSource;
+        if (sourceOfFunds === "siteManager") {
           if (!deductFromUserId)
             throw new ApiError(
               "Site manager ID required",
               HttpStatus.BAD_REQUEST,
             );
-          deductingUser = await UserModel.findById(deductFromUserId);
-          if (!deductingUser || deductingUser.role !== "siteManager") {
-            throw new ApiError("Invalid site manager", HttpStatus.BAD_REQUEST);
-          }
-          if (deductingUser.siteExpensesBalance < totalToDeduct) {
-            throw new ApiError(
-              "Insufficient site manager funds",
-              HttpStatus.BAD_REQUEST,
-            );
-          }
+          deductUserId = deductFromUserId;
+        } else if (sourceOfFunds !== "company") {
+          throw new ApiError("Invalid source of funds", HttpStatus.BAD_REQUEST);
         }
       } else if (user.role === "siteManager") {
-        deductingUser = user;
-        if (user.siteExpensesBalance < totalToDeduct) {
-          throw new ApiError(
-            "Insufficient site expenses balance",
-            HttpStatus.BAD_REQUEST,
-          );
-        }
+        sourceOfFunds = "siteManager";
+        deductUserId = req.user?.userId;
       } else {
         throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
       }
@@ -107,12 +84,10 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       typeof req.body.items === "string"
         ? JSON.parse(req.body.items)
         : req.body.items;
-
     for (const item of items) {
       const quantity = parseFloat(item.quantity);
       const price = parseFloat(item.price);
       const itemTotal = parseFloat(item.totalAmount || "0");
-
       if (isNaN(quantity) || quantity <= 0)
         throw new ApiError(
           `Invalid quantity for item ${item.name}`,
@@ -128,7 +103,6 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
           `Invalid total amount for item ${item.name}`,
           HttpStatus.BAD_REQUEST,
         );
-
       item.quantity = quantity;
       item.price = price;
       item.totalAmount = itemTotal;
@@ -166,10 +140,13 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       billUpload,
       addedBy: req.user?.userId,
       payment,
+      sourceOfFunds, // ← saved
+      deductFromUserId: deductUserId, // ← saved
     });
+
     await purchase.save();
 
-    // Create transportation as a separate pending miscellaneous expense (for verification flow)
+    // Transportation as separate pending miscellaneous
     if (transportationFee > 0 && siteId) {
       const misc = new MiscellaneousExpenseModel({
         site: siteId,
@@ -182,6 +159,8 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
         date: purchaseDate,
         addedBy: req.user?.userId,
         status: "pending",
+        sourceOfFunds,
+        deductFromUserId: deductUserId,
       });
       await misc.save();
     }
@@ -207,69 +186,10 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       details: `Added purchase for site: ${site?.name || purchase.site || "company"}`,
     });
 
-    // ====================== DEDUCTION - TWO SEPARATE TRANSACTIONS ======================
-    if (paymentMethod === "cash") {
-      if (isCompanyDeduction) {
-        const company = await CompanyModel.findOne();
-        if (company) {
-          company.totalAmount -= totalToDeduct;
-
-          // 1. Purchase transaction
-          company.transactions.push({
-            date: new Date(),
-            amount: -totalAmount,
-            type: "expenditure",
-            description: `Purchase${siteId ? ` for site ${site?.name || siteId}` : ""}`,
-            site: siteId || null,
-          });
-
-          // 2. Transportation transaction (service)
-          if (transportationFee > 0) {
-            company.transactions.push({
-              date: new Date(),
-              amount: -transportationFee,
-              type: "expenditure",
-              description: "Transportation Fee (Service)",
-              site: siteId || null,
-            });
-          }
-
-          await company.save();
-        }
-      } else if (deductingUser) {
-        // Deduct total from site manager balance
-        deductingUser.siteExpensesBalance -= totalToDeduct;
-
-        // 1. Purchase transaction
-        const purchaseTrans: any = {
-          date: new Date(),
-          amount: -totalAmount,
-          type: "expenditure",
-          description: `Purchase for site ${site?.name || siteId || "company"}`,
-          site: siteId || null,
-          givenBy: user.role === "admin" ? user._id : undefined,
-        };
-        deductingUser.siteExpensesTransactions.push(purchaseTrans);
-
-        // 2. Transportation transaction (service)
-        if (transportationFee > 0) {
-          const transTrans: any = {
-            date: new Date(),
-            amount: -transportationFee,
-            type: "expenditure",
-            description: "Transportation Fee (Service)",
-            site: siteId || null,
-            givenBy: user.role === "admin" ? user._id : undefined,
-          };
-          deductingUser.siteExpensesTransactions.push(transTrans);
-        }
-
-        await deductingUser.save();
-      }
-    }
+    // NO DEDUCTION / NO TRANSACTIONS HERE ANYMORE (moved to verifyPurchase)
 
     res.status(HttpStatus.CREATED).json({
-      message: "Purchase added",
+      message: "Purchase added (pending verification)",
       purchaseId: purchase._id,
     });
   } catch (error) {
@@ -284,8 +204,6 @@ const verifyPurchase = async (
 ) => {
   try {
     const { purchaseId } = req.params;
-    const user = req.user;
-
     const purchase: any =
       await PurchaseModel.findById(purchaseId).populate("site");
     if (!purchase)
@@ -294,6 +212,7 @@ const verifyPurchase = async (
     purchase.status = "verified";
     await purchase.save();
 
+    // Stock update
     for (const item of purchase.items) {
       const { name, unit, category, quantity } = item;
       const stockQuery = {
@@ -302,7 +221,6 @@ const verifyPurchase = async (
         category,
         site: purchase.site ? purchase.site._id : null,
       };
-
       let stock = await StockModel.findOne(stockQuery);
       if (!stock) {
         stock = new StockModel({
@@ -317,23 +235,24 @@ const verifyPurchase = async (
       await stock.save();
     }
 
+    // Notifications
     await NotificationModel.updateMany(
       { relatedId: purchaseId, type: "purchase_verification" },
       { status: "approved" },
     );
-
     const notification = new NotificationModel({
       user: purchase.addedBy,
       type: "purchase_update",
       relatedId: purchase._id,
-      message: `Your purchase of $${purchase.totalAmount} for site ${purchase.site?.name || "company"} has been verified`,
+      message: `Your purchase of ₹${purchase.totalAmount} for site ${purchase.site?.name || "company"} has been verified`,
       status: "approved",
     });
     await notification.save();
 
+    // Site expense record
     if (purchase.site) {
       const site = await SiteModel.findById(purchase.site?._id);
-      const purchasedUser = await UserModel.findOne(purchase.addedBy);
+      const purchasedUser = await UserModel.findById(purchase.addedBy);
       if (site) {
         site.expenses += purchase.totalAmount;
         site.transactions.push({
@@ -342,15 +261,120 @@ const verifyPurchase = async (
           type: "purchase",
           description: `Purchase added by ${purchasedUser?.name}`,
           relatedId: purchase._id,
-          user: purchasedUser?._id.toString(),
+          user: purchasedUser?._id,
         });
         await site.save();
       }
     }
 
+    // DEDUCTION ON VERIFICATION
+    if (purchase.payment.method === "cash" && purchase.sourceOfFunds) {
+      const purchaseOnlyAmount = purchase.totalAmount;
+
+      if (purchase.sourceOfFunds === "company") {
+        const company = await CompanyModel.findOne();
+        if (company) {
+          company.totalAmount -= purchaseOnlyAmount;
+          company.transactions.push({
+            date: new Date(),
+            amount: -purchaseOnlyAmount,
+            type: "expenditure",
+            description: `Purchase${purchase.site ? ` for site ${purchase.site.name || purchase.site}` : ""}`,
+            site: purchase.site?._id || null,
+          });
+          await company.save();
+        }
+      } else if (
+        purchase.sourceOfFunds === "siteManager" &&
+        purchase.deductFromUserId
+      ) {
+        const deductingUser = await UserModel.findById(
+          purchase.deductFromUserId,
+        );
+        if (deductingUser) {
+          deductingUser.siteExpensesBalance -= purchaseOnlyAmount;
+          deductingUser.siteExpensesTransactions.push({
+            date: new Date(),
+            amount: -purchaseOnlyAmount,
+            type: "expenditure",
+            description: `Purchase for site ${purchase.site?.name || "company"}`,
+            site: purchase.site?._id || null,
+            givenBy: purchase.addedBy,
+          });
+          await deductingUser.save();
+        }
+      }
+    }
+
     res
       .status(HttpStatus.OK)
-      .json({ message: "Purchase verified and stocks updated" });
+      .json({ message: "Purchase verified, stocks updated, funds deducted" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Delete only unverified purchases (no refund needed because deduction never happened)
+const deletePurchase = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { purchaseId } = req.params;
+
+    const purchase: any = await PurchaseModel.findById(purchaseId);
+    if (!purchase)
+      throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+
+    if (purchase.status === "verified") {
+      throw new ApiError(
+        "Cannot delete a verified purchase. Deductions and records are permanent.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Authorization: admin or the person who added it
+    if (
+      req.user?.role !== "admin" &&
+      req.user?.userId !== purchase.addedBy.toString()
+    ) {
+      throw new ApiError(
+        "Unauthorized to delete this purchase",
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    // Clean up bill from Cloudinary if exists
+    if (purchase.billUpload?.public_id) {
+      const resourceType =
+        purchase.billUpload.type === "application/pdf" ? "raw" : "image";
+      await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
+        resource_type: resourceType,
+      });
+    }
+
+    // Delete linked pending transportation miscellaneous
+    if (purchase.transportationFee > 0) {
+      await MiscellaneousExpenseModel.deleteMany({
+        purchaseId: purchase._id,
+        status: "pending",
+      });
+    }
+
+    await PurchaseModel.findByIdAndDelete(purchaseId);
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "delete",
+      resource: "purchase",
+      resourceId: purchase._id,
+      details: `Deleted pending purchase`,
+    });
+
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Purchase deleted successfully" });
   } catch (error) {
     next(error);
   }
@@ -488,6 +512,7 @@ export default {
   getPurchases,
   addPurchase,
   verifyPurchase,
+  deletePurchase,
   getPurchasesBySite,
   getPurchasesBySiteForReport,
   deleteBillUpload,

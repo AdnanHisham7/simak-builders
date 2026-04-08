@@ -45,6 +45,7 @@ import {
   getPurchasesBySite,
   verifyPurchase,
   deleteBillUpload,
+  deletePurchase,
 } from "@/services/purchaseService";
 // import { User } from "@/services/userService";
 import {
@@ -249,7 +250,8 @@ const SiteDetail: React.FC = () => {
     try {
       const data = await getMiscellaneousExpensesBySite(siteId!);
       const sortedData = [...data].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       setMiscellaneousExpenses(sortedData);
     } catch (err) {
@@ -399,16 +401,20 @@ const SiteDetail: React.FC = () => {
   };
 
   const handleDeletePurchase = async (purchaseId: string) => {
-    if (window.confirm("Are you sure you want to delete this purchase?")) {
-      try {
-        // Placeholder for captcha token; replace with actual reCAPTCHA integration
-        const captchaToken = "dummy-token";
-        await deletePurchase(purchaseId, captchaToken);
-        fetchPurchases();
-      } catch (err) {
-        console.error("Error deleting purchase:", err);
-        setError("Failed to delete purchase.");
-      }
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this unverified purchase?",
+      )
+    )
+      return;
+
+    try {
+      await deletePurchase(purchaseId);
+      fetchPurchases();
+      toast.success("Purchase deleted successfully");
+    } catch (err: any) {
+      console.error("Error deleting purchase:", err);
+      toast.error(err.response?.data?.message || "Failed to delete purchase.");
     }
   };
 
@@ -1456,7 +1462,10 @@ const SiteDetail: React.FC = () => {
                                 {canVerifyPurchase &&
                                   purchase.status === "pending" && (
                                     <button
-                                      onClick={() => handleVerify(purchase._id)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleVerify(purchase._id);
+                                      }}
                                       className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                                     >
                                       Verify
@@ -1464,30 +1473,42 @@ const SiteDetail: React.FC = () => {
                                   )}
                                 {purchase.billUpload &&
                                   purchase.billUpload.url && (
-                                    <div>
-                                      <a
-                                        href={`${purchase.billUpload.url}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800"
-                                        title="View Bill"
-                                      >
-                                        <Eye className="w-4 h-4" />
-                                      </a>
-                                    </div>
+                                    <a
+                                      href={`${purchase.billUpload.url}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-blue-600 hover:text-blue-800"
+                                      title="View Bill"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                    </a>
                                   )}
                                 {userType === "admin" &&
                                   purchase.billUpload && (
                                     <button
-                                      onClick={() =>
-                                        handleDeleteBillUpload(purchase._id)
-                                      }
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteBillUpload(purchase._id);
+                                      }}
                                       className="text-red-600 hover:text-red-800"
                                       title="Delete Bill Upload"
                                     >
                                       <X className="w-4 h-4" />
                                     </button>
                                   )}
+                                {/* Delete unverified purchase */}
+                                {purchase.status === "pending" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeletePurchase(purchase._id);
+                                    }}
+                                    className="text-red-600 hover:text-red-800"
+                                    title="Delete unverified purchase"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1536,13 +1557,13 @@ const SiteDetail: React.FC = () => {
                                           </div>
                                           <div className="text-emerald-600 font-bold text-lg">
                                             ₹
-                                            {parseFloat(item.totalAmount).toFixed(
-                                                2,
-                                              )}
+                                            {parseFloat(
+                                              item.totalAmount,
+                                            ).toFixed(2)}
                                           </div>
                                         </div>
                                       </div>
-                                    )
+                                    ),
                                   )}
                                 </div>
 

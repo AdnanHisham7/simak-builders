@@ -1,15 +1,14 @@
 import { privateClient } from "@/api";
 
-export const addPurchase = async (purchaseData) => {
+export const addPurchase = async (purchaseData: any) => {
   const response = await privateClient.post(`/purchases`, purchaseData);
   return response.data;
 };
 
-export const verifyPurchase = async (purchaseId) => {
-  console.log(purchaseId, "dfhfhdfdhfjdhfdj");
+export const verifyPurchase = async (purchaseId: string) => {
   const response = await privateClient.patch(
     `/purchases/${purchaseId}/verify`,
-    {}
+    {},
   );
   return response.data;
 };
@@ -28,4 +27,8 @@ export const getPurchasesBySite = async (siteId: string, status = null) => {
 
 export const deleteBillUpload = async (purchaseId: string) => {
   await privateClient.delete(`/purchases/${purchaseId}/billUpload`);
+};
+
+export const deletePurchase = async (purchaseId: string) => {
+  await privateClient.delete(`/purchases/${purchaseId}`);
 };

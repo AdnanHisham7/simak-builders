@@ -8,6 +8,7 @@ const router = express.Router();
 // Purchases
 router.post('/', authMiddleware, upload.single("billUpload"), purchaseController.addPurchase);
 router.patch('/:purchaseId/verify', authMiddleware, purchaseController.verifyPurchase);
+router.delete('/:purchaseId', authMiddleware, purchaseController.deletePurchase);
 router.get('/', authMiddleware, purchaseController.getPurchases);
 router.get("/by-site", purchaseController.getPurchasesBySite);
 router.get("/site/:siteId", purchaseController.getPurchasesBySiteForReport);

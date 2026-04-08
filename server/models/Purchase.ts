@@ -36,6 +36,12 @@ const PurchaseSchema = new Schema<Purchase>(
       method: { type: String, enum: ["cash", "credit"], required: true },
       isPaid: { type: Boolean, default: false },
     },
+    sourceOfFunds: {
+      type: String,
+      enum: ["company", "siteManager"],
+      required: false,
+    },
+    deductFromUserId: { type: Schema.Types.ObjectId, ref: "User", required: false },
   },
   { timestamps: true },
 );
