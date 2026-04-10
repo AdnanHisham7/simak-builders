@@ -10,6 +10,7 @@ import { PurchaseModel } from "@models/Purchase";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { UserModel } from "@models/User";
 import { NotificationModel } from "@models/Notification";
+import { Types } from "mongoose";
 
 const addStock = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -137,8 +138,8 @@ const approveStockTransfer = async (
           amount: -stockValue,
           type: "stockTransfer",
           description: `Stock transferred to site ${transfer.toSite}`,
-          relatedId: transfer._id,
-          user: user?.userId,
+          relatedId: new Types.ObjectId(transfer._id),
+          user: new Types.ObjectId(user?.userId),
         });
         await sourceSite.save();
       }
