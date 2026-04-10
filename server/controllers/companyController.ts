@@ -470,8 +470,8 @@ const createSiteWithBulkData = async (
             amount: purchase.totalAmount,
             type: "purchase",
             description: `Purchase from vendor ${purchaseData.vendor}`,
-            relatedId: purchase._id,
-            user: adminUser.userId,
+            relatedId: new Types.ObjectId(purchase._id),
+            user: new Types.ObjectId(adminUser.userId),
           });
 
           newSite.expenses += purchase.totalAmount;
@@ -513,7 +513,7 @@ const createSiteWithBulkData = async (
             type: "miscellaneous",
             description: `${expData.category} - ${expData.name}`,
             relatedId: expense._id,
-            user: adminUser.userId,
+            user: new Types.ObjectId(adminUser.userId),
           });
 
           newSite.expenses += totalAmount;
@@ -537,8 +537,8 @@ const createSiteWithBulkData = async (
             amount: -attendanceData.dailyWage,
             type: "attendance",
             description: `Attendance for employee ${attendanceData.employee}`,
-            relatedId: attendance._id,
-            user: adminUser.userId,
+            relatedId: new Types.ObjectId(attendance._id),
+            user: new Types.ObjectId(adminUser.userId),
           });
           company.totalAmount -= attendanceData.dailyWage;
           company.transactions.push({
@@ -579,8 +579,8 @@ const createSiteWithBulkData = async (
             amount: -transactionData.amount,
             type: "contractor_payment",
             description: transactionData.description || "Contractor payment",
-            relatedId: transaction._id,
-            user: adminUser.userId,
+            relatedId: new Types.ObjectId(transaction._id),
+            user: new Types.ObjectId(adminUser.userId),
           });
           company.totalAmount -= transactionData.amount;
           company.transactions.push({

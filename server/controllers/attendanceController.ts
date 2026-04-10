@@ -55,8 +55,8 @@ const markAttendance = async (
       amount: expense,
       type: "attendance",
       description: `Attendance for ${employee.name}`,
-      relatedId: attendance._id,
-      user: user?.userId,
+      relatedId: new Types.ObjectId(attendance._id),
+      user: new Types.ObjectId(user?.userId),
     });
     await site.save();
 
