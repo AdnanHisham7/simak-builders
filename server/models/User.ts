@@ -40,7 +40,7 @@ const UserSchema = new Schema<User>(
       {
         date: { type: Date, default: Date.now },
         amount: { type: Number, required: true },
-        type: { type: String, enum: ["incoming", "expenditure"], required: true },
+        type: { type: String, enum: ["incoming", "expenditure", "reversal"], required: true },
         description: { type: String },
         site: { type: Schema.Types.ObjectId, ref: "Site" },
         givenBy: { type: Schema.Types.ObjectId, ref: "User" },

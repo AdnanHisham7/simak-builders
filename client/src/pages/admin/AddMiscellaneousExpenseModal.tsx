@@ -23,18 +23,21 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
   const [tip, setTip] = useState("");
   const [notes, setNotes] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-
-  // Source of funds (admin only)
   const [sourceOfFunds, setSourceOfFunds] = useState<"company" | "siteManager">(
     "company",
   );
   const [selectedSiteManagerId, setSelectedSiteManagerId] = useState("");
   const [siteManagers, setSiteManagers] = useState<any[]>([]);
 
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "credit">("cash");
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // Fetch site managers if admin
     if (isAdmin && siteId) {
       const fetchManagers = async () => {
         const site = await getSiteDetails(siteId);
@@ -42,6 +45,16 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
       };
       fetchManagers();
     }
+    // Fetch vendors list
+    const fetchVendors = async () => {
+      try {
+        const { data } = await privateClient.get("/vendors");
+        setVendors(data);
+      } catch (error) {
+        console.error("Failed to fetch vendors", error);
+      }
+    };
+    fetchVendors();
   }, [isAdmin, siteId]);
 
   const validateForm = () => {
@@ -51,13 +64,15 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
     if (!amount || isNaN(parsedAmount) || parsedAmount <= 0)
       newErrors.amount = "Valid amount is required";
     if (!date) newErrors.date = "Date is required";
-
     if (isAdmin) {
       if (!sourceOfFunds)
         newErrors.sourceOfFunds = "Source of funds is required";
       if (sourceOfFunds === "siteManager" && !selectedSiteManagerId) {
         newErrors.selectedSiteManager = "Please select a site manager";
       }
+    }
+    if (paymentMethod === "credit" && !selectedVendorId) {
+      newErrors.vendor = "Please select a vendor for credit payment";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -80,6 +95,8 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
           isAdmin && sourceOfFunds === "siteManager"
             ? selectedSiteManagerId
             : undefined,
+        paymentMethod,
+        vendorId: paymentMethod === "credit" ? selectedVendorId : undefined,
       });
       onClose();
     } catch (error: any) {
@@ -92,8 +109,8 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-xl font-bold flex items-center space-x-2">
             <Plus className="w-6 h-6 text-blue-600" />
@@ -105,6 +122,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
         </div>
 
         <div className="space-y-4">
+          {/* Category */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Category *
@@ -120,6 +138,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             </select>
           </div>
 
+          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Name / Description *
@@ -136,6 +155,52 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             )}
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Payment Method *
+            </label>
+            <select
+              value={paymentMethod}
+              onChange={(e) => {
+                setPaymentMethod(e.target.value as "cash" | "credit");
+                setSelectedVendorId("");
+                setErrors((prev) => ({ ...prev, vendor: "" }));
+              }}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+            >
+              <option value="cash">Cash</option>
+              <option value="credit">Credit</option>
+            </select>
+          </div>
+
+          {/* Vendor Selection (if credit) */}
+          {paymentMethod === "credit" && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Select Vendor *
+              </label>
+              <select
+                value={selectedVendorId}
+                onChange={(e) => {
+                  setSelectedVendorId(e.target.value);
+                  setErrors((prev) => ({ ...prev, vendor: "" }));
+                }}
+                className={`w-full px-3 py-2 border rounded-lg ${errors.vendor ? "border-red-300" : "border-gray-200"}`}
+              >
+                <option value="">Select a vendor</option>
+                {vendors.map((vendor) => (
+                  <option key={vendor._id} value={vendor._id}>
+                    {vendor.name}
+                  </option>
+                ))}
+              </select>
+              {errors.vendor && (
+                <p className="text-red-500 text-sm mt-1">{errors.vendor}</p>
+              )}
+            </div>
+          )}
+
+          {/* Source of Funds (admin only) */}
           {isAdmin && (
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
               <div className="flex items-center mb-3">
@@ -165,7 +230,6 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
                   {errors.sourceOfFunds}
                 </p>
               )}
-
               {sourceOfFunds === "siteManager" && (
                 <div className="mt-4">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -199,6 +263,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             </div>
           )}
 
+          {/* Amount & Tip */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -231,6 +296,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Notes */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Notes (Optional)
@@ -243,6 +309,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             />
           </div>
 
+          {/* Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Date *

@@ -10,7 +10,7 @@ const CompanySchema = new Schema(
         amount: { type: Number, required: true }, // Negative for expenditures
         type: {
           type: String,
-          enum: ["expenditure", "incoming"],
+          enum: ["expenditure", "incoming", "reversal"],
           required: true,
         },
         description: { type: String },

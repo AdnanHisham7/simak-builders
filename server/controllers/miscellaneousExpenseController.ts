@@ -7,6 +7,7 @@ import { ActivityLogModel } from "@models/ActivityLog";
 import { NotificationModel } from "@models/Notification";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
+import { Types } from "mongoose";
 
 const addMiscellaneousExpense = async (
   req: Request,
@@ -24,6 +25,8 @@ const addMiscellaneousExpense = async (
       date,
       sourceOfFunds: reqSource,
       deductFromUserId,
+      paymentMethod = "cash",
+      vendorId,
     } = req.body;
 
     const user = await UserModel.findById(req.user?.userId);
@@ -36,6 +39,16 @@ const addMiscellaneousExpense = async (
     }
     if (!["machinery", "rental", "service"].includes(category)) {
       throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
+    }
+
+    if (!["cash", "credit"].includes(paymentMethod)) {
+      throw new ApiError("Invalid payment method", HttpStatus.BAD_REQUEST);
+    }
+    if (paymentMethod === "credit" && !vendorId) {
+      throw new ApiError(
+        "Vendor is required for credit payment",
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const site = await SiteModel.findById(siteId);
@@ -79,6 +92,8 @@ const addMiscellaneousExpense = async (
       status: "pending",
       sourceOfFunds,
       deductFromUserId,
+      paymentMethod,
+      vendor: vendorId || undefined,
     });
 
     await expense.save();
@@ -196,7 +211,6 @@ const verifyMiscellaneousExpense = async (
   }
 };
 
-// Delete only unverified (no refund needed because nothing was deducted on add)
 const deleteMiscellaneousExpense = async (
   req: Request,
   res: Response,
@@ -204,16 +218,13 @@ const deleteMiscellaneousExpense = async (
 ) => {
   try {
     const { expenseId } = req.params;
-    const expense: any = await MiscellaneousExpenseModel.findById(expenseId);
+    const expense: any = await MiscellaneousExpenseModel.findById(expenseId)
+      .populate("site")
+      .populate("vendor");
+
     if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
 
-    if (expense.status === "verified") {
-      throw new ApiError(
-        "Cannot delete a verified miscellaneous expense",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
+    // Authorization: admin or the user who added it
     if (
       req.user?.role !== "admin" &&
       req.user?.userId !== expense.addedBy.toString()
@@ -221,19 +232,76 @@ const deleteMiscellaneousExpense = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
+    const totalExpense = expense.amount + (expense.tip || 0);
+    const wasVerified = expense.status === "verified";
+
+    // If verified, perform accounting reversal
+    if (wasVerified) {
+      // 1. Reverse site expense
+      const site = await SiteModel.findById(expense.site);
+      if (site) {
+        site.expenses -= totalExpense;
+        // Add reversal transaction
+        site.transactions.push({
+          date: new Date(),
+          amount: -totalExpense,
+          type: "miscellaneous",
+          description: `Reversal: Deleted miscellaneous expense (${expense.category} - ${expense.name})`,
+          relatedId: new Types.ObjectId(expense._id),
+          user: new Types.ObjectId(req.user?.userId),
+        });
+        await site.save();
+      }
+
+      // 2. Reverse source deduction
+      if (expense.sourceOfFunds === "company") {
+        const company = await CompanyModel.findOne();
+        if (company) {
+          company.totalAmount += totalExpense;
+          company.transactions.push({
+            date: new Date(),
+            amount: totalExpense,
+            type: "reversal",
+            description: `Reversal: Deleted miscellaneous expense (${expense.category} - ${expense.name}) for site ${expense.site?.name || ""}`,
+            site: expense.site?._id,
+          });
+          await company.save();
+        }
+      } else if (
+        expense.sourceOfFunds === "siteManager" &&
+        expense.deductFromUserId
+      ) {
+        const user = await UserModel.findById(expense.deductFromUserId);
+        if (user) {
+          user.siteExpensesBalance += totalExpense;
+          user.siteExpensesTransactions.push({
+            date: new Date(),
+            amount: totalExpense,
+            type: "reversal",
+            description: `Reversal: Deleted miscellaneous expense (${expense.category} - ${expense.name}) for site ${expense.site?.name || ""}`,
+            site: expense.site?._id,
+            givenBy: expense.addedBy,
+          });
+          await user.save();
+        }
+      }
+    }
+
+    // Delete the expense document
     await MiscellaneousExpenseModel.findByIdAndDelete(expenseId);
 
+    // Activity log
     await ActivityLogModel.create({
       user: req.user?.userId,
       action: "delete",
       resource: "miscellaneousExpense",
       resourceId: expense._id,
-      details: `Deleted pending miscellaneous expense`,
+      details: `Deleted ${wasVerified ? "verified" : "pending"} miscellaneous expense`,
     });
 
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Miscellaneous expense deleted successfully" });
+    res.status(HttpStatus.OK).json({
+      message: `Miscellaneous expense deleted successfully${wasVerified ? " with accounting reversal" : ""}`,
+    });
   } catch (error) {
     next(error);
   }
@@ -248,10 +316,13 @@ const getMiscellaneousExpensesBySite = async (
     const { siteId } = req.query;
     if (!siteId)
       throw new ApiError("siteId is required", HttpStatus.BAD_REQUEST);
+
     const expenses = await MiscellaneousExpenseModel.find({ site: siteId })
       .populate("addedBy", "name")
       .populate("purchaseId", "totalAmount date")
+      .populate("vendor", "name")
       .sort({ date: -1 });
+
     res.status(HttpStatus.OK).json(expenses);
   } catch (error) {
     next(error);

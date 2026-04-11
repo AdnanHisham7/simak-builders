@@ -22,6 +22,12 @@ const MiscellaneousExpenseSchema = new Schema(
       required: false,
     },
     deductFromUserId: { type: Schema.Types.ObjectId, ref: "User", required: false },
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "credit"],
+      default: "cash",
+    },
+    vendor: { type: Schema.Types.ObjectId, ref: "Vendor", required: false },
   },
   { timestamps: true },
 );

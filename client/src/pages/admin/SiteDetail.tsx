@@ -39,6 +39,8 @@ import {
   User,
   ChevronDown,
   ChevronRight,
+  FileX,
+  Trash2,
 } from "lucide-react";
 import RequestTransferModal from "./RequestTransferModal";
 import {
@@ -402,12 +404,12 @@ const SiteDetail: React.FC = () => {
   };
 
   const handleDeletePurchase = async (purchaseId: string) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this unverified purchase?",
-      )
-    )
-      return;
+    const purchase = purchases.find((p) => p._id === purchaseId);
+    const isVerified = purchase?.status === "verified";
+    const confirmMsg = isVerified
+      ? "This is a verified purchase. Deleting will reverse all accounting entries (stock, expenses, source funds). Are you sure?"
+      : "Are you sure you want to delete this unverified purchase?";
+    if (!window.confirm(confirmMsg)) return;
 
     try {
       await deletePurchase(purchaseId);
@@ -420,12 +422,14 @@ const SiteDetail: React.FC = () => {
   };
 
   const handleDeleteMiscellaneous = async (expenseId: string) => {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this unverified miscellaneous expense?",
-      )
-    )
-      return;
+    const expense = miscellaneousExpenses.find((e) => e._id === expenseId);
+    const isVerified = expense?.status === "verified";
+    const confirmMsg = isVerified
+      ? "This expense is verified. Deleting will reverse the accounting entries. Continue?"
+      : "Are you sure you want to delete this unverified miscellaneous expense?";
+
+    if (!window.confirm(confirmMsg)) return;
+
     try {
       await deleteMiscellaneousExpense(expenseId);
       fetchMiscellaneousExpenses();
@@ -1510,20 +1514,25 @@ const SiteDetail: React.FC = () => {
                                       className="text-red-600 hover:text-red-800"
                                       title="Delete Bill Upload"
                                     >
-                                      <X className="w-4 h-4" />
+                                      <FileX className="w-4 h-4" />
                                     </button>
                                   )}
-                                {/* Delete unverified purchase */}
-                                {purchase.status === "pending" && (
+                                {/* Delete button - always for admin, for non-admin only if pending and added by them */}
+                                {(userType === "admin" ||
+                                  purchase.status === "pending") && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleDeletePurchase(purchase._id);
                                     }}
                                     className="text-red-600 hover:text-red-800"
-                                    title="Delete unverified purchase"
+                                    title={
+                                      purchase.status === "verified"
+                                        ? "Delete verified purchase (reversal)"
+                                        : "Delete unverified purchase"
+                                    }
                                   >
-                                    <X className="w-4 h-4" />
+                                    <Trash2 className="w-4 h-4" />
                                   </button>
                                 )}
                               </div>
@@ -1584,27 +1593,26 @@ const SiteDetail: React.FC = () => {
                                   )}
                                 </div>
 
-                                {purchase.transportationFee &&
-                                  parseFloat(purchase.transportationFee) >
-                                    0 && (
-                                    <div className="mt-6 flex justify-between items-center bg-amber-50 border border-amber-200 p-4 rounded-2xl">
-                                      <div className="flex items-center">
-                                        <DollarSign className="w-5 h-5 text-amber-600 mr-3" />
-                                        <span className="font-medium text-amber-700">
-                                          Transportation Fee (recorded as
-                                          miscellaneous service)
-                                        </span>
-                                      </div>
-                                      <span className="font-semibold text-amber-700 text-xl">
-                                        ₹
-                                        {parseFloat(
-                                          purchase.transportationFee,
-                                        ).toLocaleString("en-IN", {
-                                          minimumFractionDigits: 2,
-                                        })}
+                                {parseFloat(purchase.transportationFee || 0) >
+                                  0 && (
+                                  <div className="mt-6 flex justify-between items-center bg-amber-50 border border-amber-200 p-4 rounded-2xl">
+                                    <div className="flex items-center">
+                                      <DollarSign className="w-5 h-5 text-amber-600 mr-3" />
+                                      <span className="font-medium text-amber-700">
+                                        Transportation Fee (recorded as
+                                        miscellaneous service)
                                       </span>
                                     </div>
-                                  )}
+                                    <span className="font-semibold text-amber-700 text-xl">
+                                      ₹
+                                      {parseFloat(
+                                        purchase.transportationFee || 0,
+                                      ).toLocaleString("en-IN", {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </span>
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           )}
@@ -1700,110 +1708,125 @@ const SiteDetail: React.FC = () => {
 
               {/* Table */}
               {miscellaneousExpenses.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Category
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Name
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Tip
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Total
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {miscellaneousExpenses.map((exp: any) => (
-                      <tr key={exp._id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {new Date(exp.date).toLocaleDateString()}
-                        </td>
-                        <td className="capitalize">{exp.category}</td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {exp.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          ₹{exp.amount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          ₹{(exp.tip || 0).toLocaleString()}
-                        </td>
-                        <td className="font-medium">
-                          ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`px-2 py-1 text-xs font-medium rounded-full ${
-                              exp.status === "verified"
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {exp.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {userType === "admin" && exp.status === "pending" && (
-                            <button
-                              onClick={() => handleVerifyMiscellaneous(exp._id)}
-                              className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                            >
-                              Verify
-                            </button>
-                          )}
-
-                          {exp.status === "pending" && (
-                            <button
-                              onClick={() => handleDeleteMiscellaneous(exp._id)}
-                              className="ml-2 text-red-600 hover:text-red-800"
-                              title="Delete unverified expense"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          )}
-
-                          {/* === UPDATED NOTES WITH PURCHASE ID TOOLTIP === */}
-                          {exp.notes && (
-                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                              Notes:{" "}
-                              {exp.notes === "from purchase" &&
-                              exp.purchaseId ? (
-                                <span
-                                  className="inline-flex items-center gap-1 cursor-help hover:text-blue-600 transition-colors underline decoration-dotted"
-                                  title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
-                                >
-                                  from purchase
-                                  <span className="text-[10px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
-                                    ID
-                                  </span>
-                                </span>
-                              ) : (
-                                exp.notes
-                              )}
-                            </p>
-                          )}
-                        </td>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Date
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Category
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Name
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Amount
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Tip
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Total
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                          Actions
+                        </th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {miscellaneousExpenses.map((exp: any) => (
+                        <tr key={exp._id}>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {new Date(exp.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-4 py-4 capitalize">
+                            {exp.category}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            {exp.name}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            ₹{exp.amount.toLocaleString()}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            ₹{(exp.tip || 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-4 font-medium">
+                            ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                exp.status === "verified"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                              }`}
+                            >
+                              {exp.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4 whitespace-nowrap">
+                            <div className="flex items-center space-x-2">
+                              {userType === "admin" &&
+                                exp.status === "pending" && (
+                                  <button
+                                    onClick={() =>
+                                      handleVerifyMiscellaneous(exp._id)
+                                    }
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                                  >
+                                    Verify
+                                  </button>
+                                )}
+                              {/* Delete button – admin can delete any, non-admin only pending (own) */}
+                              {(userType === "admin" ||
+                                exp.status === "pending") && (
+                                <button
+                                  onClick={() =>
+                                    handleDeleteMiscellaneous(exp._id)
+                                  }
+                                  className="text-red-600 hover:text-red-800 p-1"
+                                  title={
+                                    exp.status === "verified"
+                                      ? "Delete verified expense (reversal)"
+                                      : "Delete unverified expense"
+                                  }
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                            {/* Notes with purchase link tooltip */}
+                            {exp.notes && (
+                              <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                                Notes:{" "}
+                                {exp.notes === "from purchase" &&
+                                exp.purchaseId ? (
+                                  <span
+                                    className="inline-flex items-center gap-1 cursor-help hover:text-blue-600 transition-colors underline decoration-dotted"
+                                    title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
+                                  >
+                                    from purchase
+                                    <span className="text-[10px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
+                                      ID
+                                    </span>
+                                  </span>
+                                ) : (
+                                  exp.notes
+                                )}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               ) : (
                 <p className="text-gray-600">
                   No miscellaneous expenses found for this site.

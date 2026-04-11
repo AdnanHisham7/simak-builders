@@ -13,6 +13,7 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import cloudinary from "../services/cloudinaryService";
 import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
+import { Types } from "mongoose";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -314,38 +315,160 @@ const verifyPurchase = async (
   }
 };
 
-// Delete only unverified purchases (no refund needed because deduction never happened)
 const deletePurchase = async (
   req: Request,
   res: Response,
   next: NextFunction,
 ) => {
   try {
+    console.log("HEYYYY")
     const { purchaseId } = req.params;
+    const purchase: any = await PurchaseModel.findById(purchaseId)
+      .populate("site")
+      .populate("vendor");
 
-    const purchase: any = await PurchaseModel.findById(purchaseId);
     if (!purchase)
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
 
-    if (purchase.status === "verified") {
-      throw new ApiError(
-        "Cannot delete a verified purchase. Deductions and records are permanent.",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Authorization: admin or the person who added it
+    // Authorization
     if (
       req.user?.role !== "admin" &&
       req.user?.userId !== purchase.addedBy.toString()
     ) {
-      throw new ApiError(
-        "Unauthorized to delete this purchase",
-        HttpStatus.FORBIDDEN,
-      );
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    // Clean up bill from Cloudinary if exists
+    const wasVerified = purchase.status === "verified";
+    const purchaseAmount = purchase.totalAmount;
+    const transportationFee = purchase.transportationFee || 0;
+
+    if (wasVerified) {
+      // 1. Reverse stock updates
+      for (const item of purchase.items) {
+        const stock = await StockModel.findOne({
+          name: item.name,
+          unit: item.unit,
+          category: item.category,
+          site: purchase.site?._id || null,
+        });
+        if (stock) {
+          stock.quantity -= item.quantity;
+          if (stock.quantity < 0) stock.quantity = 0;
+          await stock.save();
+        }
+      }
+
+      // 2. Reverse site expense
+      const site = await SiteModel.findById(purchase.site?._id);
+      if (site) {
+        site.expenses -= purchaseAmount;
+        site.transactions.push({
+          date: new Date(),
+          amount: -purchaseAmount,
+          type: "purchase",
+          description: `Reversal: Deleted purchase (Vendor: ${purchase.vendor?.name || "Unknown"})`,
+          relatedId: new Types.ObjectId(purchase._id),
+          user: new Types.ObjectId(req.user?.userId),
+        });
+        await site.save();
+      }
+
+      // 3. Reverse source deduction (only for cash purchases)
+      if (purchase.payment.method === "cash" && purchase.sourceOfFunds) {
+        if (purchase.sourceOfFunds === "company") {
+          const company = await CompanyModel.findOne();
+          if (company) {
+            company.totalAmount += purchaseAmount;
+            company.transactions.push({
+              date: new Date(),
+              amount: purchaseAmount,
+              type: "reversal",
+              description: `Reversal: Deleted purchase for site ${purchase.site?.name || "company"}`,
+              site: purchase.site?._id,
+            });
+            await company.save();
+          }
+        } else if (
+          purchase.sourceOfFunds === "siteManager" &&
+          purchase.deductFromUserId
+        ) {
+          const user = await UserModel.findById(purchase.deductFromUserId);
+          if (user) {
+            user.siteExpensesBalance += purchaseAmount;
+            user.siteExpensesTransactions.push({
+              date: new Date(),
+              amount: purchaseAmount,
+              type: "reversal",
+              description: `Reversal: Deleted purchase for site ${purchase.site?.name || "company"}`,
+              site: purchase.site?._id,
+              givenBy: purchase.addedBy,
+            });
+            await user.save();
+          }
+        }
+      }
+
+      // 4. Delete linked miscellaneous expense (transportation) if it exists and is verified
+      if (transportationFee > 0) {
+        const miscExpense = await MiscellaneousExpenseModel.findOne({
+          purchaseId: purchase._id,
+          status: "verified",
+        });
+        if (miscExpense) {
+          // Recursively call deleteMiscellaneousExpense logic or handle here
+          // For simplicity, manually reverse and delete
+          const totalMisc = miscExpense.amount + (miscExpense.tip || 0);
+          const miscSite = await SiteModel.findById(miscExpense.site);
+          if (miscSite) {
+            miscSite.expenses -= totalMisc;
+            miscSite.transactions.push({
+              date: new Date(),
+              amount: -totalMisc,
+              type: "miscellaneous",
+              description: `Reversal: Deleted transportation fee (linked to purchase)`,
+              relatedId: new Types.ObjectId(miscExpense._id),
+              user: new Types.ObjectId(req.user?.userId),
+            });
+            await miscSite.save();
+          }
+          // Reverse source for misc
+          if (miscExpense.sourceOfFunds === "company") {
+            const company = await CompanyModel.findOne();
+            if (company) {
+              company.totalAmount += totalMisc;
+              company.transactions.push({
+                date: new Date(),
+                amount: totalMisc,
+                type: "reversal",
+                description: `Reversal: Deleted transportation fee for site ${miscSite?.name || ""}`,
+                site: miscSite?._id,
+              });
+              await company.save();
+            }
+          } else if (
+            miscExpense.sourceOfFunds === "siteManager" &&
+            miscExpense.deductFromUserId
+          ) {
+            const user = await UserModel.findById(miscExpense.deductFromUserId);
+            if (user) {
+              user.siteExpensesBalance += totalMisc;
+              user.siteExpensesTransactions.push({
+                date: new Date(),
+                amount: totalMisc,
+                type: "reversal",
+                description: `Reversal: Deleted transportation fee for site ${miscSite?.name || ""}`,
+                site: miscSite?._id,
+                givenBy: miscExpense.addedBy,
+              });
+              await user.save();
+            }
+          }
+          await MiscellaneousExpenseModel.findByIdAndDelete(miscExpense._id);
+        }
+      }
+    }
+
+    // Delete bill from cloudinary if exists
     if (purchase.billUpload?.public_id) {
       const resourceType =
         purchase.billUpload.type === "application/pdf" ? "raw" : "image";
@@ -354,8 +477,8 @@ const deletePurchase = async (
       });
     }
 
-    // Delete linked pending transportation miscellaneous
-    if (purchase.transportationFee > 0) {
+    // Delete pending transportation misc if unverified
+    if (!wasVerified && transportationFee > 0) {
       await MiscellaneousExpenseModel.deleteMany({
         purchaseId: purchase._id,
         status: "pending",
@@ -369,13 +492,14 @@ const deletePurchase = async (
       action: "delete",
       resource: "purchase",
       resourceId: purchase._id,
-      details: `Deleted pending purchase`,
+      details: `Deleted ${wasVerified ? "verified" : "pending"} purchase`,
     });
 
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Purchase deleted successfully" });
+    res.status(HttpStatus.OK).json({
+      message: `Purchase deleted successfully${wasVerified ? " with accounting reversal" : ""}`,
+    });
   } catch (error) {
+    console.log("HEYYY 2, ", error)
     next(error);
   }
 };

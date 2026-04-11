@@ -42,7 +42,7 @@ export interface User {
   siteExpensesTransactions: {
     date: Date;
     amount: number;
-    type: "incoming" | "expenditure";
+    type: "incoming" | "expenditure" | "reversal";
     description?: string;
     site?: Types.ObjectId;
     givenBy?: Types.ObjectId;

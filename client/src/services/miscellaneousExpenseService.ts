@@ -9,6 +9,8 @@ export const addMiscellaneousExpense = async (data: {
   amount: number;
   sourceOfFunds: "company" | "siteManager";
   deductFromUserId?: string;
+  paymentMethod: string;
+  vendorId: string | undefined;
   date: string;
 }) => {
   const response = await privateClient.post("/miscellaneous-expenses", data);
