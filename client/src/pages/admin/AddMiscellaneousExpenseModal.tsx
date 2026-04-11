@@ -15,7 +15,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
   isAdmin = false,
   onClose,
 }) => {
-  const [category, setCategory] = useState<"machinery" | "rental" | "service">(
+  const [category, setCategory] = useState<"machinery" | "rental" | "service" | "material">(
     "machinery",
   );
   const [name, setName] = useState("");
@@ -134,6 +134,7 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
             >
               <option value="machinery">Machinery</option>
               <option value="rental">Rental</option>
+              <option value="material">Material</option>
               <option value="service">Service</option>
             </select>
           </div>

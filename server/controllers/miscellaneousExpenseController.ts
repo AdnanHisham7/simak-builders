@@ -37,7 +37,7 @@ const addMiscellaneousExpense = async (
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       throw new ApiError("Valid amount is required", HttpStatus.BAD_REQUEST);
     }
-    if (!["machinery", "rental", "service"].includes(category)) {
+    if (!["machinery", "rental", "service", "material"].includes(category)) {
       throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
     }
 

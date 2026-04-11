@@ -59,7 +59,7 @@ interface Purchase {
 }
 
 interface MiscellaneousExpense {
-  category: "machinery" | "rental" | "service";
+  category: "machinery" | "rental" | "service" | "material";
   name: string;
   amount: number;
   tip: number;
@@ -973,6 +973,7 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
                         >
                           <option value="machinery">Machinery</option>
                           <option value="rental">Rental</option>
+                          <option value="material">Material</option>
                           <option value="service">Service</option>
                         </select>
                       </InputField>

@@ -159,7 +159,7 @@ interface Purchase {
 }
 
 interface MiscellaneousExpense {
-  category: "machinery" | "rental" | "service";
+  category: "machinery" | "rental" | "service" | "material";
   name: string;
   amount: number;
   tip: number;

@@ -5,7 +5,7 @@ const MiscellaneousExpenseSchema = new Schema(
     site: { type: Schema.Types.ObjectId, ref: "Site", required: true },
     category: {
       type: String,
-      enum: ["machinery", "rental", "service"],
+      enum: ["machinery", "rental", "service", "material"],
       required: true,
     },
     name: { type: String, required: true },

@@ -293,7 +293,7 @@ const createSiteWithBulkData = async (
         .items(
           Joi.object({
             category: Joi.string()
-              .valid("machinery", "rental", "service")
+              .valid("machinery", "rental", "service", "material")
               .required(),
             name: Joi.string().required(),
             amount: Joi.number().required(),
