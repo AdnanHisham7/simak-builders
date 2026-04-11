@@ -13,6 +13,7 @@ router.post("/:siteId/client-payments/manual", authMiddleware, clientController.
 
 router.put('/transactions/:transactionId/verify', authMiddleware, clientController.verifyClientTransaction);
 router.get('/transactions/:clientId', authMiddleware, clientController.getTransactionsForReport);
+router.delete("/transactions/:transactionId", authMiddleware, clientController.deleteClientTransaction);
 
 
 export default router;

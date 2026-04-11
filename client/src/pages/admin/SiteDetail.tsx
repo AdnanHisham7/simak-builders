@@ -73,6 +73,7 @@ import TransactionsModal from "./TransactionsModal";
 import { toast } from "sonner";
 import { privateClient } from "@/api";
 import CompleteSiteModal from "./CompleteSiteModal";
+import ClientPaymentsModal from "./ClientPaymentsModal";
 
 interface Transaction {
   date: string;
@@ -146,13 +147,17 @@ const SiteDetail: React.FC = () => {
   const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
 
-  // NEW: Client payments related state
+  // Client payments related state
   const [isClientPaymentsModalOpen, setIsClientPaymentsModalOpen] =
     useState(false);
   const [clientPayments, setClientPayments] = useState<ClientTransaction[]>([]);
   const [isManualPaymentModalOpen, setIsManualPaymentModalOpen] =
     useState(false);
   const [manualAmount, setManualAmount] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualDate, setManualDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(
     new Set(),
   );
@@ -165,7 +170,7 @@ const SiteDetail: React.FC = () => {
         const siteData = await getSiteDetails(siteId!);
         setSite(siteData);
 
-        // NEW: Fetch client payment records (inflows from client)
+        // Fetch client payment records (inflows from client)
         const clientPaymentsRes = await privateClient.get(
           `/client/${siteId}/client-transactions`,
         );
@@ -207,13 +212,15 @@ const SiteDetail: React.FC = () => {
     try {
       await privateClient.post(`/client/${siteId}/client-payments/manual`, {
         amount,
+        notes: manualNotes,
+        date: manualDate,
       });
-      const updatedSite = await getSiteDetails(siteId!);
-      setSite(updatedSite as ExtendedSite);
-      await fetchClientPayments();
-      toast.success("Manual client payment recorded successfully");
+      await fetchClientPayments(); // refresh list
+      toast.success("Manual client payment recorded (pending verification)");
       setIsManualPaymentModalOpen(false);
       setManualAmount("");
+      setManualNotes("");
+      setManualDate(new Date().toISOString().split("T")[0]);
     } catch (err) {
       console.error(err);
       toast.error("Failed to record manual payment");
@@ -2092,24 +2099,20 @@ const SiteDetail: React.FC = () => {
           />
         )}
 
-        {/* NEW: Client Payments Modal (reuses TransactionsModal with mapped data) */}
+        {/* Client Payments Modal */}
         {isClientPaymentsModalOpen && (
-          <TransactionsModal
-            transactions={clientPayments.map((t) => ({
-              date: t.createdAt,
-              amount: t.amount,
-              type: "client_payment" as any,
-              description: `Client payment (${t.status.toUpperCase()})`,
-              relatedId: t._id,
-              user: t.verifiedBy
-                ? { id: t.verifiedBy._id || "", name: t.verifiedBy.name }
-                : { id: "", name: "Client" },
-            }))}
+          <ClientPaymentsModal
+            siteId={siteId!}
             onClose={() => setIsClientPaymentsModalOpen(false)}
+            onPaymentChanged={() => {
+              // Refresh site data and client payments list
+              getSiteDetails(siteId!).then(setSite);
+              fetchClientPayments();
+            }}
           />
         )}
 
-        {/* NEW: Manual Payment Modal (simple inline form) */}
+        {/* Manual Payment Modal (simple inline form) */}
         {isManualPaymentModalOpen && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
             <div className="bg-white rounded-3xl p-8 w-full max-w-md mx-4">
@@ -2117,13 +2120,13 @@ const SiteDetail: React.FC = () => {
                 Record Direct Client Payment
               </h3>
               <p className="text-gray-600 mb-6">
-                Use this when client paid offline (cash/UPI) and forgot the
-                portal.
+                Use this when client paid offline. Payment will be unverified
+                until approved.
               </p>
               <form onSubmit={handleManualPaymentSubmit}>
-                <div className="space-y-6">
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Amount (₹)
                     </label>
                     <input
@@ -2134,14 +2137,41 @@ const SiteDetail: React.FC = () => {
                       className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500 text-3xl font-semibold"
                       step="0.01"
                       autoFocus
+                      required
                     />
                   </div>
-                  <div className="flex gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={manualDate}
+                      onChange={(e) => setManualDate(e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes (optional)
+                    </label>
+                    <textarea
+                      value={manualNotes}
+                      onChange={(e) => setManualNotes(e.target.value)}
+                      placeholder="Any remarks..."
+                      rows={3}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                  <div className="flex gap-3 pt-4">
                     <button
                       type="button"
                       onClick={() => {
                         setIsManualPaymentModalOpen(false);
                         setManualAmount("");
+                        setManualNotes("");
+                        setManualDate(new Date().toISOString().split("T")[0]);
                       }}
                       className="flex-1 py-4 text-gray-700 font-medium border border-gray-300 rounded-2xl hover:bg-gray-50"
                     >

@@ -16,6 +16,8 @@ const ClientTransactionSchema = new Schema(
     client: { type: Schema.Types.ObjectId, ref: "User", required: true },
     site: { type: Schema.Types.ObjectId, ref: "Site", required: true },
     amount: { type: Number, required: true },
+    notes: { type: String, default: "" },
+    transactionDate: { type: Date, default: Date.now },
     status: { type: String, enum: ["pending", "verified"], default: "pending" },
     verifiedBy: { type: Schema.Types.ObjectId, ref: "User" },
     verifiedAt: { type: Date },
@@ -304,15 +306,10 @@ const addManualClientPayment = async (
 ) => {
   try {
     const { siteId } = req.params;
-    const { amount } = req.body;
+    const { amount, notes, date } = req.body;
     const userId = req.user?.userId;
     const userRole = req.user?.role;
-    console.log("Adding manual client payment:", {
-      siteId,
-      amount,
-      userId,
-      userRole,
-    });
+
     if (!amount || amount <= 0) {
       throw new ApiError(
         "Amount must be a positive number",
@@ -330,7 +327,7 @@ const addManualClientPayment = async (
       throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
     }
 
-    // Authorization logic using assignedSites (correct way)
+    // Authorization logic using assignedSites
     let isAuthorized = false;
 
     if (userRole === "admin") {
@@ -359,37 +356,18 @@ const addManualClientPayment = async (
       );
     }
 
-    // Create verified client transaction
+    // Create client transaction
     const transaction = new ClientTransactionModel({
       client: site.client,
       site: siteId,
       amount: Number(amount),
-      status: "verified",
-      verifiedBy: userId,
-      verifiedAt: new Date(),
+      notes: notes || "",
+      transactionDate: date ? new Date(date) : new Date(),
+      status: "pending",
     });
-
     await transaction.save();
 
-    // Update Company total amount
-    const company = await CompanyModel.findOne();
-    if (company) {
-      company.totalAmount = (company.totalAmount || 0) + Number(amount);
-      company.transactions.push({
-        date: new Date(),
-        amount: Number(amount),
-        type: "incoming",
-        description: `Manual client payment recorded for site: ${site.name}`,
-        site: site._id,
-      });
-      await company.save();
-    }
-
-    // Update Site budget
-    site.budget = (site.budget || 0) + Number(amount);
-    await site.save();
-
-    // Notify the client (optional but recommended)
+    // Notify the client
     const clientNotification = new NotificationModel({
       user: site.client,
       type: "payment_verified",
@@ -410,6 +388,52 @@ const addManualClientPayment = async (
   }
 };
 
+const deleteClientTransaction = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { transactionId } = req.params;
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+
+    const transaction = await ClientTransactionModel.findById(transactionId);
+    if (!transaction)
+      throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
+    if (transaction.status === "verified") {
+      throw new ApiError(
+        "Verified transactions cannot be deleted",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // authorize user (only admin or siteManager of that site)
+    const site = await SiteModel.findById(transaction.site);
+    let isAuthorized = false;
+    if (userRole === "admin") isAuthorized = true;
+    else if (userRole === "siteManager") {
+      const user = await UserModel.findById(userId).select("assignedSites");
+      if (
+        user &&
+        user.assignedSites.some(
+          (id: any) => id.toString() === transaction.site.toString(),
+        )
+      )
+        isAuthorized = true;
+    }
+    if (!isAuthorized)
+      throw new ApiError("Not authorized", HttpStatus.FORBIDDEN);
+
+    await transaction.deleteOne();
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Transaction deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getClientDashboard,
   getClientSites,
@@ -418,4 +442,5 @@ export default {
   getTransactionsForReport,
   getSiteClientTransactions,
   addManualClientPayment,
+  deleteClientTransaction,
 };
