@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   MapPin,
   Building,
-  DollarSign,
   Users,
   HardHat,
   Briefcase,
@@ -35,7 +34,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
     city: "",
     state: "",
     zip: "",
-    budget: 0,
+    budget: 0, // kept for backend compatibility – always defaults to 0
     status: "",
     clientId: "",
     siteManagerIds: [] as string[],
@@ -47,15 +46,13 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
     city: false,
     state: false,
     zip: false,
-    budget: false,
     clientId: false,
   });
   const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const parsedValue = name === "budget" ? parseFloat(value) || 0 : value;
-    setNewSite((prev) => ({ ...prev, [name]: parsedValue }));
+    setNewSite((prev) => ({ ...prev, [name]: value }));
     if (inputErrors[name as keyof typeof inputErrors]) {
       setInputErrors((prev) => ({ ...prev, [name]: false }));
     }
@@ -90,7 +87,6 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
       return !Object.values(newErrors).some(Boolean);
     } else {
       const newErrors = {
-        budget: newSite.budget <= 0,
         clientId: !newSite.clientId,
       };
       setInputErrors((prev) => ({ ...prev, ...newErrors }));
@@ -113,6 +109,7 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
     if (validateStep(activeStep)) {
       setSubmissionError(null);
       try {
+        // Budget is always sent as 0 to the backend (no UI field)
         await onSubmit(newSite);
         // Parent will close the modal on success
       } catch (err) {
@@ -142,7 +139,6 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
       city: false,
       state: false,
       zip: false,
-      budget: false,
       clientId: false,
     });
     setActiveStep(0);
@@ -196,7 +192,6 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
           </div>
         )}
 
-        {/* <div className=""> */}
         <div className="flex-1 overflow-y-auto px-6">
           {activeStep === 0 && (
             <div className="w-full p-6 transition-all duration-300 ease-in-out">
@@ -326,31 +321,9 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
           {activeStep === 1 && (
             <div className="w-full p-6 transition-all duration-300 ease-in-out">
               <div className="space-y-5">
-                <div>
-                  <label className="flex items-center text-gray-700 font-medium mb-1.5">
-                    <DollarSign size={18} className="mr-2 text-blue-600" />
-                    Project Budget
-                  </label>
-                  <input
-                    type="number"
-                    name="budget"
-                    value={newSite.budget}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 border ${
-                      inputErrors.budget
-                        ? "border-red-400 bg-red-50"
-                        : "border-gray-300"
-                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors`}
-                    placeholder="Enter total budget"
-                    min="0"
-                  />
-                  {inputErrors.budget && (
-                    <p className="flex items-center text-red-500 text-xs mt-1.5">
-                      <AlertCircle size={12} className="mr-1" /> Valid budget is
-                      required
-                    </p>
-                  )}
-                </div>
+                {/* Project Budget field completely removed */}
+                {/* Budget will always be sent as 0 to the backend */}
+
                 <div>
                   <label className="flex items-center text-gray-700 font-medium mb-1.5">
                     <Building size={18} className="mr-2 text-blue-600" />
@@ -470,7 +443,6 @@ const AddSiteModal: React.FC<AddSiteModalProps> = ({
             </button>
           </div>
         </div>
-        {/* </div> */}
       </div>
     </div>
   );
