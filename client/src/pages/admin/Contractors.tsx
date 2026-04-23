@@ -99,7 +99,6 @@ const Contractors: React.FC = () => {
   });
   const [transactionError, setTransactionError] = useState<string | null>(null);
 
-  const [isAnimating, setIsAnimating] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "company" | "email" | "status">(
     "name",
   );
@@ -127,12 +126,6 @@ const Contractors: React.FC = () => {
     };
     fetchData();
   }, []);
-
-  useEffect(() => {
-    if (isAddModalOpen || isAssignSiteModalOpen || isAddTransactionModalOpen) {
-      setIsAnimating(true);
-    }
-  }, [isAddModalOpen, isAssignSiteModalOpen, isAddTransactionModalOpen]);
 
   const filteredAndSortedContractors = useMemo(() => {
     let filtered = contractors.filter((contractor) => {
@@ -1114,7 +1107,6 @@ const Contractors: React.FC = () => {
           newContractor={newContractor}
           setNewContractor={setNewContractor}
           inputErrors={inputErrors}
-          isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
         />
 
@@ -1136,7 +1128,6 @@ const Contractors: React.FC = () => {
           newContractor={newContractor}
           setNewContractor={setNewContractor}
           inputErrors={inputErrors}
-          isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
           isEditMode={true} // Important!
         />
@@ -1148,7 +1139,6 @@ const Contractors: React.FC = () => {
           sites={sites}
           onAssign={handleAssignSite}
           setError={setError}
-          isAnimating={isAnimating}
           sizeStyles={getSizeStyles()}
         />
 

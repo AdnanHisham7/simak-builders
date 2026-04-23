@@ -155,3 +155,9 @@ export const updateContractor = async (
 export const deleteContractor = async (id: string): Promise<void> => {
   await privateClient.delete(`/contractors/${id}`);
 };
+
+
+export const unassignSiteFromContractor = async (contractorId: string, siteId: string) => {
+  const response = await privateClient.delete(`/contractors/${contractorId}/sites/${siteId}`);
+  return response.data;
+};

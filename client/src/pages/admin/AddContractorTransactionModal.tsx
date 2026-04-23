@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { X, AlertCircle } from "lucide-react";
 
 interface Contractor {
@@ -16,14 +16,12 @@ interface AddContractorTransactionModalProps {
   onClose: () => void;
   contractor: Contractor;
   onAddTransaction: (data: any) => Promise<any>;
+  defaultSiteId?: string;
 }
 
-const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps> = ({
-  isOpen,
-  onClose,
-  contractor,
-  onAddTransaction,
-}) => {
+const AddContractorTransactionModal: React.FC<
+  AddContractorTransactionModalProps
+> = ({ isOpen, onClose, contractor, onAddTransaction, defaultSiteId }) => {
   const [transaction, setTransaction] = useState({
     siteId: "",
     type: "",
@@ -32,10 +30,17 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
   });
   const [error, setError] = useState<string | null>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
     setTransaction((prev) => ({ ...prev, [name]: value }));
   };
+
+  useEffect(() => {
+    if (defaultSiteId)
+      setTransaction((prev) => ({ ...prev, siteId: defaultSiteId }));
+  }, [defaultSiteId]);
 
   const handleAdd = async () => {
     if (!transaction.siteId || !transaction.type || !transaction.amount) {
@@ -54,7 +59,7 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
       setTransaction({ siteId: "", type: "", amount: 0, description: "" });
       setError(null);
       onClose();
-      window.location.href = '/admin/contractors'
+      window.location.href = "/admin/contractors";
     } catch (err) {
       setError("Failed to add transaction. Ensure the site exists.");
     }
@@ -62,7 +67,9 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
 
   if (!isOpen) return null;
 
-  const assignedSites = contractor.siteAssignments.map((assignment) => assignment.site);
+  const assignedSites = contractor.siteAssignments.map(
+    (assignment) => assignment.site,
+  );
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -73,29 +80,52 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
         >
           <X size={20} />
         </button>
-        <h2 className="text-2xl font-bold mb-6">Add Transaction for {contractor.name}</h2>
+        <h2 className="text-2xl font-bold mb-6">
+          Add Transaction for {contractor.name}
+        </h2>
         {assignedSites.length === 0 ? (
           <p className="text-red-500">No sites assigned to this contractor.</p>
         ) : (
           <>
+            {!defaultSiteId ? (
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Site *
+                </label>
+                <select
+                  name="siteId"
+                  value={transaction.siteId}
+                  onChange={handleChange}
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
+                >
+                  <option value="">Select a site</option>
+                  {assignedSites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <label className="block text-gray-700 text-sm font-semibold mb-2">
+                  Site
+                </label>
+                <input
+                  type="text"
+                  value={
+                    assignedSites.find((s) => s.id === defaultSiteId)?.name ||
+                    ""
+                  }
+                  disabled
+                  className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-100 rounded-xl text-gray-600"
+                />
+              </div>
+            )}
             <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">Site *</label>
-              <select
-                name="siteId"
-                value={transaction.siteId}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-              >
-                <option value="">Select a site</option>
-                {assignedSites.map((site) => (
-                  <option key={site.id} value={site.id}>
-                    {site.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">Type *</label>
+              <label className="block text-gray-700 text-sm font-semibold mb-2">
+                Type *
+              </label>
               <select
                 name="type"
                 value={transaction.type}
@@ -109,7 +139,9 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
               </select>
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">Amount *</label>
+              <label className="block text-gray-700 text-sm font-semibold mb-2">
+                Amount *
+              </label>
               <input
                 type="number"
                 name="amount"
@@ -120,7 +152,9 @@ const AddContractorTransactionModal: React.FC<AddContractorTransactionModalProps
               />
             </div>
             <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">Description</label>
+              <label className="block text-gray-700 text-sm font-semibold mb-2">
+                Description
+              </label>
               <input
                 type="text"
                 name="description"

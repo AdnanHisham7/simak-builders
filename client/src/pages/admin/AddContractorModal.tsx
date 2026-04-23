@@ -4,7 +4,7 @@ import { X, UserPlus, UserPen, AlertCircle } from "lucide-react";
 interface AddContractorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (e: React.MouseEvent) => void; // Renamed from onAdd
+  onSubmit: (e: React.MouseEvent) => void;
   newContractor: {
     name: string;
     email: string;
@@ -25,10 +25,8 @@ interface AddContractorModalProps {
     phone: boolean;
     company: boolean;
   };
-  isAnimating: boolean;
   sizeStyles: string;
-  isEditMode?: boolean; // New prop
-  contractorToEdit?: any;
+  isEditMode?: boolean;
 }
 
 const AddContractorModal: React.FC<AddContractorModalProps> = ({
@@ -38,7 +36,6 @@ const AddContractorModal: React.FC<AddContractorModalProps> = ({
   newContractor,
   setNewContractor,
   inputErrors,
-  isAnimating,
   sizeStyles,
   isEditMode = false,
 }) => {
@@ -47,9 +44,7 @@ const AddContractorModal: React.FC<AddContractorModalProps> = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden ${
-          isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        } ${sizeStyles}`}
+        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform scale-100 opacity-100 ${sizeStyles}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />

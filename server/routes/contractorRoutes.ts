@@ -11,5 +11,6 @@ router.delete("/:id", authMiddleware, contractorController.deleteContractor);
 router.post("/transactions", authMiddleware, contractorController.addTransaction);
 router.get("/transactions", authMiddleware, contractorController.getContractorTransactions);
 router.post("/assign-site", authMiddleware, contractorController.assignSiteToContractor);
+router.delete("/:contractorId/sites/:siteId", authMiddleware, contractorController.unassignSiteFromContractor);
 
 export default router;

@@ -74,6 +74,7 @@ import { toast } from "sonner";
 import { privateClient } from "@/api";
 import CompleteSiteModal from "./CompleteSiteModal";
 import ClientPaymentsModal from "./ClientPaymentsModal";
+import SiteContractorsManager from "./SiteContractorsManager";
 
 interface Transaction {
   date: string;
@@ -1279,6 +1280,12 @@ const SiteDetail: React.FC = () => {
                 </div>
               </div>
             )}
+
+            <SiteContractorsManager
+              siteId={siteId!}
+              siteName={site.name}
+              userType={userType}
+            />
           </div>
         )}
 

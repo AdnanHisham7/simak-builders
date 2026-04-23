@@ -311,6 +311,61 @@ const getContractorTransactions = async (
   }
 };
 
+const unassignSiteFromContractor = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { contractorId, siteId } = req.params;
+    if (req.user?.role !== "admin")
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+
+    const contractor = await ContractorModel.findById(contractorId);
+    if (!contractor)
+      throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
+
+    const siteExists = await SiteModel.findById(siteId);
+    if (!siteExists) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const assignmentIndex = contractor.siteAssignments.findIndex(
+      (assignment) => assignment.site?.toString() === siteId,
+    );
+    if (assignmentIndex === -1) {
+      throw new ApiError(
+        "Site not assigned to this contractor",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Remove the assignment
+    contractor.siteAssignments.splice(assignmentIndex, 1);
+    await contractor.save();
+
+    // Optionally, delete all transactions for this contractor+site if you want
+    // await ContractorTransactionModel.deleteMany({ contractor: contractorId, site: siteId });
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "contractor",
+      resourceId: contractor._id,
+      details: `Unassigned site ${siteId} from contractor ${contractor.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Site unassigned from contractor successfully",
+      contractor: {
+        id: contractor._id,
+        name: contractor.name,
+        siteAssignments: contractor.siteAssignments,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // const getContractorById = async (
 //   req: Request,
 //   res: Response,
@@ -340,4 +395,5 @@ export default {
   addTransaction,
   getContractorTransactions,
   assignSiteToContractor,
+  unassignSiteFromContractor,
 };
