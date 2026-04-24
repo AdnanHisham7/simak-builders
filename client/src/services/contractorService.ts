@@ -7,7 +7,7 @@ export interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; balance: number }[];
+  siteAssignments: { site: { id: string; name: string }; totalAmount: number }[];
 }
 
 export interface ContractorTransaction {
@@ -18,7 +18,7 @@ export interface ContractorTransaction {
   amount: number;
   description: string;
   date: string;
-  createdBy: { id: string; name: string };
+  addedBy: { id: string; name: string };
 }
 
 export const getAllContractors = async (): Promise<Contractor[]> => {
@@ -32,7 +32,7 @@ export const getAllContractors = async (): Promise<Contractor[]> => {
     status: contractor.status,
     siteAssignments: contractor.siteAssignments.map((assignment: any) => ({
       site: { id: assignment.site._id, name: assignment.site.name },
-      balance: assignment.balance,
+      totalAmount: assignment.totalAmount,
     })),
   }));
 };
@@ -86,9 +86,9 @@ export const addTransaction = async (data: {
       amount: transaction.amount,
       description: transaction.description,
       date: transaction.date,
-      createdBy: {
-        id: transaction.createdBy,
-        name: transaction.createdByName || "",
+      addedBy: {
+        id: transaction.addedBy,
+        name: transaction.addedByName || "",
       },
     },
     updatedContractor: {
@@ -104,7 +104,7 @@ export const addTransaction = async (data: {
             id: assignment.site._id || assignment.site,
             name: assignment.site.name || "",
           },
-          balance: assignment.balance,
+          totalAmount: assignment.totalAmount,
         }),
       ),
     },
@@ -124,9 +124,10 @@ export const getContractorTransactions = async (
     site: { id: tx.site._id, name: tx.site.name },
     type: tx.type,
     amount: tx.amount,
+    category: tx.category,
     description: tx.description,
     date: tx.date,
-    createdBy: { id: tx.createdBy._id, name: tx.createdBy.name },
+    addedBy: { id: tx.addedBy?._id, name: tx.addedBy?.name },
   }));
 };
 
@@ -156,8 +157,18 @@ export const deleteContractor = async (id: string): Promise<void> => {
   await privateClient.delete(`/contractors/${id}`);
 };
 
+export const deleteContractorTransaction = async (
+  transactionId: string,
+): Promise<void> => {
+  await privateClient.delete(`/contractors/transactions/${transactionId}`);
+};
 
-export const unassignSiteFromContractor = async (contractorId: string, siteId: string) => {
-  const response = await privateClient.delete(`/contractors/${contractorId}/sites/${siteId}`);
+export const unassignSiteFromContractor = async (
+  contractorId: string,
+  siteId: string,
+): Promise<any> => {
+  const response = await privateClient.delete(
+    `/contractors/${contractorId}/sites/${siteId}`,
+  );
   return response.data;
 };

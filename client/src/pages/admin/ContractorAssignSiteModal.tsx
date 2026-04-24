@@ -8,7 +8,7 @@ interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; balance: number }[];
+  siteAssignments: { site: { id: string; name: string }; }[];
 }
 
 interface Site {
@@ -23,7 +23,6 @@ interface ContractorAssignSiteModalProps {
   sites: Site[];
   onAssign: (siteId: string) => void;
   setError?: (error: string | null) => void;
-  isAnimating?: boolean;
   sizeStyles?: string;
 }
 
@@ -34,10 +33,8 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
   sites = [],
   onAssign,
   setError,
-  isAnimating = false,
   sizeStyles = "max-w-2xl w-full mx-4",
 }) => {
-  // === ALL HOOKS ALWAYS RUN — NO EARLY RETURN BEFORE THEM ===
   const [searchQuery, setSearchQuery] = useState("");
   const [localSelectedSiteId, setLocalSelectedSiteId] = useState("");
 
@@ -49,7 +46,6 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
     }
   }, [isOpen]);
 
-  // We compute these even if contractor is null (safe fallback)
   const assignedSiteIds =
     contractor?.siteAssignments.map((a) => a.site.id) || [];
   const availableSites = sites.filter(
@@ -74,21 +70,12 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
     }
   };
 
-  const handleClose = () => {
-    onClose();
-  };
-
-  // Now safe to early return
-  if (!isOpen || !contractor) {
-    return null;
-  }
+  if (!isOpen || !contractor) return null;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div
-        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden ${
-          isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        } ${sizeStyles}`}
+        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform ${sizeStyles}`}
       >
         <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 rounded-t-2xl" />
 
@@ -99,7 +86,7 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
               Assign Site to {contractor.name}
             </h2>
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
             >
               <X size={20} />
@@ -147,7 +134,7 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
 
           <div className="flex justify-end gap-4 mt-8">
             <button
-              onClick={handleClose}
+              onClick={onClose}
               className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all font-medium"
             >
               Cancel

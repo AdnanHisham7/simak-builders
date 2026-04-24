@@ -11,7 +11,7 @@ const ContractorSchema = new Schema(
     siteAssignments: [
       {
         site: { type: Schema.Types.ObjectId, ref: "Site" },
-        balance: { type: Number, default: 0 },
+        totalAmount: { type: Number, default: 0 },  
       },
     ],
   },

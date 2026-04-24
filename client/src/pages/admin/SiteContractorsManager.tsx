@@ -20,10 +20,12 @@ import {
   deleteContractor,
   getContractorTransactions,
   addTransaction,
+  deleteContractorTransaction,
 } from "@/services/contractorService";
 import AddContractorModal from "./AddContractorModal";
 import AddTransactionModal from "./AddContractorTransactionModal";
 import DeleteContractorModal from "./DeleteContractorModal";
+import { toast } from "sonner";
 
 interface Contractor {
   id: string;
@@ -32,7 +34,7 @@ interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; balance: number }[];
+  siteAssignments: { site: { id: string; name: string }; totalAmount: number }[];
 }
 
 interface SiteContractorsManagerProps {
@@ -122,12 +124,12 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       (c.company && c.company.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
-  // Helper: get balance for current site
-  const getBalanceForSite = (contractor: Contractor) => {
+  // Helper: get total amount for current site
+  const getTotalAmountForSite = (contractor: Contractor) => {
     const assignment = contractor.siteAssignments.find(
       (sa) => sa.site.id === siteId,
     );
-    return assignment ? assignment.balance : 0;
+    return assignment ? assignment.totalAmount : 0;
   };
 
   // ----- Handlers -----
@@ -154,6 +156,30 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       setIsAddModalOpen(false);
     } catch (err) {
       setError("Failed to add contractor and assign to site");
+    }
+  };
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    if (
+      !window.confirm(
+        "Delete this transaction? This action will reverse all accounting entries.",
+      )
+    )
+      return;
+    try {
+      await deleteContractorTransaction(transactionId);
+      // refresh transactions and contractor list
+      if (selectedContractor) {
+        const txs = await getContractorTransactions(
+          selectedContractor.id,
+          siteId,
+        );
+        setTransactions(txs);
+        await fetchAllContractors(); // refresh balances
+        toast.success("Transaction deleted");
+      }
+    } catch (err) {
+      toast.error("Failed to delete transaction");
     }
   };
 
@@ -378,8 +404,10 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                       {contractor.email}
                     </div>
                     <div className="text-sm font-medium text-emerald-600 mt-0.5">
-                      Balance: ₹
-                      {getBalanceForSite(contractor).toLocaleString("en-IN")}
+                      Total Amount: ₹
+                      {getTotalAmountForSite(contractor).toLocaleString(
+                        "en-IN",
+                      )}
                     </div>
                   </div>
                 </div>
@@ -569,6 +597,9 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                       Amount
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      Category
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                       Description
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -590,7 +621,12 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                         <td className="px-4 py-3 text-sm font-medium">
                           ₹{tx.amount.toLocaleString("en-IN")}
                         </td>
-                        <td className="px-4 py-3 text-sm">{tx.description}</td>
+                        <td className="px-4 py-3 text-sm">
+                          {tx.category || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-sm">
+                          {tx.description || "-"}
+                        </td>
                         <td className="px-4 py-3 text-sm">
                           {new Date(tx.date).toLocaleDateString()}
                         </td>

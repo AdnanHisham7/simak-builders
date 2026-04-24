@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { X, AlertCircle } from "lucide-react";
+import { toast } from "sonner";
 
 interface Contractor {
   id: string;
@@ -29,6 +30,33 @@ const AddContractorTransactionModal: React.FC<
     description: "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [category, setCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+
+  const predefinedCategories = [
+    "electrical work",
+    "plumbing",
+    "Waterproofing",
+    "landscaping",
+    "concrete",
+    "industrial work",
+    "roofing work",
+    "painting work",
+    "plastering work",
+  ];
+
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === "other") {
+      setShowCustomCategory(true);
+      setCategory("");
+    } else {
+      setShowCustomCategory(false);
+      setCategory(value);
+      setCustomCategory("");
+    }
+  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
@@ -54,12 +82,14 @@ const AddContractorTransactionModal: React.FC<
         type: transaction.type as "advance" | "expense" | "additional_payment",
         amount: Number(transaction.amount),
         description: transaction.description,
+        category: showCustomCategory ? customCategory : category,
       };
       await onAddTransaction(data);
       setTransaction({ siteId: "", type: "", amount: 0, description: "" });
       setError(null);
       onClose();
-      window.location.href = "/admin/contractors";
+      toast.success("Transaction added successfully");
+      // window.location.href = "/admin/contractors";
     } catch (err) {
       setError("Failed to add transaction. Ensure the site exists.");
     }
@@ -153,6 +183,34 @@ const AddContractorTransactionModal: React.FC<
             </div>
             <div className="mb-4">
               <label className="block text-gray-700 text-sm font-semibold mb-2">
+                Category Type *
+              </label>
+              <select
+                value={showCustomCategory ? "other" : category}
+                onChange={handleCategoryChange}
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+              >
+                <option value="">Select category</option>
+                {predefinedCategories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+                <option value="other">Other (specify)</option>
+              </select>
+              {showCustomCategory && (
+                <input
+                  type="text"
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  placeholder="Enter custom category"
+                  className="mt-2 w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
+                  required
+                />
+              )}
+            </div>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-semibold mb-2">
                 Description
               </label>
               <input
@@ -175,7 +233,7 @@ const AddContractorTransactionModal: React.FC<
                 onClick={handleAdd}
                 className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
               >
-                Add Transaction
+                Add "Transaction"
               </button>
             </div>
           </>

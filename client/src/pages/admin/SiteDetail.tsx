@@ -133,6 +133,7 @@ const SiteDetail: React.FC = () => {
   const [selectedTab, setSelectedTab] = useState<
     | "overview"
     | "team"
+    | "contractors"
     | "attendance"
     | "purchases"
     | "stocks"
@@ -770,6 +771,7 @@ const SiteDetail: React.FC = () => {
   const tabs = [
     { id: "overview", label: "Overview", icon: Eye },
     { id: "team", label: "Team", icon: Users },
+    { id: "contractors", label: "Contractors", icon: Users },
     { id: "attendance", label: "Attendance", icon: Calendar },
     { id: "purchases", label: "Purchases", icon: ShoppingCart },
     { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
@@ -1280,13 +1282,15 @@ const SiteDetail: React.FC = () => {
                 </div>
               </div>
             )}
-
-            <SiteContractorsManager
-              siteId={siteId!}
-              siteName={site.name}
-              userType={userType}
-            />
           </div>
+        )}
+
+        {selectedTab === "contractors" && (
+          <SiteContractorsManager
+            siteId={siteId!}
+            siteName={site.name}
+            userType={userType}
+          />
         )}
 
         {selectedTab === "attendance" && (

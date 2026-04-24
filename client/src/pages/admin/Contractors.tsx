@@ -38,7 +38,7 @@ interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; balance: number }[];
+  siteAssignments: { site: { id: string; name: string }; totalAmount: number }[];
 }
 
 interface Site {
@@ -641,13 +641,10 @@ const Contractors: React.FC = () => {
                                     {assignment.site.name}
                                   </h4>
                                   <p
-                                    className={`text-sm font-medium ${
-                                      assignment.balance >= 0
-                                        ? "text-green-600"
-                                        : "text-red-600"
-                                    }`}
+                                    className={`text-sm font-medium ${assignment.totalAmount >= 0 ? "text-green-600" : "text-red-600"}`}
                                   >
-                                    Balance: ₹{assignment.balance.toFixed(2)}
+                                    Total Amount: ₹
+                                    {assignment.totalAmount?.toFixed(2)}
                                   </p>
                                 </div>
                               </div>
@@ -785,7 +782,7 @@ const Contractors: React.FC = () => {
                                 {tx.type}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
-                                ${tx.amount.toFixed(2)}
+                                ₹{tx.amount.toFixed(2)}
                               </td>
                               <td className="px-6 py-4">
                                 {tx.description || "N/A"}

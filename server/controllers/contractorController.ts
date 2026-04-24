@@ -6,6 +6,9 @@ import { ContractorModel } from "@models/Contractor";
 import { ContractorTransactionModel } from "@models/ContractorTransaction";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { Types } from "mongoose";
+import { CompanyModel } from "@models/Company";
+import { UserModel } from "@models/User";
+import { sign } from "crypto";
 
 const createContractor = async (
   req: Request,
@@ -208,7 +211,7 @@ const assignSiteToContractor = async (
       );
     }
 
-    contractor.siteAssignments.push({ site: siteId, balance: 0 });
+    contractor.siteAssignments.push({ site: siteId, totalAmount: 0 });
     await contractor.save();
 
     res
@@ -225,58 +228,123 @@ const addTransaction = async (
   next: NextFunction,
 ) => {
   try {
-    const { contractorId, siteId, type, amount, description } = req.body;
-    if (req.user?.role !== "admin")
+    const { contractorId, siteId, type, amount, description, category } =
+      req.body;
+    console.log(
+      "HAHAHAHAHA",
+      contractorId,
+      siteId,
+      type,
+      amount,
+      description,
+      category,
+    );
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+
+    if (userRole !== "admin" && userRole !== "siteManager") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
 
     const contractor = await ContractorModel.findById(contractorId);
     if (!contractor)
       throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
 
-    const siteExists = await SiteModel.findById(siteId);
-    if (!siteExists) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
+    // Find or create site assignment
     let siteAssignment = contractor.siteAssignments.find(
       (assignment) => assignment.site?.toString() === siteId,
     );
     if (!siteAssignment) {
-      // Automatically assign the site if not already assigned
-      siteAssignment = contractor.siteAssignments.create({
+      contractor.siteAssignments.push({
         site: new Types.ObjectId(siteId),
-        balance: 0,
+        totalAmount: 0,
       });
-
-      contractor.siteAssignments.push(siteAssignment);
+      siteAssignment =
+        contractor.siteAssignments[contractor.siteAssignments.length - 1];
     }
 
+    // Validate amount
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ApiError("Invalid amount", HttpStatus.BAD_REQUEST);
+    }
+
+    // Create transaction record
     const transaction = new ContractorTransactionModel({
       contractor: contractorId,
       site: siteId,
       type,
-      amount,
-      description,
-      createdBy: req.user.userId,
+      amount: numAmount,
+      description: description || "",
+      category: category || "",
+      addedBy: userId,
     });
     await transaction.save();
 
-    // Update balance based on transaction type
-    if (type === "advance" || type === "additional_payment") {
-      siteAssignment.balance += amount;
-    } else if (type === "expense") {
-      siteAssignment.balance -= amount;
-    }
+    // Update contractor balance
+    siteAssignment.totalAmount += numAmount;
     await contractor.save();
+
+    const populatedContractor = await ContractorModel.findById(contractorId)
+      .populate("siteAssignments.site", "name")
+      .lean();
+
+    // --- EXPENSE RECORDING & SOURCE DEDUCTION ---
+    // 1. Update site expenses
+    site.expenses += numAmount;
+    site.transactions.push({
+      date: new Date(),
+      amount: numAmount,
+      type: "contractor_payment",
+      description: `${type} to contractor ${contractor.name} for ${category || "uncategorized"}`,
+      relatedId: transaction._id,
+      user: new Types.ObjectId(userId),
+    });
+    await site.save();
+
+    // 2. Deduct from source (company or siteManager)
+    if (userRole === "admin") {
+      const company = await CompanyModel.findOne();
+      if (!company)
+        throw new ApiError(
+          "Company not found",
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      company.totalAmount -= numAmount;
+      company.transactions.push({
+        date: new Date(),
+        amount: -numAmount,
+        type: "expenditure",
+        description: `Contractor payment (${type}) at site ${site.name} - ${contractor.name}`,
+        site: site._id,
+      });
+      await company.save();
+    } else if (userRole === "siteManager") {
+      const siteManager = await UserModel.findById(userId);
+      if (!siteManager)
+        throw new ApiError(
+          "Site manager not found",
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      siteManager.siteExpensesBalance -= numAmount;
+      siteManager.siteExpensesTransactions.push({
+        date: new Date(),
+        amount: -numAmount,
+        type: "expenditure",
+        description: `Contractor payment (${type}) at site ${site.name} - ${contractor.name}`,
+        site: site._id,
+        givenBy: userId ? new Types.ObjectId(userId) : undefined,
+      });
+      await siteManager.save();
+    }
 
     res.status(HttpStatus.CREATED).json({
       message: "Transaction added successfully",
       transaction,
-      updatedContractor: {
-        ...contractor.toObject(),
-        siteAssignments: contractor.siteAssignments.map((assignment) => ({
-          site: assignment.site,
-          balance: assignment.balance,
-        })),
-      },
+      updatedContractor: populatedContractor,
     });
   } catch (error) {
     next(error);
@@ -304,7 +372,7 @@ const getContractorTransactions = async (
       site: siteId,
     })
       .populate("site", "name")
-      .populate("createdBy", "name");
+      .populate("addedBy", "name");
     res.status(HttpStatus.OK).json(transactions);
   } catch (error) {
     next(error);
@@ -387,6 +455,104 @@ const unassignSiteFromContractor = async (
 //   }
 // };
 
+const deleteTransaction = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { transactionId } = req.params;
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+
+    const transaction = await ContractorTransactionModel.findById(transactionId)
+      .populate("contractor")
+      .populate("site");
+    if (!transaction) {
+      throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Authorization: admin or the user who added it
+    if (userRole !== "admin" && transaction.addedBy.toString() !== userId) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const contractor = await ContractorModel.findById(transaction.contractor);
+    const site = await SiteModel.findById(transaction.site);
+    if (!contractor || !site) {
+      throw new ApiError(
+        "Associated contractor or site not found",
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const amount = transaction.amount;
+    const type = transaction.type;
+
+    // 1. Reverse contractor balance
+    const siteAssignment = contractor.siteAssignments.find(
+      (a) => a.site?.toString() === transaction.site.toString(),
+    );
+    if (siteAssignment) {
+      siteAssignment.totalAmount -= amount;
+      await contractor.save();
+    }
+
+    // 2. Reverse site expenses
+    site.expenses -= amount;
+    site.transactions.push({
+      date: new Date(),
+      amount: -amount,
+      type: "contractor_payment",
+      description: `Reversal: Deleted ${type} transaction for contractor ${contractor.name}`,
+      relatedId: transaction._id,
+      user: new Types.ObjectId(userId),
+    });
+    await site.save();
+
+    // 3. Reverse source deduction
+    const originalAddedBy = transaction.addedBy;
+    const originalUser = await UserModel.findById(originalAddedBy);
+    if (originalUser?.role === "admin") {
+      const company = await CompanyModel.findOne();
+      if (company) {
+        company.totalAmount += amount;
+        company.transactions.push({
+          date: new Date(),
+          amount: amount,
+          type: "reversal",
+          description: `Reversal: Deleted contractor payment (${type}) at site ${site.name}`,
+          site: site._id,
+        });
+        await company.save();
+      }
+    } else if (originalUser?.role === "siteManager") {
+      const siteManager = await UserModel.findById(originalAddedBy);
+      if (siteManager) {
+        siteManager.siteExpensesBalance += amount;
+        siteManager.siteExpensesTransactions.push({
+          date: new Date(),
+          amount: amount,
+          type: "reversal",
+          description: `Reversal: Deleted contractor payment (${type}) at site ${site.name}`,
+          site: site._id,
+          givenBy: userId ? new Types.ObjectId(userId) : undefined,
+        });
+        await siteManager.save();
+      }
+    }
+
+    // 4. Delete the transaction record
+    await ContractorTransactionModel.findByIdAndDelete(transactionId);
+
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Transaction deleted and reversed" });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   createContractor,
   getAllContractors,
@@ -396,4 +562,5 @@ export default {
   getContractorTransactions,
   assignSiteToContractor,
   unassignSiteFromContractor,
+  deleteTransaction,
 };
