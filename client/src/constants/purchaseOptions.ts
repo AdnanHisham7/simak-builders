@@ -1,0 +1,31 @@
+export const PURCHASE_CATEGORIES = [
+  "Earth Work",
+  "Rubble work",
+  "Laterite Work",
+  "Concrete Work",
+  "Wood Work",
+  "Waterproofing & Pest control",
+  "Plastering Wiring Plumbing",
+  "Floor Work",
+  "Interior work",
+  "Paint Work",
+  "Masonry Work",
+  "Other",
+];
+
+export const PURCHASE_UNITS = [
+  "kg",
+  "Ft",
+  "Nos",
+  "Load",
+  "bag",
+  "sheet",
+  "hour",
+  "day",
+  "bundle",
+  "kintel",
+  "ton",
+  "length",
+  "N/A",
+  "Other",
+];

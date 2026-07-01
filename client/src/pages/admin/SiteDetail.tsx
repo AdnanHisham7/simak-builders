@@ -41,14 +41,18 @@ import {
   ChevronRight,
   FileX,
   Trash2,
+  Edit2,
 } from "lucide-react";
 import RequestTransferModal from "./RequestTransferModal";
 import {
   getPurchasesBySite,
   verifyPurchase,
+  updatePurchaseItem,
   deleteBillUpload,
   deletePurchase,
 } from "@/services/purchaseService";
+import { searchItems, ItemSuggestion } from "@/services/itemService";
+import { PURCHASE_CATEGORIES } from "@/constants/purchaseOptions";
 // import { User } from "@/services/userService";
 import {
   getStocksBySite,
@@ -162,6 +166,20 @@ const SiteDetail: React.FC = () => {
   );
   const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(
     new Set(),
+  );
+  const [editingItem, setEditingItem] = useState<{
+    purchaseId: string;
+    index: number;
+  } | null>(null);
+  const [editItemName, setEditItemName] = useState("");
+  const [editItemCategory, setEditItemCategory] = useState("");
+  const [editItemSuggestions, setEditItemSuggestions] = useState<
+    ItemSuggestion[]
+  >([]);
+  const [showEditSuggestions, setShowEditSuggestions] = useState(false);
+  const [savingItemEdit, setSavingItemEdit] = useState(false);
+  const editItemSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
   );
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -348,6 +366,68 @@ const SiteDetail: React.FC = () => {
       fetchPurchases();
     } catch (err) {
       console.error("Error verifying purchase:", err);
+    }
+  };
+
+  const startEditPurchaseItem = (
+    purchaseId: string,
+    index: number,
+    currentName: string,
+    currentCategory: string,
+  ) => {
+    setEditingItem({ purchaseId, index });
+    setEditItemName(currentName);
+    setEditItemCategory(currentCategory);
+    setEditItemSuggestions([]);
+    setShowEditSuggestions(false);
+  };
+
+  const cancelEditPurchaseItem = () => {
+    setEditingItem(null);
+    setEditItemName("");
+    setEditItemCategory("");
+    setEditItemSuggestions([]);
+    setShowEditSuggestions(false);
+  };
+
+  const handleEditItemNameChange = (value: string) => {
+    setEditItemName(value);
+    setShowEditSuggestions(true);
+    if (editItemSearchTimer.current) clearTimeout(editItemSearchTimer.current);
+    if (!value || value.trim().length < 2) {
+      setEditItemSuggestions([]);
+      return;
+    }
+    editItemSearchTimer.current = setTimeout(async () => {
+      try {
+        const results = await searchItems(value.trim());
+        setEditItemSuggestions(results);
+      } catch (err) {
+        console.error("Error fetching item suggestions:", err);
+      }
+    }, 300);
+  };
+
+  const saveEditPurchaseItem = async () => {
+    if (!editingItem) return;
+    if (!editItemName.trim() || !editItemCategory.trim()) {
+      toast.error("Item name and category are required");
+      return;
+    }
+    setSavingItemEdit(true);
+    try {
+      await updatePurchaseItem(editingItem.purchaseId, editingItem.index, {
+        name: editItemName.trim(),
+        category: editItemCategory.trim(),
+      });
+      toast.success("Item updated successfully");
+      cancelEditPurchaseItem();
+      fetchPurchases();
+    } catch (err: any) {
+      console.error("Error updating item:", err);
+      toast.error(err.response?.data?.message || "Failed to update item.");
+    } finally {
+      setSavingItemEdit(false);
     }
   };
 
@@ -1566,48 +1646,237 @@ const SiteDetail: React.FC = () => {
                                 </h4>
                                 <div className="space-y-4">
                                   {purchase.items.map(
-                                    (item: any, idx: number) => (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100"
-                                      >
-                                        <div className="flex-1">
-                                          <div className="font-medium">
-                                            {item.name}
-                                          </div>
-                                          <div className="text-xs text-gray-500">
-                                            {item.category} • {item.unit}
-                                          </div>
-                                        </div>
-                                        <div className="flex items-center gap-8 text-right">
-                                          <div>
-                                            <div className="text-xs text-gray-500">
-                                              Qty
+                                    (item: any, idx: number) => {
+                                      const isEditingThisItem =
+                                        editingItem?.purchaseId ===
+                                          purchase._id &&
+                                        editingItem?.index === idx;
+                                      const canEditItem =
+                                        purchase.status === "pending" &&
+                                        (userType === "admin" ||
+                                          purchase.addedBy?._id === user?.id ||
+                                          purchase.addedBy === user?.id);
+
+                                      return (
+                                        <div
+                                          key={idx}
+                                          className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100"
+                                        >
+                                          {isEditingThisItem ? (
+                                            <div
+                                              className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              <div className="relative">
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                  Item Name
+                                                </label>
+                                                <input
+                                                  type="text"
+                                                  value={editItemName}
+                                                  autoComplete="off"
+                                                  onChange={(e) =>
+                                                    handleEditItemNameChange(
+                                                      e.target.value,
+                                                    )
+                                                  }
+                                                  onFocus={() =>
+                                                    setShowEditSuggestions(
+                                                      true,
+                                                    )
+                                                  }
+                                                  onBlur={() =>
+                                                    setTimeout(
+                                                      () =>
+                                                        setShowEditSuggestions(
+                                                          false,
+                                                        ),
+                                                      150,
+                                                    )
+                                                  }
+                                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                                />
+                                                {showEditSuggestions &&
+                                                  editItemSuggestions.length >
+                                                    0 && (
+                                                    <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                                      {editItemSuggestions.map(
+                                                        (s) => (
+                                                          <button
+                                                            type="button"
+                                                            key={s._id}
+                                                            onMouseDown={() => {
+                                                              setEditItemName(
+                                                                s.name,
+                                                              );
+                                                              if (s.category)
+                                                                setEditItemCategory(
+                                                                  s.category,
+                                                                );
+                                                              setShowEditSuggestions(
+                                                                false,
+                                                              );
+                                                            }}
+                                                            className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
+                                                          >
+                                                            <span>
+                                                              {s.name}
+                                                            </span>
+                                                            {s.category && (
+                                                              <span className="text-xs text-gray-400">
+                                                                {s.category}
+                                                              </span>
+                                                            )}
+                                                          </button>
+                                                        ),
+                                                      )}
+                                                    </div>
+                                                  )}
+                                              </div>
+                                              <div>
+                                                <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                  Category
+                                                </label>
+                                                <select
+                                                  value={
+                                                    PURCHASE_CATEGORIES.includes(
+                                                      editItemCategory,
+                                                    )
+                                                      ? editItemCategory
+                                                      : editItemCategory
+                                                        ? "Other"
+                                                        : ""
+                                                  }
+                                                  onChange={(e) =>
+                                                    setEditItemCategory(
+                                                      e.target.value,
+                                                    )
+                                                  }
+                                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                                >
+                                                  <option value="">
+                                                    Select Category
+                                                  </option>
+                                                  {PURCHASE_CATEGORIES.filter(
+                                                    (c) => c !== "Other",
+                                                  ).map((c) => (
+                                                    <option key={c} value={c}>
+                                                      {c}
+                                                    </option>
+                                                  ))}
+                                                  <option value="Other">
+                                                    Other
+                                                  </option>
+                                                </select>
+                                                {(editItemCategory ===
+                                                  "Other" ||
+                                                  (editItemCategory &&
+                                                    !PURCHASE_CATEGORIES.includes(
+                                                      editItemCategory,
+                                                    ))) && (
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Enter custom category..."
+                                                    value={
+                                                      editItemCategory ===
+                                                      "Other"
+                                                        ? ""
+                                                        : editItemCategory
+                                                    }
+                                                    onChange={(e) =>
+                                                      setEditItemCategory(
+                                                        e.target.value,
+                                                      )
+                                                    }
+                                                    className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                                  />
+                                                )}
+                                              </div>
+                                              <div className="md:col-span-2 flex items-center justify-end gap-2 mt-1">
+                                                <button
+                                                  onClick={
+                                                    cancelEditPurchaseItem
+                                                  }
+                                                  disabled={savingItemEdit}
+                                                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                                                >
+                                                  Cancel
+                                                </button>
+                                                <button
+                                                  onClick={saveEditPurchaseItem}
+                                                  disabled={savingItemEdit}
+                                                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                                >
+                                                  {savingItemEdit
+                                                    ? "Saving..."
+                                                    : "Save"}
+                                                </button>
+                                              </div>
                                             </div>
-                                            <div className="font-semibold">
-                                              {item.quantity} {item.unit}
-                                            </div>
-                                          </div>
-                                          <div>
-                                            <div className="text-xs text-gray-500">
-                                              Unit Price
-                                            </div>
-                                            <div className="font-medium">
-                                              ₹
-                                              {parseFloat(item.price).toFixed(
-                                                2,
+                                          ) : (
+                                            <div className="flex-1 flex items-center gap-2">
+                                              <div>
+                                                <div className="font-medium">
+                                                  {item.name}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                  {item.category} •{" "}
+                                                  {item.unit}
+                                                </div>
+                                              </div>
+                                              {canEditItem && (
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    startEditPurchaseItem(
+                                                      purchase._id,
+                                                      idx,
+                                                      item.name,
+                                                      item.category,
+                                                    );
+                                                  }}
+                                                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
+                                                  title="Edit item name/category"
+                                                >
+                                                  <Edit2 className="w-3.5 h-3.5" />
+                                                </button>
                                               )}
                                             </div>
-                                          </div>
-                                          <div className="text-emerald-600 font-bold text-lg">
-                                            ₹
-                                            {parseFloat(
-                                              item.totalAmount,
-                                            ).toFixed(2)}
-                                          </div>
+                                          )}
+                                          {!isEditingThisItem && (
+                                            <div className="flex items-center gap-8 text-right">
+                                              <div>
+                                                <div className="text-xs text-gray-500">
+                                                  Qty
+                                                </div>
+                                                <div className="font-semibold">
+                                                  {item.quantity} {item.unit}
+                                                </div>
+                                              </div>
+                                              <div>
+                                                <div className="text-xs text-gray-500">
+                                                  Unit Price
+                                                </div>
+                                                <div className="font-medium">
+                                                  ₹
+                                                  {parseFloat(
+                                                    item.price,
+                                                  ).toFixed(2)}
+                                                </div>
+                                              </div>
+                                              <div className="text-emerald-600 font-bold text-lg">
+                                                ₹
+                                                {parseFloat(
+                                                  item.totalAmount,
+                                                ).toFixed(2)}
+                                              </div>
+                                            </div>
+                                          )}
                                         </div>
-                                      </div>
-                                    ),
+                                      );
+                                    },
                                   )}
                                 </div>
 

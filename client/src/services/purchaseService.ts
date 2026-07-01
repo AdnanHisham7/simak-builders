@@ -13,6 +13,18 @@ export const verifyPurchase = async (purchaseId: string) => {
   return response.data;
 };
 
+export const updatePurchaseItem = async (
+  purchaseId: string,
+  itemIndex: number,
+  data: { name: string; category: string },
+) => {
+  const response = await privateClient.patch(
+    `/purchases/${purchaseId}/items/${itemIndex}`,
+    data,
+  );
+  return response.data;
+};
+
 export const getPurchases = async (siteId = null, status = null) => {
   const response = await privateClient.get(`/purchases`);
   return response.data;

@@ -26,6 +26,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       deductFromUserId,
       date: dateStr,
       transportationFee: transFeeStr,
+      notes,
     } = req.body;
 
     const file = req.file;
@@ -154,6 +155,7 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       payment,
       sourceOfFunds, // ← saved
       deductFromUserId: deductUserId, // ← saved
+      notes: typeof notes === "string" ? notes.trim() : "",
     });
 
     await purchase.save();
@@ -344,6 +346,74 @@ const verifyPurchase = async (
     res
       .status(HttpStatus.OK)
       .json({ message: "Purchase verified, stocks updated, funds deducted" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updatePurchaseItem = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { purchaseId, itemIndex } = req.params;
+    const { name, category } = req.body;
+
+    const purchase: any = await PurchaseModel.findById(purchaseId);
+    if (!purchase)
+      throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+
+    if (purchase.status === "verified") {
+      throw new ApiError(
+        "Cannot edit items of a verified purchase",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (
+      req.user?.role !== "admin" &&
+      req.user?.userId !== purchase.addedBy.toString()
+    ) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const idx = parseInt(itemIndex, 10);
+    if (isNaN(idx) || idx < 0 || idx >= purchase.items.length) {
+      throw new ApiError("Invalid item index", HttpStatus.BAD_REQUEST);
+    }
+
+    if (!name || !String(name).trim())
+      throw new ApiError("Item name is required", HttpStatus.BAD_REQUEST);
+    if (!category || !String(category).trim())
+      throw new ApiError("Category is required", HttpStatus.BAD_REQUEST);
+
+    const item = purchase.items[idx];
+
+    const { canonicalName } = await resolveItem(
+      String(name).trim(),
+      String(category).trim(),
+      item.unit,
+      req.user?.userId,
+    );
+
+    item.name = canonicalName;
+    item.category = String(category).trim();
+    purchase.markModified("items");
+    await purchase.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "purchase",
+      resourceId: purchase._id,
+      details: `Edited item #${idx} on unverified purchase (name/category)`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Item updated",
+      item,
+    });
   } catch (error) {
     next(error);
   }
@@ -670,6 +740,7 @@ export default {
   getPurchases,
   addPurchase,
   verifyPurchase,
+  updatePurchaseItem,
   deletePurchase,
   getPurchasesBySite,
   getPurchasesBySiteForReport,

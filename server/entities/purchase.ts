@@ -34,6 +34,7 @@ export interface Purchase {
   payment: Payment;
   sourceOfFunds?: "company" | "siteManager";
   deductFromUserId?: Types.ObjectId;
+  notes?: string;
   createdAt?: Date;
   updatedAt?: Date;
 }

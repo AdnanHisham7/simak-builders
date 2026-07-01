@@ -42,6 +42,7 @@ const PurchaseSchema = new Schema<Purchase>(
       required: false,
     },
     deductFromUserId: { type: Schema.Types.ObjectId, ref: "User", required: false },
+    notes: { type: String, default: "", trim: true },
   },
   { timestamps: true },
 );

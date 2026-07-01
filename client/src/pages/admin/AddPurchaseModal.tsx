@@ -12,12 +12,14 @@ import {
   Building2,
   DollarSign,
   Calendar,
+  FileText,
 } from "lucide-react";
 import { addPurchase } from "@/services/purchaseService";
 import { getVendors, createVendor, Vendor } from "@/services/vendorService";
 import { privateClient } from "@/api";
 import { getSiteDetails } from "@/services/siteService";
 import { searchItems, ItemSuggestion } from "@/services/itemService";
+import { PURCHASE_CATEGORIES, PURCHASE_UNITS } from "@/constants/purchaseOptions";
 
 interface AddPurchaseModalProps {
   siteId: string | null; // null for company-level purchases
@@ -59,6 +61,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   ]);
   const [totalAmount, setTotalAmount] = useState(0);
   const [transportationFee, setTransportationFee] = useState<string>(""); // NEW: optional transportation fee
+  const [notes, setNotes] = useState<string>("");
   const [billFile, setBillFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("");
@@ -82,37 +85,9 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     {},
   );
 
-  const categories = [
-    "Earth Work",
-    "Rubble work",
-    "Laterite Work",
-    "Concrete Work",
-    "Wood Work",
-    "Waterproofing & Pest control",
-    "Plastering Wiring Plumbing",
-    "Floor Work",
-    "Interior work",
-    "Paint Work",
-    "Masonry Work",
-    "Other",
-  ];
+  const categories = PURCHASE_CATEGORIES;
 
-  const units = [
-    "kg",
-    "Ft",
-    "Nos",
-    "Load",
-    "bag",
-    "sheet",
-    "hour",
-    "day",
-    "bundle",
-    "kintel",
-    "ton",
-    "length",
-    "N/A",
-    "Other",
-  ];
+  const units = PURCHASE_UNITS;
 
   useEffect(() => {
     setIsAnimating(true);
@@ -357,6 +332,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       formData.append("items", JSON.stringify(items));
       formData.append("totalAmount", totalAmount.toString());
       formData.append("transportationFee", transportationFee || "0"); // NEW
+      formData.append("notes", notes || "");
       formData.append("billUpload", billFile!);
       formData.append("paymentMethod", paymentMethod);
       formData.append("date", purchaseDate);
@@ -1051,6 +1027,26 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                 <span className="font-medium"> "service" </span> miscellaneous
                 expense (Transportation service).
               </p>
+            </div>
+
+            {/* Notes (NEW) */}
+            <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-4 border border-gray-200">
+              <div className="flex items-center mb-3">
+                <FileText size={18} className="text-gray-600 mr-2" />
+                <h3 className="font-semibold text-gray-900">
+                  Notes{" "}
+                  <span className="text-gray-400 text-sm font-normal">
+                    (Optional)
+                  </span>
+                </h3>
+              </div>
+              <textarea
+                placeholder="Any additional notes about this purchase..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-sm resize-none"
+              />
             </div>
 
             {/* Upload Bill */}
