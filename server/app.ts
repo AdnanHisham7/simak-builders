@@ -18,6 +18,7 @@ import reportRoutes from "@routes/reportRoutes";
 import notificationRoutes from "@routes/notificationRoutes";
 import enquiryRoutes from "@routes/enquiryRoutes";
 import projectRoutes from "@routes/projectRoutes";
+import itemRoutes from "@routes/itemRoutes";
 import { env } from "./config/env";
 import morgan from "morgan";
 import { setupCronJobs } from "@utils/cronJobs";
@@ -65,6 +66,7 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/projects", projectRoutes);
+app.use("/api/items", itemRoutes);
 
 // Error Handler
 app.use(errorMiddleware);

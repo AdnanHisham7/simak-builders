@@ -11,20 +11,47 @@ import { ActivityLogModel } from "@models/ActivityLog";
 import { UserModel } from "@models/User";
 import { NotificationModel } from "@models/Notification";
 import { Types } from "mongoose";
+import { resolveItem } from "@utils/itemMaster";
 
 const addStock = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, quantity, unit, category, siteId } = req.body;
     const user = req.user;
 
-    const stock = new StockModel({
+    if (!name || !String(name).trim())
+      throw new ApiError("Item name is required", HttpStatus.BAD_REQUEST);
+
+    const parsedQuantity = parseFloat(quantity);
+    if (isNaN(parsedQuantity) || parsedQuantity <= 0)
+      throw new ApiError("Invalid quantity", HttpStatus.BAD_REQUEST);
+
+    const { canonicalName } = await resolveItem(
       name,
-      quantity,
+      category,
+      unit,
+      user?.userId,
+    );
+
+    let stock = await StockModel.findOne({
+      name: canonicalName,
       unit,
       category,
       site: siteId || null,
     });
-    await stock.save();
+
+    if (stock) {
+      stock.quantity += parsedQuantity;
+      await stock.save();
+    } else {
+      stock = new StockModel({
+        name: canonicalName,
+        quantity: parsedQuantity,
+        unit,
+        category,
+        site: siteId || null,
+      });
+      await stock.save();
+    }
 
     await ActivityLogModel.create({
       user: req.user?.userId,

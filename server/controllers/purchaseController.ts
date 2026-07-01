@@ -14,6 +14,7 @@ import * as path from "path";
 import cloudinary from "../services/cloudinaryService";
 import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { Types } from "mongoose";
+import { resolveItem } from "@utils/itemMaster";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -89,6 +90,8 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       const quantity = parseFloat(item.quantity);
       const price = parseFloat(item.price);
       const itemTotal = parseFloat(item.totalAmount || "0");
+      if (!item.name || !String(item.name).trim())
+        throw new ApiError("Item name is required", HttpStatus.BAD_REQUEST);
       if (isNaN(quantity) || quantity <= 0)
         throw new ApiError(
           `Invalid quantity for item ${item.name}`,
@@ -107,6 +110,14 @@ const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
       item.quantity = quantity;
       item.price = price;
       item.totalAmount = itemTotal;
+
+      const { canonicalName } = await resolveItem(
+        item.name,
+        item.category,
+        item.unit,
+        req.user?.userId,
+      );
+      item.name = canonicalName;
     }
 
     let site;
@@ -209,6 +220,29 @@ const verifyPurchase = async (
       await PurchaseModel.findById(purchaseId).populate("site");
     if (!purchase)
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+
+    if (purchase.status === "verified") {
+      throw new ApiError(
+        "Purchase is already verified",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Defensively re-resolve every item name against the item master at the
+    // moment stock is actually created. This protects against purchases
+    // created before this feature existed, and against any future edit flow
+    // on unverified purchases that might set a name without going through
+    // resolveItem. Canonical names are backfilled onto the purchase itself.
+    for (const item of purchase.items) {
+      const { canonicalName } = await resolveItem(
+        item.name,
+        item.category,
+        item.unit,
+        purchase.addedBy?.toString(),
+      );
+      item.name = canonicalName;
+    }
+    purchase.markModified("items");
 
     purchase.status = "verified";
     await purchase.save();

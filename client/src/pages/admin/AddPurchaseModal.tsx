@@ -17,6 +17,7 @@ import { addPurchase } from "@/services/purchaseService";
 import { getVendors, createVendor, Vendor } from "@/services/vendorService";
 import { privateClient } from "@/api";
 import { getSiteDetails } from "@/services/siteService";
+import { searchItems, ItemSuggestion } from "@/services/itemService";
 
 interface AddPurchaseModalProps {
   siteId: string | null; // null for company-level purchases
@@ -71,6 +72,15 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   );
   const [selectedSiteManagerId, setSelectedSiteManagerId] = useState("");
   const [siteManagers, setSiteManagers] = useState<any[]>([]);
+  const [itemSuggestions, setItemSuggestions] = useState<
+    Record<number, ItemSuggestion[]>
+  >({});
+  const [openSuggestionIndex, setOpenSuggestionIndex] = useState<
+    number | null
+  >(null);
+  const itemSearchTimers = React.useRef<Record<number, ReturnType<typeof setTimeout>>>(
+    {},
+  );
 
   const categories = [
     "Earth Work",
@@ -194,6 +204,49 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       [`item_${index}_price`]: "",
       [`item_${index}_totalAmount`]: "",
     }));
+  };
+
+  const handleItemNameSearch = (index: number, value: string) => {
+    handleItemChange(index, "name", value);
+    setOpenSuggestionIndex(index);
+
+    if (itemSearchTimers.current[index]) {
+      clearTimeout(itemSearchTimers.current[index]);
+    }
+
+    if (!value || value.trim().length < 2) {
+      setItemSuggestions((prev) => ({ ...prev, [index]: [] }));
+      return;
+    }
+
+    itemSearchTimers.current[index] = setTimeout(async () => {
+      try {
+        const results = await searchItems(value.trim());
+        setItemSuggestions((prev) => ({ ...prev, [index]: results }));
+      } catch (error) {
+        console.error("Error fetching item suggestions:", error);
+      }
+    }, 300);
+  };
+
+  const selectItemSuggestion = (index: number, suggestion: ItemSuggestion) => {
+    const newItems = [...items];
+    newItems[index].name = suggestion.name;
+    if (suggestion.category && !newItems[index].category) {
+      newItems[index].category = suggestion.category;
+    }
+    if (suggestion.defaultUnit && !newItems[index].unit) {
+      newItems[index].unit = suggestion.defaultUnit;
+    }
+    setItems(newItems);
+    setErrors((prev) => ({
+      ...prev,
+      [`item_${index}_name`]: "",
+      [`item_${index}_category`]: "",
+      [`item_${index}_unit`]: "",
+    }));
+    setOpenSuggestionIndex(null);
+    setItemSuggestions((prev) => ({ ...prev, [index]: [] }));
   };
 
   const calculateTotal = () => {
@@ -663,7 +716,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                     )}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                       {/* Item Name */}
-                      <div>
+                      <div className="relative">
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Item Name *
                         </label>
@@ -671,19 +724,48 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                           type="text"
                           placeholder="(e.g: Cement)"
                           value={item.name}
+                          autoComplete="off"
                           onChange={(e) => {
-                            handleItemChange(index, "name", e.target.value);
+                            handleItemNameSearch(index, e.target.value);
                             setErrors((prev) => ({
                               ...prev,
                               [`item_${index}_name`]: "",
                             }));
                           }}
+                          onFocus={() => setOpenSuggestionIndex(index)}
+                          onBlur={() =>
+                            setTimeout(() => setOpenSuggestionIndex(null), 150)
+                          }
                           className={`w-full px-3 py-2 border rounded-lg text-sm transition-all duration-200 focus:ring-1 focus:ring-green-500 focus:border-green-500 ${
                             errors[`item_${index}_name`]
                               ? "border-red-300 bg-red-50"
                               : "border-gray-200"
                           }`}
                         />
+                        {openSuggestionIndex === index &&
+                          (itemSuggestions[index]?.length ?? 0) > 0 && (
+                            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                              {itemSuggestions[index].map((suggestion) => (
+                                <button
+                                  type="button"
+                                  key={suggestion._id}
+                                  onMouseDown={() =>
+                                    selectItemSuggestion(index, suggestion)
+                                  }
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-green-50 flex items-center justify-between"
+                                >
+                                  <span className="text-gray-800">
+                                    {suggestion.name}
+                                  </span>
+                                  {suggestion.category && (
+                                    <span className="text-xs text-gray-400">
+                                      {suggestion.category}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         {errors[`item_${index}_name`] && (
                           <p className="text-red-500 text-xs mt-1">
                             {errors[`item_${index}_name`]}
