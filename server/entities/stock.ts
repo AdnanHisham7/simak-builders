@@ -6,6 +6,7 @@ export interface Stock {
   unit: string;
   category: string;
   site?: Types.ObjectId;
+  averagePrice?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }

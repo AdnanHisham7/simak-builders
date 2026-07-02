@@ -15,6 +15,7 @@ import cloudinary from "../services/cloudinaryService";
 import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { Types } from "mongoose";
 import { resolveItem } from "@utils/itemMaster";
+import { computeWeightedAveragePrice } from "@utils/stockPricing";
 
 const addPurchase = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -251,7 +252,7 @@ const verifyPurchase = async (
 
     // Stock update
     for (const item of purchase.items) {
-      const { name, unit, category, quantity } = item;
+      const { name, unit, category, quantity, price } = item;
       const stockQuery = {
         name,
         unit,
@@ -266,8 +267,15 @@ const verifyPurchase = async (
           unit,
           category,
           site: purchase.site ? purchase.site._id : null,
+          averagePrice: 0,
         });
       }
+      stock.averagePrice = computeWeightedAveragePrice(
+        stock.quantity,
+        stock.averagePrice || 0,
+        quantity,
+        price,
+      );
       stock.quantity += quantity;
       await stock.save();
     }

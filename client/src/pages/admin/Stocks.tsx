@@ -20,6 +20,8 @@ interface Stock {
   name: string;
   quantity: number;
   unit: string;
+  category?: string;
+  averagePrice?: number;
   site?: { _id: string; name: string };
 }
 
@@ -144,6 +146,11 @@ const Stocks: React.FC = () => {
 
   const canManageStocks = userType === "siteManager" || userType === "admin";
 
+  const companyStocks = filteredStocks.filter((s) => !s.site);
+  const siteStocksList = filteredStocks.filter((s) => s.site);
+  const showCompanySection = !filterSite || filterSite === "company";
+  const showSiteSection = !filterSite || filterSite !== "company";
+
   const getStockStatusColor = (quantity: number) => {
     if (quantity <= 10) return "from-red-500 to-red-600";
     if (quantity <= 50) return "from-yellow-500 to-orange-500";
@@ -155,6 +162,209 @@ const Stocks: React.FC = () => {
     if (quantity <= 50) return "Medium Stock";
     return "In Stock";
   };
+
+  const renderInventorySection = (
+    title: string,
+    list: Stock[],
+    accentGradient: string,
+  ) => (
+    <div
+      className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
+        isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
+      }`}
+    >
+      <div
+        className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${accentGradient} rounded-t-2xl overflow-hidden`}
+      />
+      <div className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+          <div className="text-sm text-gray-500">
+            {list.length} item{list.length !== 1 ? "s" : ""} found
+          </div>
+        </div>
+
+        {viewMode === "grid" ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {list.map((stock, index) => (
+              <div
+                key={stock._id}
+                className={`group relative bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden ${
+                  selectedStock === stock._id
+                    ? "ring-2 ring-blue-500 shadow-xl"
+                    : ""
+                }`}
+                onClick={() =>
+                  setSelectedStock(
+                    selectedStock === stock._id ? null : stock._id,
+                  )
+                }
+                style={{ animationDelay: `${index * 0.1}s` }}
+              >
+                <div
+                  className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getStockStatusColor(
+                    stock.quantity,
+                  )} rounded-t-xl`}
+                />
+
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <h3
+                      className="font-semibold text-gray-900 text-lg truncate"
+                      title={stock.name}
+                    >
+                      {stock.name}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {stock.site ? stock.site.name : "Company"}
+                    </p>
+                  </div>
+                  <div
+                    className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
+                      stock.quantity,
+                    )} text-white`}
+                  >
+                    {getStockStatusText(stock.quantity)}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-2xl font-bold text-gray-900">
+                      {stock.quantity}
+                    </div>
+                    <div className="text-sm text-gray-500 uppercase tracking-wider">
+                      {stock.unit}
+                    </div>
+                  </div>
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
+                    <svg
+                      className="w-6 h-6 text-blue-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 rounded-xl transition-all duration-300" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Item
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Quantity
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Site
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {list.map((stock) => (
+                  <tr
+                    key={stock._id}
+                    className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 cursor-pointer"
+                    onClick={() =>
+                      setSelectedStock(
+                        selectedStock === stock._id ? null : stock._id,
+                      )
+                    }
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center mr-3">
+                          <svg
+                            className="w-5 h-5 text-blue-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                            />
+                          </svg>
+                        </div>
+                        <div className="font-medium text-gray-900">
+                          {stock.name}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-lg font-semibold text-gray-900">
+                        {stock.quantity}{" "}
+                        <span className="text-sm text-gray-500">
+                          {stock.unit}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">
+                      {stock.site ? stock.site.name : "Company"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
+                          stock.quantity,
+                        )} text-white`}
+                      >
+                        {getStockStatusText(stock.quantity)}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {list.length === 0 && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg
+                className="w-8 h-8 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+                />
+              </svg>
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No stocks found
+            </h3>
+            <p className="text-gray-500">
+              Try adjusting your search or filter criteria
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -439,205 +649,19 @@ const Stocks: React.FC = () => {
           </div>
         </div>
 
-        <div
-          className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-            isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
-          style={{ animationDelay: "0.2s" }}
-        >
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 rounded-t-2xl overflow-hidden" />
+        {showCompanySection &&
+          renderInventorySection(
+            "🏢 Company Stocks",
+            companyStocks,
+            "from-purple-500 via-indigo-500 to-blue-500",
+          )}
 
-          <div className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">
-                Current Inventory
-              </h2>
-              <div className="text-sm text-gray-500">
-                {filteredStocks.length} item
-                {filteredStocks.length !== 1 ? "s" : ""} found
-              </div>
-            </div>
-
-            {viewMode === "grid" ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredStocks.map((stock, index) => (
-                  <div
-                    key={stock._id}
-                    className={`group relative bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden ${
-                      selectedStock === stock._id
-                        ? "ring-2 ring-blue-500 shadow-xl"
-                        : ""
-                    }`}
-                    onClick={() =>
-                      setSelectedStock(
-                        selectedStock === stock._id ? null : stock._id
-                      )
-                    }
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <div
-                      className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getStockStatusColor(
-                        stock.quantity
-                      )} rounded-t-xl`}
-                    />
-
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <h3
-                          className="font-semibold text-gray-900 text-lg truncate"
-                          title={stock.name}
-                        >
-                          {stock.name}
-                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {stock.site ? stock.site.name : "Company"}
-                        </p>
-                      </div>
-                      <div
-                        className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
-                          stock.quantity
-                        )} text-white`}
-                      >
-                        {getStockStatusText(stock.quantity)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-2xl font-bold text-gray-900">
-                          {stock.quantity}
-                        </div>
-                        <div className="text-sm text-gray-500 uppercase tracking-wider">
-                          {stock.unit}
-                        </div>
-                      </div>
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
-                        <svg
-                          className="w-6 h-6 text-blue-600"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                          />
-                        </svg>
-                      </div>
-                    </div>
-
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 rounded-xl transition-all duration-300" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Item
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Site
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredStocks.map((stock, index) => (
-                      <tr
-                        key={stock._id}
-                        className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 cursor-pointer"
-                        onClick={() =>
-                          setSelectedStock(
-                            selectedStock === stock._id ? null : stock._id
-                          )
-                        }
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center mr-3">
-                              <svg
-                                className="w-5 h-5 text-blue-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                                />
-                              </svg>
-                            </div>
-                            <div className="font-medium text-gray-900">
-                              {stock.name}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-lg font-semibold text-gray-900">
-                            {stock.quantity}{" "}
-                            <span className="text-sm text-gray-500">
-                              {stock.unit}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-gray-900">
-                          {stock.site ? stock.site.name : "Company"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
-                              stock.quantity
-                            )} text-white`}
-                          >
-                            {getStockStatusText(stock.quantity)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {filteredStocks.length === 0 && (
-              <div className="text-center py-12">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    className="w-8 h-8 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                    />
-                  </svg>
-                </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No stocks found
-                </h3>
-                <p className="text-gray-500">
-                  Try adjusting your search or filter criteria
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+        {showSiteSection &&
+          renderInventorySection(
+            "📍 Site Stocks",
+            siteStocksList,
+            "from-green-500 via-blue-500 to-purple-500",
+          )}
 
         {userType === "admin" && (
           <div

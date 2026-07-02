@@ -43,6 +43,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({
 }) => {
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState<number | "">("");
+  const [unitPrice, setUnitPrice] = useState<number | "">("");
   const [unit, setUnit] = useState("");
   const [category, setCategory] = useState("");
   const [site, setSite] = useState("");
@@ -99,6 +100,7 @@ const AddStockModal: React.FC<AddStockModalProps> = ({
         unit,
         category,
         siteId,
+        price: unitPrice === "" ? undefined : Number(unitPrice),
       };
       await onSubmit(stockData);
       onClose();
@@ -461,6 +463,46 @@ const AddStockModal: React.FC<AddStockModalProps> = ({
               </div>
 
               {renderUnitField()}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-gray-700 flex items-center space-x-2">
+                <svg
+                  className="w-4 h-4 text-gray-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                  />
+                </svg>
+                <span>Unit Price</span>
+                <span className="text-gray-400 text-xs font-normal">
+                  (Optional)
+                </span>
+              </label>
+              <input
+                type="number"
+                value={unitPrice}
+                onChange={(e) =>
+                  setUnitPrice(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+                min="0"
+                step="0.01"
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-200 rounded-xl transition-all duration-200 focus:outline-none focus:bg-white focus:shadow-lg focus:border-purple-500 hover:border-gray-300"
+                placeholder="₹ per unit"
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-gray-500">
+                Used to value future stock transfers of this item. Leave
+                blank to keep the existing average price.
+              </p>
             </div>
 
             {/* Category */}

@@ -221,7 +221,8 @@ console.log("Allowed TO SITES", allowedToSites)
                       <option value="">Select stock item</option>
                       {filteredStocks.map((s) => (
                         <option key={s._id} value={s._id}>
-                          📦 {s.name} (Available: {s.quantity || 0})
+                          📦 {s.name} (Available: {s.quantity || 0}) • ₹
+                          {(s.averagePrice || 0).toFixed(2)}/{s.unit}
                         </option>
                       ))}
                     </select>
@@ -246,6 +247,9 @@ console.log("Allowed TO SITES", allowedToSites)
                     <div>
                       <h4 className="font-semibold text-blue-900">Selected Item: {stock.name}</h4>
                       <p className="text-sm text-blue-700">Available quantity: {stock.quantity || 0} units</p>
+                      <p className="text-sm text-blue-700">
+                        Unit price: ₹{(stock.averagePrice || 0).toFixed(2)} / {stock.unit}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -295,6 +299,12 @@ console.log("Allowed TO SITES", allowedToSites)
                     <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t">
                       <span className="text-gray-600">Remaining:</span>
                       <span className="font-semibold">{(stock.quantity || 0) - quantity} units</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm mt-2 pt-2 border-t">
+                      <span className="text-gray-600">Estimated value:</span>
+                      <span className="font-semibold text-emerald-600">
+                        ₹{((stock.averagePrice || 0) * (quantity || 0)).toFixed(2)}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -362,6 +372,18 @@ console.log("Allowed TO SITES", allowedToSites)
                       <div className="flex justify-between">
                         <span className="text-green-700">Quantity:</span>
                         <span className="font-medium">{quantity} units</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-green-700">Unit price:</span>
+                        <span className="font-medium">
+                          ₹{(stock.averagePrice || 0).toFixed(2)} / {stock.unit}
+                        </span>
+                      </div>
+                      <div className="flex justify-between pt-2 border-t border-green-200">
+                        <span className="text-green-700">Estimated value:</span>
+                        <span className="font-semibold text-green-900">
+                          ₹{((stock.averagePrice || 0) * (quantity || 0)).toFixed(2)}
+                        </span>
                       </div>
                     </div>
                   </div>

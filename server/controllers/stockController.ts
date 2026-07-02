@@ -6,16 +6,16 @@ import { SiteModel } from "@models/Site";
 import { UserRole } from "@entities/user";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
-import { PurchaseModel } from "@models/Purchase";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { UserModel } from "@models/User";
 import { NotificationModel } from "@models/Notification";
 import { Types } from "mongoose";
 import { resolveItem } from "@utils/itemMaster";
+import { computeWeightedAveragePrice } from "@utils/stockPricing";
 
 const addStock = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, quantity, unit, category, siteId } = req.body;
+    const { name, quantity, unit, category, siteId, price } = req.body;
     const user = req.user;
 
     if (!name || !String(name).trim())
@@ -24,6 +24,13 @@ const addStock = async (req: Request, res: Response, next: NextFunction) => {
     const parsedQuantity = parseFloat(quantity);
     if (isNaN(parsedQuantity) || parsedQuantity <= 0)
       throw new ApiError("Invalid quantity", HttpStatus.BAD_REQUEST);
+
+    const parsedPrice =
+      price !== undefined && price !== null && price !== ""
+        ? parseFloat(price)
+        : null;
+    if (parsedPrice !== null && (isNaN(parsedPrice) || parsedPrice < 0))
+      throw new ApiError("Invalid unit price", HttpStatus.BAD_REQUEST);
 
     const { canonicalName } = await resolveItem(
       name,
@@ -40,6 +47,14 @@ const addStock = async (req: Request, res: Response, next: NextFunction) => {
     });
 
     if (stock) {
+      if (parsedPrice !== null) {
+        stock.averagePrice = computeWeightedAveragePrice(
+          stock.quantity,
+          stock.averagePrice || 0,
+          parsedQuantity,
+          parsedPrice,
+        );
+      }
       stock.quantity += parsedQuantity;
       await stock.save();
     } else {
@@ -49,6 +64,7 @@ const addStock = async (req: Request, res: Response, next: NextFunction) => {
         unit,
         category,
         site: siteId || null,
+        averagePrice: parsedPrice !== null ? parsedPrice : 0,
       });
       await stock.save();
     }
@@ -148,13 +164,7 @@ const approveStockTransfer = async (
       throw new ApiError("Insufficient stock", HttpStatus.BAD_REQUEST);
     }
 
-    const purchase: any = await PurchaseModel.findOne({
-      "items.name": fromStock.name,
-    });
-    const stockValue = purchase
-      ? purchase.items.find((item: any) => item.name === fromStock.name).price *
-        transfer.quantity
-      : 0;
+    const stockValue = (fromStock.averagePrice || 0) * transfer.quantity;
 
     if (transfer.fromSite) {
       const sourceSite = await SiteModel.findById(transfer.fromSite);
@@ -164,7 +174,7 @@ const approveStockTransfer = async (
           date: new Date(),
           amount: -stockValue,
           type: "stockTransfer",
-          description: `Stock transferred to site ${transfer.toSite}`,
+          description: `Stock (${fromStock.name}) transferred to site ${transfer.toSite}`,
           relatedId: new Types.ObjectId(transfer._id),
           user: new Types.ObjectId(user?.userId),
         });
@@ -183,10 +193,32 @@ const approveStockTransfer = async (
     };
     let toStock = await StockModel.findOne(toStockQuery);
     if (!toStock) {
-      toStock = new StockModel({ ...toStockQuery, quantity: 0 });
+      toStock = new StockModel({ ...toStockQuery, quantity: 0, averagePrice: 0 });
     }
+    toStock.averagePrice = computeWeightedAveragePrice(
+      toStock.quantity,
+      toStock.averagePrice || 0,
+      transfer.quantity,
+      fromStock.averagePrice || 0,
+    );
     toStock.quantity += transfer.quantity;
     await toStock.save();
+
+    const destinationSite = await SiteModel.findById(transfer.toSite);
+    if (destinationSite) {
+      destinationSite.expenses += stockValue;
+      destinationSite.transactions.push({
+        date: new Date(),
+        amount: stockValue,
+        type: "stockTransfer",
+        description: `Stock (${fromStock.name}) received from ${
+          transfer.fromSite ? "site " + transfer.fromSite : "company stock"
+        }`,
+        relatedId: new Types.ObjectId(transfer._id),
+        user: new Types.ObjectId(user?.userId),
+      });
+      await destinationSite.save();
+    }
 
     transfer.status = "Approved";
     transfer.approvedBy = user?.userId;
