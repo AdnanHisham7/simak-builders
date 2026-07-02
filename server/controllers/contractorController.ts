@@ -358,11 +358,9 @@ const getContractorTransactions = async (
 ) => {
   try {
     const { contractorId, siteId } = req.query;
-    console.log("HAHAHAHAHAHA", siteId, contractorId);
     if (req.user?.role !== "admin")
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
 
-    console.log("HAHAHAHAHAHA MAATHRA");
     const contractor = await ContractorModel.findById(contractorId);
     if (!contractor)
       throw new ApiError("Contractor not found", HttpStatus.NOT_FOUND);
@@ -468,6 +466,8 @@ const deleteTransaction = async (
     const transaction = await ContractorTransactionModel.findById(transactionId)
       .populate("contractor")
       .populate("site");
+    
+    console.log("Deleting transaction:", transaction?.site);
     if (!transaction) {
       throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
     }
@@ -490,9 +490,17 @@ const deleteTransaction = async (
     const type = transaction.type;
 
     // 1. Reverse contractor balance
+    const transactionSiteId =
+      typeof transaction.site === "object" &&
+      transaction.site !== null &&
+      "_id" in transaction.site
+        ? (transaction.site as { _id?: Types.ObjectId })._id?.toString()
+        : transaction.site?.toString();
+
     const siteAssignment = contractor.siteAssignments.find(
-      (a) => a.site?.toString() === transaction.site.toString(),
+      (a) => a.site?.toString() === transactionSiteId,
     );
+    console.log("HAHAHA", siteAssignment, contractor.siteAssignments);
     if (siteAssignment) {
       siteAssignment.totalAmount -= amount;
       await contractor.save();
@@ -545,9 +553,16 @@ const deleteTransaction = async (
     // 4. Delete the transaction record
     await ContractorTransactionModel.findByIdAndDelete(transactionId);
 
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Transaction deleted and reversed" });
+    const populatedContractor = await ContractorModel.findById(
+      contractor._id,
+    )
+      .populate("siteAssignments.site", "name")
+      .lean();
+
+    res.status(HttpStatus.OK).json({
+      message: "Transaction deleted and reversed",
+      updatedContractor: populatedContractor,
+    });
   } catch (error) {
     next(error);
   }

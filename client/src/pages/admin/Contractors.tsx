@@ -15,6 +15,7 @@ import {
   Phone,
   ArrowLeft,
   DollarSign,
+  Trash2,
 } from "lucide-react";
 import {
   getAllContractors,
@@ -24,6 +25,7 @@ import {
   addTransaction,
   updateContractor,
   deleteContractor,
+  deleteContractorTransaction,
 } from "@/services/contractorService";
 import { getSites } from "@/services/siteService";
 import AddContractorModal from "./AddContractorModal";
@@ -250,8 +252,11 @@ const Contractors: React.FC = () => {
         siteAssignments: [...(prev?.siteAssignments || []), newAssignment],
       }));
       setIsAssignSiteModalOpen(false);
-    } catch (err) {
-      setError("Failed to assign site.");
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message || "Failed to assign site.",
+      );
+      throw err;
     }
   };
 
@@ -269,6 +274,39 @@ const Contractors: React.FC = () => {
       setSelectedContractor(response.updatedContractor);
     }
     return response;
+  };
+
+  const [deletingTxId, setDeletingTxId] = useState<string | null>(null);
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    if (
+      !window.confirm(
+        "Delete this transaction? This will reverse the contractor balance, the site's expenses, and the original payment source (company or site manager balance). This cannot be undone.",
+      )
+    ) {
+      return;
+    }
+    setDeletingTxId(transactionId);
+    try {
+      const { updatedContractor } =
+        await deleteContractorTransaction(transactionId);
+      setTransactions((prev) => prev.filter((tx) => tx.id !== transactionId));
+      setContractors((prev) =>
+        prev.map((c) =>
+          c.id === updatedContractor.id ? updatedContractor : c,
+        ),
+      );
+      if (selectedContractor && selectedContractor.id === updatedContractor.id) {
+        setSelectedContractor(updatedContractor);
+      }
+      setError(null);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.message || "Failed to delete transaction.",
+      );
+    } finally {
+      setDeletingTxId(null);
+    }
   };
 
   const handleSort = (field: "name" | "company" | "email" | "status") => {
@@ -773,6 +811,9 @@ const Contractors: React.FC = () => {
                             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Date
                             </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
@@ -789,6 +830,18 @@ const Contractors: React.FC = () => {
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap">
                                 {new Date(tx.date).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                                <button
+                                  onClick={() =>
+                                    handleDeleteTransaction(tx.id)
+                                  }
+                                  disabled={deletingTxId === tx.id}
+                                  className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Delete transaction"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
                               </td>
                             </tr>
                           ))}

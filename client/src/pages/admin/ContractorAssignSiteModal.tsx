@@ -37,12 +37,14 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [localSelectedSiteId, setLocalSelectedSiteId] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Reset form when modal is closed
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery("");
       setLocalSelectedSiteId("");
+      setIsSubmitting(false);
     }
   }, [isOpen]);
 
@@ -61,12 +63,15 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
   }, [availableSites, searchQuery]);
 
   const handleAssign = async () => {
-    if (!localSelectedSiteId || !contractor) return;
+    if (!localSelectedSiteId || !contractor || isSubmitting) return;
+    setIsSubmitting(true);
     try {
       await onAssign(localSelectedSiteId);
       onClose();
     } catch (err) {
       setError?.("Failed to assign site.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -135,16 +140,17 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
           <div className="flex justify-end gap-4 mt-8">
             <button
               onClick={onClose}
-              className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all font-medium"
+              disabled={isSubmitting}
+              className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               onClick={handleAssign}
-              disabled={!localSelectedSiteId}
+              disabled={!localSelectedSiteId || isSubmitting}
               className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
-              Assign Site
+              {isSubmitting ? "Assigning..." : "Assign Site"}
             </button>
           </div>
         </div>

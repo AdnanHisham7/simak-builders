@@ -30,6 +30,7 @@ const AddContractorTransactionModal: React.FC<
     description: "",
   });
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [category, setCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
   const [showCustomCategory, setShowCustomCategory] = useState(false);
@@ -62,6 +63,9 @@ const AddContractorTransactionModal: React.FC<
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
+    if (name === "amount" && value !== "" && Number(value) < 0) {
+      return;
+    }
     setTransaction((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -71,10 +75,16 @@ const AddContractorTransactionModal: React.FC<
   }, [defaultSiteId]);
 
   const handleAdd = async () => {
+    if (isSubmitting) return;
     if (!transaction.siteId || !transaction.type || !transaction.amount) {
       setError("Please fill all required fields: site, type, and amount.");
       return;
     }
+    if (Number(transaction.amount) <= 0) {
+      setError("Amount must be greater than zero.");
+      return;
+    }
+    setIsSubmitting(true);
     try {
       const data = {
         contractorId: contractor.id,
@@ -92,6 +102,8 @@ const AddContractorTransactionModal: React.FC<
       // window.location.href = "/admin/contractors";
     } catch (err) {
       setError("Failed to add transaction. Ensure the site exists.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -177,6 +189,8 @@ const AddContractorTransactionModal: React.FC<
                 name="amount"
                 value={transaction.amount || ""}
                 onChange={handleChange}
+                min="0"
+                step="0.01"
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
                 placeholder="Enter amount"
               />
@@ -231,9 +245,10 @@ const AddContractorTransactionModal: React.FC<
             <div className="flex justify-end">
               <button
                 onClick={handleAdd}
-                className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 font-medium shadow-lg hover:shadow-xl"
+                disabled={isSubmitting}
+                className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Add "Transaction"
+                {isSubmitting ? "Adding..." : 'Add "Transaction"'}
               </button>
             </div>
           </>

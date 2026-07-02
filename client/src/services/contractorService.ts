@@ -21,20 +21,25 @@ export interface ContractorTransaction {
   addedBy: { id: string; name: string };
 }
 
+const mapContractor = (raw: any): Contractor => ({
+  id: raw._id,
+  name: raw.name,
+  email: raw.email,
+  phone: raw.phone,
+  company: raw.company,
+  status: raw.status,
+  siteAssignments: (raw.siteAssignments || []).map((assignment: any) => ({
+    site: {
+      id: assignment.site._id || assignment.site,
+      name: assignment.site.name || "",
+    },
+    totalAmount: assignment.totalAmount,
+  })),
+});
+
 export const getAllContractors = async (): Promise<Contractor[]> => {
   const response = await privateClient.get("/contractors");
-  return response.data.map((contractor: any) => ({
-    id: contractor._id,
-    name: contractor.name,
-    email: contractor.email,
-    phone: contractor.phone,
-    company: contractor.company,
-    status: contractor.status,
-    siteAssignments: contractor.siteAssignments.map((assignment: any) => ({
-      site: { id: assignment.site._id, name: assignment.site.name },
-      totalAmount: assignment.totalAmount,
-    })),
-  }));
+  return response.data.map(mapContractor);
 };
 
 export const createContractor = async (data: {
@@ -91,23 +96,7 @@ export const addTransaction = async (data: {
         name: transaction.addedByName || "",
       },
     },
-    updatedContractor: {
-      id: updatedContractor._id,
-      name: updatedContractor.name,
-      email: updatedContractor.email,
-      phone: updatedContractor.phone,
-      company: updatedContractor.company,
-      status: updatedContractor.status,
-      siteAssignments: updatedContractor.siteAssignments.map(
-        (assignment: any) => ({
-          site: {
-            id: assignment.site._id || assignment.site,
-            name: assignment.site.name || "",
-          },
-          totalAmount: assignment.totalAmount,
-        }),
-      ),
-    },
+    updatedContractor: mapContractor(updatedContractor),
   };
 };
 
@@ -159,8 +148,13 @@ export const deleteContractor = async (id: string): Promise<void> => {
 
 export const deleteContractorTransaction = async (
   transactionId: string,
-): Promise<void> => {
-  await privateClient.delete(`/contractors/transactions/${transactionId}`);
+): Promise<{ updatedContractor: Contractor }> => {
+  const response = await privateClient.delete(
+    `/contractors/transactions/${transactionId}`,
+  );
+  return {
+    updatedContractor: mapContractor(response.data.updatedContractor),
+  };
 };
 
 export const unassignSiteFromContractor = async (
