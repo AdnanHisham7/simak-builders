@@ -18,6 +18,8 @@ export interface SalaryAssignment {
   date: string;
   givenBy: { _id: string; name: string };
   amount: number;
+  allowance?: number;
+  notes?: string;
   isVerified: boolean;
 }
 
@@ -223,12 +225,20 @@ export const assignSitesToArchitect = async (
 
 export const assignSalary = async (
   userId: string,
-  amount: number,
-  isVerified: boolean = false
+  data: {
+    amount: number;
+    date?: string;
+    allowance?: number;
+    notes?: string;
+    isVerified?: boolean;
+  },
 ): Promise<SalaryAssignment> => {
   const response = await privateClient.post(`/users/${userId}/assign-salary`, {
-    amount,
-    isVerified,
+    amount: data.amount,
+    date: data.date,
+    allowance: data.allowance || 0,
+    notes: data.notes || "",
+    isVerified: data.isVerified || false,
   });
   return response.data.salaryAssignment;
 };
@@ -249,9 +259,12 @@ export const updateFixedSalary = async (userId: string, fixedSalary: number): Pr
 export const updateSalaryAssignmentAmount = async (
   userId: string,
   assignmentId: string,
-  amount: number
+  data: { amount?: number; allowance?: number; notes?: string },
 ): Promise<void> => {
-  await privateClient.put(`/users/${userId}/salary-assignments/${assignmentId}`, { amount });
+  await privateClient.put(
+    `/users/${userId}/salary-assignments/${assignmentId}`,
+    data,
+  );
 };
 
 export const listSalaries = async (): Promise<UserWithSalary[]> => {

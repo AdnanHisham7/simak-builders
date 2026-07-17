@@ -32,6 +32,8 @@ const UserSchema = new Schema<User>(
         date: { type: Date, default: Date.now },
         givenBy: { type: Schema.Types.ObjectId, ref: "User" },
         amount: { type: Number, required: true },
+        allowance: { type: Number, default: 0 },
+        notes: { type: String, default: "", trim: true },
         isVerified: { type: Boolean, default: false },
       },
     ],

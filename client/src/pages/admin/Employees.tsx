@@ -9,6 +9,7 @@ import {
   markAttendancesPaid,
   Employee,
 } from "@/services/employeeService";
+import MarkEmployeeAttendanceModal from "./MarkEmployeeAttendanceModal";
 
 interface EmployeeFormData {
   name: string;
@@ -72,6 +73,10 @@ const Employees: React.FC = () => {
     "all"
   );
   const [searchTermAttendance, setSearchTermAttendance] = useState("");
+  const [markAttendanceTarget, setMarkAttendanceTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
     fetchEmployees();
@@ -565,6 +570,17 @@ const Employees: React.FC = () => {
                             📊 Attendance
                           </button>
                           <button
+                            onClick={() =>
+                              setMarkAttendanceTarget({
+                                id: employee.id,
+                                name: employee.name,
+                              })
+                            }
+                            className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
+                          >
+                            ✅ Mark Attendance
+                          </button>
+                          <button
                             onClick={() => openEditModal(employee)}
                             className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
                           >
@@ -897,6 +913,17 @@ const Employees: React.FC = () => {
           </div>
         )}
       </div>
+
+      {markAttendanceTarget && (
+        <MarkEmployeeAttendanceModal
+          employeeId={markAttendanceTarget.id}
+          employeeName={markAttendanceTarget.name}
+          onClose={() => setMarkAttendanceTarget(null)}
+          onMarked={() => {
+            fetchEmployees();
+          }}
+        />
+      )}
     </div>
   );
 };

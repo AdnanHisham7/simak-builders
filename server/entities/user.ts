@@ -36,6 +36,8 @@ export interface User {
     date: Date;
     givenBy: Types.ObjectId;
     amount: number;
+    allowance?: number;
+    notes?: string;
     isVerified: boolean;
   }[];
   totalSalary: number;

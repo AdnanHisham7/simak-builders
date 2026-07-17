@@ -8,6 +8,7 @@ import {
   updateSalaryAssignmentAmount,
   UserWithSalary,
 } from "@/services/userService";
+import AddSalaryModal from "./AddSalaryModal";
 
 const Salary: React.FC = () => {
   const [users, setUsers] = useState<UserWithSalary[]>([]);
@@ -23,6 +24,16 @@ const Salary: React.FC = () => {
   const [expandedUsers, setExpandedUsers] = useState<{
     [key: string]: boolean;
   }>({});
+  const [editableAllowances, setEditableAllowances] = useState<{
+    [key: string]: number;
+  }>({});
+  const [editableNotes, setEditableNotes] = useState<{
+    [key: string]: string;
+  }>({});
+  const [addSalaryTarget, setAddSalaryTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const userType = useSelector((state: RootState) => state.auth.userType);
 
   useEffect(() => {
@@ -34,7 +45,7 @@ const Salary: React.FC = () => {
   const calculateTotalToBePaid = (salaryAssignments: SalaryAssignment[]) => {
     return salaryAssignments
       .filter((sa) => !sa.isVerified)
-      .reduce((sum, sa) => sum + sa.amount, 0);
+      .reduce((sum, sa) => sum + sa.amount + (sa.allowance || 0), 0);
   };
 
   const handleSaveFixedSalary = async (userId: string) => {
@@ -55,14 +66,22 @@ const Salary: React.FC = () => {
   const handleSaveAmount = async (
     userId: string,
     assignmentId: string,
-    amount: number
+    amount: number,
+    allowance?: number,
+    notes?: string,
   ) => {
     setLoadingStates((prev) => ({ ...prev, [`save-${assignmentId}`]: true }));
     try {
-      await updateSalaryAssignmentAmount(userId, assignmentId, amount);
+      await updateSalaryAssignmentAmount(userId, assignmentId, {
+        amount,
+        allowance,
+        notes,
+      });
       const updatedUsers = await listSalaries();
       setUsers(updatedUsers);
       setEditableAmounts((prev) => ({ ...prev, [assignmentId]: undefined }));
+      setEditableAllowances((prev) => ({ ...prev, [assignmentId]: undefined }));
+      setEditableNotes((prev) => ({ ...prev, [assignmentId]: undefined }));
     } finally {
       setLoadingStates((prev) => ({
         ...prev,
@@ -191,6 +210,14 @@ const Salary: React.FC = () => {
                       {user.role}
                     </span>
                     <button
+                      onClick={() =>
+                        setAddSalaryTarget({ id: user._id, name: user.name })
+                      }
+                      className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-lg hover:from-emerald-600 hover:to-teal-600 text-sm font-medium flex items-center space-x-1"
+                    >
+                      <span>+ Add Salary</span>
+                    </button>
+                    <button
                       onClick={() => toggleUserExpansion(user._id)}
                       className="p-2 rounded-full hover:bg-gray-100 transition-colors duration-200"
                     >
@@ -287,7 +314,7 @@ const Salary: React.FC = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex-1">
-                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                 <div>
                                   <p className="text-sm font-medium text-gray-600">
                                     Date
@@ -327,7 +354,13 @@ const Salary: React.FC = () => {
                                           handleSaveAmount(
                                             user._id,
                                             sa._id,
-                                            editableAmounts[sa._id] || sa.amount
+                                            editableAmounts[sa._id] ?? sa.amount,
+                                            editableAllowances[sa._id] ??
+                                              sa.allowance ??
+                                              0,
+                                            editableNotes[sa._id] ??
+                                              sa.notes ??
+                                              "",
                                           )
                                         }
                                         disabled={
@@ -338,6 +371,35 @@ const Salary: React.FC = () => {
                                         Save
                                       </button>
                                     </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-600">
+                                    Allowance
+                                  </p>
+                                  {sa.isVerified ? (
+                                    <p className="text-gray-900">
+                                      {formatCurrency(sa.allowance || 0)}
+                                    </p>
+                                  ) : (
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={
+                                        editableAllowances[sa._id] !==
+                                        undefined
+                                          ? editableAllowances[sa._id]
+                                          : sa.allowance || 0
+                                      }
+                                      onChange={(e) =>
+                                        setEditableAllowances((prev) => ({
+                                          ...prev,
+                                          [sa._id]:
+                                            parseFloat(e.target.value) || 0,
+                                        }))
+                                      }
+                                      className="block w-28 pl-3 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
                                   )}
                                 </div>
                                 <div>
@@ -387,6 +449,35 @@ const Salary: React.FC = () => {
                                   </div>
                                 </div>
                               </div>
+                              {(sa.notes || !sa.isVerified) && (
+                                <div className="mt-3">
+                                  <p className="text-sm font-medium text-gray-600">
+                                    Notes
+                                  </p>
+                                  {sa.isVerified ? (
+                                    <p className="text-gray-700 text-sm">
+                                      {sa.notes || "—"}
+                                    </p>
+                                  ) : (
+                                    <input
+                                      type="text"
+                                      value={
+                                        editableNotes[sa._id] !== undefined
+                                          ? editableNotes[sa._id]
+                                          : sa.notes || ""
+                                      }
+                                      onChange={(e) =>
+                                        setEditableNotes((prev) => ({
+                                          ...prev,
+                                          [sa._id]: e.target.value,
+                                        }))
+                                      }
+                                      placeholder="Optional notes..."
+                                      className="mt-1 block w-full pl-3 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                                    />
+                                  )}
+                                </div>
+                              )}
                             </div>
                             {!sa.isVerified && (
                               <button
@@ -461,6 +552,19 @@ const Salary: React.FC = () => {
           </div>
         )}
       </div>
+
+      {addSalaryTarget && (
+        <AddSalaryModal
+          isOpen={!!addSalaryTarget}
+          onClose={() => setAddSalaryTarget(null)}
+          userId={addSalaryTarget.id}
+          userName={addSalaryTarget.name}
+          onAssigned={async () => {
+            const updatedUsers = await listSalaries();
+            setUsers(updatedUsers);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -788,22 +788,42 @@ const assignSalary = async (
 ) => {
   try {
     const { id } = req.params;
-    const { amount, isVerified = false } = req.body;
+    const {
+      amount,
+      allowance = 0,
+      notes = "",
+      date,
+      isVerified = false,
+    } = req.body;
     const user = await UserModel.findById(id);
     if (!user) {
       throw new ApiError("User not found", HttpStatus.NOT_FOUND);
     }
-    // if (req.user.role !== "admin") {
-    //   throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
-    // }
+
+    const numAmount = Number(amount);
+    const numAllowance = Number(allowance) || 0;
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ApiError("Amount must be greater than zero", HttpStatus.BAD_REQUEST);
+    }
+    if (numAllowance < 0) {
+      throw new ApiError("Allowance cannot be negative", HttpStatus.BAD_REQUEST);
+    }
+
+    const assignmentDate = date ? new Date(date) : new Date();
+    if (isNaN(assignmentDate.getTime())) {
+      throw new ApiError("Invalid date", HttpStatus.BAD_REQUEST);
+    }
+
     const salaryAssignment: any = {
-      date: new Date(),
+      date: assignmentDate,
       givenBy: req.user?.userId,
-      amount,
-      isVerified,
+      amount: numAmount,
+      allowance: numAllowance,
+      notes: String(notes).trim(),
+      isVerified: Boolean(isVerified),
     };
-    if (isVerified) {
-      user.totalSalary += amount;
+    if (salaryAssignment.isVerified) {
+      user.totalSalary += numAmount + numAllowance;
     }
     user.salaryAssignments.push(salaryAssignment);
     await user.save();
@@ -843,7 +863,7 @@ const verifySalaryAssignment = async (
       );
     }
     salaryAssignment.isVerified = true;
-    user.totalSalary += salaryAssignment.amount;
+    user.totalSalary += salaryAssignment.amount + (salaryAssignment.allowance || 0);
     await user.save();
     res
       .status(HttpStatus.OK)
@@ -899,7 +919,7 @@ const updateSalaryAssignmentAmount = async (
 ) => {
   try {
     const { userId, assignmentId } = req.params;
-    const { amount } = req.body;
+    const { amount, allowance, notes } = req.body;
     const user = await UserModel.findById(userId);
     if (!user) {
       throw new ApiError("User not found", HttpStatus.NOT_FOUND);
@@ -916,7 +936,9 @@ const updateSalaryAssignmentAmount = async (
         HttpStatus.BAD_REQUEST
       );
     }
-    salaryAssignment.amount = amount;
+    if (amount !== undefined) salaryAssignment.amount = amount;
+    if (allowance !== undefined) salaryAssignment.allowance = allowance;
+    if (notes !== undefined) salaryAssignment.notes = notes;
     await user.save();
     res
       .status(HttpStatus.OK)

@@ -21,7 +21,6 @@ import projectRoutes from "@routes/projectRoutes";
 import itemRoutes from "@routes/itemRoutes";
 import { env } from "./config/env";
 import morgan from "morgan";
-import { setupCronJobs } from "@utils/cronJobs";
 
 const app = express();
 
@@ -47,7 +46,6 @@ app.use(
   }),
 );
 
-setupCronJobs();
 
 // Routes
 app.use("/api/auth", authRoutes);
