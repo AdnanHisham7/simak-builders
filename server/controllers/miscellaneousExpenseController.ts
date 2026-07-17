@@ -319,13 +319,6 @@ const updateMiscellaneousExpense = async (
     const expense: any = await MiscellaneousExpenseModel.findById(expenseId);
     if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
 
-    if (expense.status === "verified") {
-      throw new ApiError(
-        "Cannot edit a verified miscellaneous expense",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
     if (
       req.user?.role !== "admin" &&
       req.user?.userId !== expense.addedBy.toString()
@@ -339,6 +332,8 @@ const updateMiscellaneousExpense = async (
       throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
     }
 
+    const wasVerified = expense.status === "verified";
+
     expense.name = String(name).trim();
     expense.category = category;
     await expense.save();
@@ -348,7 +343,7 @@ const updateMiscellaneousExpense = async (
       action: "update",
       resource: "miscellaneousExpense",
       resourceId: expense._id,
-      details: `Edited unverified miscellaneous expense (name/category)`,
+      details: `Edited ${wasVerified ? "verified" : "unverified"} miscellaneous expense (name/category)`,
     });
 
     res.status(HttpStatus.OK).json({

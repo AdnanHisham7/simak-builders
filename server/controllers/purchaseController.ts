@@ -372,13 +372,6 @@ const updatePurchaseItem = async (
     if (!purchase)
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
 
-    if (purchase.status === "verified") {
-      throw new ApiError(
-        "Cannot edit items of a verified purchase",
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
     if (
       req.user?.role !== "admin" &&
       req.user?.userId !== purchase.addedBy.toString()
@@ -397,6 +390,8 @@ const updatePurchaseItem = async (
       throw new ApiError("Category is required", HttpStatus.BAD_REQUEST);
 
     const item = purchase.items[idx];
+    const oldName = item.name;
+    const oldCategory = item.category;
 
     const { canonicalName } = await resolveItem(
       String(name).trim(),
@@ -404,6 +399,48 @@ const updatePurchaseItem = async (
       item.unit,
       req.user?.userId,
     );
+
+    const wasVerified = purchase.status === "verified";
+
+    // If already verified and name/category changed, adjust stocks dynamically
+    if (wasVerified && (oldName !== canonicalName || oldCategory !== String(category).trim())) {
+      // 1. Deduct quantity from old stock asset item
+      const oldStock = await StockModel.findOne({
+        name: oldName,
+        category: oldCategory,
+        unit: item.unit,
+        site: purchase.site ? purchase.site : null,
+      });
+      if (oldStock) {
+        oldStock.quantity -= item.quantity;
+        if (oldStock.quantity < 0) oldStock.quantity = 0;
+        await oldStock.save();
+      }
+
+      // 2. Add quantity to new stock asset item
+      const stockQuery = {
+        name: canonicalName,
+        category: String(category).trim(),
+        unit: item.unit,
+        site: purchase.site ? purchase.site : null,
+      };
+      let newStock = await StockModel.findOne(stockQuery);
+      if (!newStock) {
+        newStock = new StockModel({
+          ...stockQuery,
+          quantity: 0,
+          averagePrice: 0,
+        });
+      }
+      newStock.averagePrice = computeWeightedAveragePrice(
+        newStock.quantity,
+        newStock.averagePrice || 0,
+        item.quantity,
+        item.price,
+      );
+      newStock.quantity += item.quantity;
+      await newStock.save();
+    }
 
     item.name = canonicalName;
     item.category = String(category).trim();
@@ -415,7 +452,7 @@ const updatePurchaseItem = async (
       action: "update",
       resource: "purchase",
       resourceId: purchase._id,
-      details: `Edited item #${idx} on unverified purchase (name/category)`,
+      details: `Edited item #${idx} on ${wasVerified ? "verified" : "unverified"} purchase (name/category)`,
     });
 
     res.status(HttpStatus.OK).json({

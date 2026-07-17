@@ -1795,10 +1795,9 @@ const SiteDetail: React.FC = () => {
                                           purchase._id &&
                                         editingItem?.index === idx;
                                       const canEditItem =
-                                        purchase.status === "pending" &&
-                                        (userType === "admin" ||
-                                          purchase.addedBy?._id === user?.id ||
-                                          purchase.addedBy === user?.id);
+                                        userType === "admin" ||
+                                        purchase.addedBy?._id === user?.id ||
+                                        purchase.addedBy === user?.id;
 
                                       return (
                                         <div
@@ -2248,20 +2247,17 @@ const SiteDetail: React.FC = () => {
                                 </>
                               ) : (
                                 <>
-                                  {exp.status === "pending" &&
-                                    (userType === "admin" ||
-                                      exp.addedBy?._id === user?.id ||
-                                      exp.addedBy === user?.id) && (
-                                      <button
-                                        onClick={() =>
-                                          startEditMiscExpense(exp)
-                                        }
-                                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
-                                        title="Edit name/category"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </button>
-                                    )}
+                                  {(userType === "admin" ||
+                                    exp.addedBy?._id === user?.id ||
+                                    exp.addedBy === user?.id) && (
+                                    <button
+                                      onClick={() => startEditMiscExpense(exp)}
+                                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
+                                      title="Edit name/category"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                  )}
                                   {userType === "admin" &&
                                     exp.status === "pending" && (
                                       <button
