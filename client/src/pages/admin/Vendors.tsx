@@ -23,8 +23,8 @@ import {
   updateVendor,
   deleteVendor,
   getPurchasesByVendor,
-  settleVendorPayments,
 } from "@/services/vendorService";
+import SettleVendorModal from "./SettleVendorModal";
 
 interface Vendor {
   id: string;
@@ -208,20 +208,18 @@ const Vendors: React.FC = () => {
     setSelectedVendorPurchases([]);
   };
 
-  const handleSettle = async (vendorId: string) => {
-    if (
-      window.confirm(
-        "Are you sure you want to settle the outstanding amount for this vendor?"
-      )
-    ) {
-      try {
-        await settleVendorPayments(vendorId);
-        const data = await getVendors();
-        setVendors(data);
-      } catch (err) {
-        setError("Failed to settle payment");
-      }
-    }
+  const [settleTarget, setSettleTarget] = useState<{
+    id: string;
+    name: string;
+    outstandingAmount: number;
+  } | null>(null);
+
+  const openSettleModal = (vendor: Vendor) => {
+    setSettleTarget({
+      id: vendor.id,
+      name: vendor.name,
+      outstandingAmount: vendor.outstandingAmount,
+    });
   };
 
   if (loading) {
@@ -511,7 +509,7 @@ const Vendors: React.FC = () => {
                     </button>
                     {vendor.outstandingAmount > 0 && (
                       <button
-                        onClick={() => handleSettle(vendor.id)}
+                        onClick={() => openSettleModal(vendor)}
                         className="px-4 py-2 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200"
                       >
                         Settle ${vendor.outstandingAmount.toFixed(2)}
@@ -620,7 +618,7 @@ const Vendors: React.FC = () => {
                           </button>
                           {vendor.outstandingAmount > 0 && (
                             <button
-                              onClick={() => handleSettle(vendor.id)}
+                              onClick={() => openSettleModal(vendor)}
                               className="text-green-600 hover:text-green-900 p-1 rounded hover:bg-green-50"
                             >
                               Settle
@@ -860,6 +858,20 @@ const Vendors: React.FC = () => {
           </div>
         )}
       </div>
+
+      {settleTarget && (
+        <SettleVendorModal
+          isOpen={!!settleTarget}
+          onClose={() => setSettleTarget(null)}
+          vendorId={settleTarget.id}
+          vendorName={settleTarget.name}
+          outstandingAmount={settleTarget.outstandingAmount}
+          onSettled={async () => {
+            const data = await getVendors();
+            setVendors(data);
+          }}
+        />
+      )}
     </div>
   );
 };

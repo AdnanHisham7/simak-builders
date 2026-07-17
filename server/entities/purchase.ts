@@ -19,6 +19,7 @@ export interface BillUpload {
 export interface Payment {
   method: "cash" | "credit";
   isPaid?: boolean;
+  paidAmount?: number;
 }
 
 export interface Purchase {

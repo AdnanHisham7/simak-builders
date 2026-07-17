@@ -119,6 +119,13 @@ export const getPurchasesByVendor = async (
   return response.data;
 };
 
-export const settleVendorPayments = async (vendorId: string): Promise<void> => {
-  await privateClient.patch(`/vendors/${vendorId}/settle`);
+export const settleVendorPayments = async (
+  vendorId: string,
+  data: { amount: number; notes?: string },
+): Promise<{ settledAmount: number; remainingOutstanding: number }> => {
+  const response = await privateClient.patch(`/vendors/${vendorId}/settle`, {
+    amount: data.amount,
+    notes: data.notes || "",
+  });
+  return response.data;
 };

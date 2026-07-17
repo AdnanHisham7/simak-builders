@@ -37,7 +37,12 @@ const getVendors = async (req: Request, res: Response, next: NextFunction) => {
                   },
                 },
                 as: "unpaidPurchase",
-                in: "$$unpaidPurchase.totalAmount",
+                in: {
+                  $subtract: [
+                    "$$unpaidPurchase.totalAmount",
+                    { $ifNull: ["$$unpaidPurchase.payment.paidAmount", 0] },
+                  ],
+                },
               },
             },
           },
@@ -156,6 +161,7 @@ const settleVendorPayments = async (
 ) => {
   try {
     const { id } = req.params;
+    const { amount, notes } = req.body;
     const user = req.user;
     if (user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
@@ -164,52 +170,105 @@ const settleVendorPayments = async (
     if (!vendor) {
       throw new ApiError("Vendor not found", HttpStatus.NOT_FOUND);
     }
+
+    const settleAmount = Number(amount);
+    if (isNaN(settleAmount) || settleAmount <= 0) {
+      throw new ApiError(
+        "Settlement amount must be greater than zero",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const unpaidPurchases = await PurchaseModel.find({
       vendor: id,
       "payment.method": "credit",
       "payment.isPaid": false,
-    });
+    }).sort({ date: 1 });
+
     const totalOutstanding = unpaidPurchases.reduce(
-      (sum, purchase) => sum + purchase.totalAmount,
+      (sum, purchase) =>
+        sum + (purchase.totalAmount - (purchase.payment.paidAmount || 0)),
       0
     );
+
     if (totalOutstanding <= 0) {
       res
         .status(HttpStatus.OK)
         .json({ message: "No outstanding amount to settle" });
       return;
     }
+
+    if (settleAmount > totalOutstanding) {
+      throw new ApiError(
+        `Settlement amount (${settleAmount}) exceeds the outstanding balance (${totalOutstanding}) for this vendor`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     const company = await CompanyModel.findOne();
     if (!company) {
       throw new ApiError("Company not found", HttpStatus.INTERNAL_SERVER_ERROR);
     }
-    if (company.totalAmount < totalOutstanding) {
+    if (company.totalAmount < settleAmount) {
       throw new ApiError("Insufficient company funds", HttpStatus.BAD_REQUEST);
     }
-    company.totalAmount -= totalOutstanding;
+
+    // Allocate the settlement across the vendor's unpaid credit purchases,
+    // oldest first, until the settled amount is exhausted. A purchase is
+    // only marked isPaid once its paidAmount reaches its totalAmount, so
+    // partial payments correctly leave the remainder outstanding for the
+    // next settlement.
+    let remaining = settleAmount;
+    for (const purchase of unpaidPurchases) {
+      if (remaining <= 0) break;
+      
+      const alreadyPaid = purchase.payment.paidAmount || 0;
+      const due = purchase.totalAmount - alreadyPaid;
+      if (due <= 0) continue;
+      
+      const applied = Math.min(due, remaining);
+      const newPaidAmount = alreadyPaid + applied;
+      const isPaid = newPaidAmount >= purchase.totalAmount;
+      
+      remaining -= applied;
+
+      // Use updateOne to safely bypass validation on unrelated fields like 'items'
+      await PurchaseModel.updateOne(
+        { _id: purchase._id },
+        {
+          $set: {
+            "payment.paidAmount": newPaidAmount,
+            "payment.isPaid": isPaid
+          }
+        }
+      );
+    }
+
+    company.totalAmount -= settleAmount;
     const transaction = {
       date: new Date(),
-      amount: -totalOutstanding,
+      amount: -settleAmount,
       type: "expenditure",
-      description: `Payment to vendor ${vendor.name} for outstanding credit purchases`,
+      description: `Payment to vendor ${vendor.name}${
+        notes ? ` — ${String(notes).trim()}` : ""
+      }`,
       vendor: id,
     };
     company.transactions.push(transaction);
     await company.save();
-    await PurchaseModel.updateMany(
-      { vendor: id, "payment.method": "credit", "payment.isPaid": false },
-      { "payment.isPaid": true }
-    );
+
     await ActivityLogModel.create({
       user: req.user?.userId,
       action: "settle_payment",
       resource: "vendor",
       resourceId: id,
-      details: `Settled outstanding amount of ${totalOutstanding} for vendor ${vendor.name}`,
+      details: `Settled ${settleAmount} of ${totalOutstanding} outstanding for vendor ${vendor.name}`,
     });
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Outstanding amount settled successfully" });
+    res.status(HttpStatus.OK).json({
+      message: "Payment settled successfully",
+      settledAmount: settleAmount,
+      remainingOutstanding: totalOutstanding - settleAmount,
+    });
   } catch (error) {
     next(error);
   }

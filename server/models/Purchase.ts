@@ -35,6 +35,7 @@ const PurchaseSchema = new Schema<Purchase>(
     payment: {
       method: { type: String, enum: ["cash", "credit"], required: true },
       isPaid: { type: Boolean, default: false },
+      paidAmount: { type: Number, default: 0 },
     },
     sourceOfFunds: {
       type: String,
