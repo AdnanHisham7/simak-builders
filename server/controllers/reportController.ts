@@ -26,6 +26,93 @@ interface ExpenseSummary {
   netTotal: number;
 }
 
+const roundToCents = (value: number): number => Math.round(value * 100) / 100;
+
+// Removes transaction pairs that fully cancel each other out, such as a
+// deleted purchase/expense's original transaction and the accounting
+// reversal transaction generated when it was deleted. Both share the same
+// relatedId (the id of the underlying purchase/expense/payment document)
+// and their amounts sum to zero, so together they carry no net effect and
+// must not surface in reports.
+const excludeCancelledTransactionPairs = (txns: any[]): any[] => {
+  const groupsByRelatedId = new Map<string, any[]>();
+
+  for (const t of txns) {
+    if (!t.relatedId) continue;
+    const key = t.relatedId.toString();
+    const group = groupsByRelatedId.get(key);
+    if (group) {
+      group.push(t);
+    } else {
+      groupsByRelatedId.set(key, [t]);
+    }
+  }
+
+  const cancelledTransactions = new Set<any>();
+  for (const group of groupsByRelatedId.values()) {
+    if (group.length < 2) continue;
+    const netAmount = group.reduce(
+      (sum, t) => sum + (Number(t.amount) || 0),
+      0,
+    );
+    if (roundToCents(netAmount) === 0) {
+      for (const t of group) cancelledTransactions.add(t);
+    }
+  }
+
+  if (cancelledTransactions.size === 0) return txns;
+  return txns.filter((t) => !cancelledTransactions.has(t));
+};
+
+// Merges itemized rows that refer to the same item/description into a
+// single row, summing quantity (where present) and amount, so the same
+// named item — purchase item, miscellaneous expense, attendance entry, or
+// any other itemized row — appearing multiple times within the report
+// period appears only once. Quantity is only combined when at least one of
+// the merged rows actually has a quantity; rows with no quantity at all
+// (e.g. miscellaneous/attendance rows) stay blank after merging.
+const mergeDuplicateItems = (rows: any[]): any[] => {
+  const mergedByItemName = new Map<string, any>();
+  const result: any[] = [];
+
+  for (const row of rows) {
+    const key = String(row.itemOfWork || "").trim().toLowerCase();
+
+    if (!key) {
+      result.push(row);
+      continue;
+    }
+
+    const existing = mergedByItemName.get(key);
+    if (existing) {
+      const rowHasQuantity = row.quantity !== null && row.quantity !== undefined;
+      const existingHasQuantity = existing.quantity !== null && existing.quantity !== undefined;
+
+      if (rowHasQuantity || existingHasQuantity) {
+        existing.quantity =
+          Number(existingHasQuantity ? existing.quantity : 0) +
+          Number(rowHasQuantity ? row.quantity : 0);
+      }
+
+      existing.amount = roundToCents(Number(existing.amount || 0) + Number(row.amount || 0));
+
+      if (new Date(row.date).getTime() < new Date(existing.date).getTime()) {
+        existing.date = row.date;
+      }
+    } else {
+      const mergedRow = {
+        ...row,
+        quantity: row.quantity !== null && row.quantity !== undefined ? Number(row.quantity) : null,
+        amount: roundToCents(Number(row.amount || 0)),
+      };
+      mergedByItemName.set(key, mergedRow);
+      result.push(mergedRow);
+    }
+  }
+
+  return result;
+};
+
 const buildExpenseSummary = async (
   site: any,
   supervisionPercentageParam?: string,
@@ -37,6 +124,17 @@ const buildExpenseSummary = async (
     typeof t.toObject === "function" ? t.toObject() : t,
   );
 
+  // Deleted records (e.g. a deleted purchase/expense) leave behind their
+  // original transaction plus a reversal transaction with the opposite
+  // amount, linked by the same relatedId. The reversal is timestamped at
+  // deletion time, which can fall outside the report's date range even
+  // when the original transaction falls inside it (a purchase added in
+  // January and deleted in March, reported on for January alone). Both
+  // must be matched and excluded together against the FULL transaction
+  // history, before any date-range filtering, so a deleted purchase never
+  // leaks back into a report for a period before it was deleted.
+  transactions = excludeCancelledTransactionPairs(transactions);
+
   if (startDate) {
     const start = new Date(startDate as string);
     transactions = transactions.filter((t) => new Date(t.date) >= start);
@@ -46,11 +144,6 @@ const buildExpenseSummary = async (
     end.setHours(23, 59, 59, 999);
     transactions = transactions.filter((t) => new Date(t.date) <= end);
   }
-
-  // Calculate totals based on ALL matching transactions before display filters are applied
-  const totalAmount = Number(
-    transactions.reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2),
-  );
 
   let supervisionPercentage = Number(site.supervisionPercentage) || 0;
   if (
@@ -67,11 +160,6 @@ const buildExpenseSummary = async (
     }
     supervisionPercentage = parsed;
   }
-
-  const supervisionAmount = Number(
-    ((totalAmount * supervisionPercentage) / 100).toFixed(2),
-  );
-  const netTotal = Number((totalAmount + supervisionAmount).toFixed(2));
 
   // Build itemized transaction array for rows
   const expandedTransactions: any[] = [];
@@ -90,7 +178,9 @@ const buildExpenseSummary = async (
 
   for (const t of transactions) {
     if (t.type === "attendance") {
-      // Client Report hides attendance rows completely (but amount remains reflected in total summary)
+      // Client Report hides attendance rows completely, and since totals
+      // are now derived from the shown rows, hidden attendance amounts no
+      // longer contribute to the Client Report's total either.
       if (isClientReport) {
         continue;
       }
@@ -136,13 +226,30 @@ const buildExpenseSummary = async (
     }
   }
 
+  // Combine duplicate item rows (same item/description name, any type)
+  // into a single summed row so the same item appearing multiple times
+  // within the report period shows only once.
+  const mergedTransactions = mergeDuplicateItems(expandedTransactions);
+
   // Final chronological sort for itemized lines
-  expandedTransactions.sort(
+  mergedTransactions.sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
+  // Total Amount is the sum of exactly the rows shown in the report above,
+  // after cancelled-pair exclusion, client-report attendance hiding, and
+  // duplicate-item merging. Supervision and Net Total are derived from
+  // this same shown total, so every figure in the report is internally
+  // consistent with what the person is actually looking at.
+  const totalAmount = roundToCents(
+    mergedTransactions.reduce((sum, t) => sum + (Number(t.amount) || 0), 0),
+  );
+
+  const supervisionAmount = roundToCents((totalAmount * supervisionPercentage) / 100);
+  const netTotal = roundToCents(totalAmount + supervisionAmount);
+
   return {
-    transactions: expandedTransactions,
+    transactions: mergedTransactions,
     totalAmount,
     supervisionPercentage,
     supervisionAmount,

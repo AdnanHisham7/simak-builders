@@ -1850,27 +1850,9 @@ const ExpenseReport = ({ sites }) => {
 
       doc.setFont("Roboto-Regular");
 
-      // Aggregate duplicate purchase items for PDF export
-      const processedTransactions = [];
-      const purchaseGroups = {};
-
-      reportData.transactions.forEach((t) => {
-        const isPurchase = t.type !== "miscellaneous";
-        const hasQuantity = t.quantity !== null && t.quantity !== undefined;
-
-        if (isPurchase && hasQuantity) {
-          const name = t.itemOfWork || t.description || t.type;
-          if (purchaseGroups[name]) {
-            purchaseGroups[name].quantity += Number(t.quantity || 0);
-            purchaseGroups[name].amount += Number(t.amount || 0);
-          } else {
-            purchaseGroups[name] = { ...t, quantity: Number(t.quantity || 0), amount: Number(t.amount || 0) };
-            processedTransactions.push(purchaseGroups[name]);
-          }
-        } else {
-          processedTransactions.push({ ...t });
-        }
-      });
+      // Duplicate purchase items and cancelled (deleted + reversal) transactions
+      // are already merged out server-side, so the export uses the report rows as-is.
+      const processedTransactions = reportData.transactions;
 
       const bodyRows = processedTransactions.map((t, idx) => [
         String(idx + 1),
@@ -1934,29 +1916,9 @@ const ExpenseReport = ({ sites }) => {
     }
   };
 
-  // Aggregate duplicate purchase items for live UI viewport table render
-  const uiTransactions = [];
-  const uiPurchaseGroups = {};
-
-  if (reportData && reportData.transactions) {
-    reportData.transactions.forEach((t) => {
-      const isPurchase = t.type !== "miscellaneous";
-      const hasQuantity = t.quantity !== null && t.quantity !== undefined;
-
-      if (isPurchase && hasQuantity) {
-        const name = t.itemOfWork || t.description || t.type;
-        if (uiPurchaseGroups[name]) {
-          uiPurchaseGroups[name].quantity += Number(t.quantity || 0);
-          uiPurchaseGroups[name].amount += Number(t.amount || 0);
-        } else {
-          uiPurchaseGroups[name] = { ...t, quantity: Number(t.quantity || 0), amount: Number(t.amount || 0) };
-          uiTransactions.push(uiPurchaseGroups[name]);
-        }
-      } else {
-        uiTransactions.push({ ...t });
-      }
-    });
-  }
+  // Duplicate purchase items and cancelled (deleted + reversal) transactions
+  // are already merged out server-side, so the UI renders the report rows as-is.
+  const uiTransactions = reportData && reportData.transactions ? reportData.transactions : [];
 
   return (
     <div
@@ -2297,27 +2259,9 @@ const ClientSiteReport = ({ sites }) => {
 
       doc.setFont("Roboto-Regular");
 
-      // Aggregate duplicate purchase items for PDF export
-      const processedTransactions = [];
-      const purchaseGroups = {};
-
-      reportData.transactions.forEach((t) => {
-        const isPurchase = t.type !== "miscellaneous";
-        const hasQuantity = t.quantity !== null && t.quantity !== undefined;
-
-        if (isPurchase && hasQuantity) {
-          const name = t.itemOfWork || t.description || t.type;
-          if (purchaseGroups[name]) {
-            purchaseGroups[name].quantity += Number(t.quantity || 0);
-            purchaseGroups[name].amount += Number(t.amount || 0);
-          } else {
-            purchaseGroups[name] = { ...t, quantity: Number(t.quantity || 0), amount: Number(t.amount || 0) };
-            processedTransactions.push(purchaseGroups[name]);
-          }
-        } else {
-          processedTransactions.push({ ...t });
-        }
-      });
+      // Duplicate purchase items and cancelled (deleted + reversal) transactions
+      // are already merged out server-side, so the export uses the report rows as-is.
+      const processedTransactions = reportData.transactions;
 
       const bodyRows = processedTransactions.map((t, idx) => [
         String(idx + 1),
@@ -2389,29 +2333,9 @@ const ClientSiteReport = ({ sites }) => {
     }
   };
 
-  // Aggregate duplicate purchase items for live UI viewport table render
-  const uiTransactions = [];
-  const uiPurchaseGroups = {};
-
-  if (reportData && reportData.transactions) {
-    reportData.transactions.forEach((t) => {
-      const isPurchase = t.type !== "miscellaneous";
-      const hasQuantity = t.quantity !== null && t.quantity !== undefined;
-
-      if (isPurchase && hasQuantity) {
-        const name = t.itemOfWork || t.description || t.type;
-        if (uiPurchaseGroups[name]) {
-          uiPurchaseGroups[name].quantity += Number(t.quantity || 0);
-          uiPurchaseGroups[name].amount += Number(t.amount || 0);
-        } else {
-          uiPurchaseGroups[name] = { ...t, quantity: Number(t.quantity || 0), amount: Number(t.amount || 0) };
-          uiTransactions.push(uiPurchaseGroups[name]);
-        }
-      } else {
-        uiTransactions.push({ ...t });
-      }
-    });
-  }
+  // Duplicate purchase items and cancelled (deleted + reversal) transactions
+  // are already merged out server-side, so the UI renders the report rows as-is.
+  const uiTransactions = reportData && reportData.transactions ? reportData.transactions : [];
 
   return (
     <div
