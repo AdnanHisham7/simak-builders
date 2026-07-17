@@ -307,6 +307,59 @@ const deleteMiscellaneousExpense = async (
   }
 };
 
+const updateMiscellaneousExpense = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { expenseId } = req.params;
+    const { name, category } = req.body;
+
+    const expense: any = await MiscellaneousExpenseModel.findById(expenseId);
+    if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+
+    if (expense.status === "verified") {
+      throw new ApiError(
+        "Cannot edit a verified miscellaneous expense",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (
+      req.user?.role !== "admin" &&
+      req.user?.userId !== expense.addedBy.toString()
+    ) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    if (!name || !String(name).trim())
+      throw new ApiError("Name is required", HttpStatus.BAD_REQUEST);
+    if (!["machinery", "rental", "service", "material"].includes(category)) {
+      throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
+    }
+
+    expense.name = String(name).trim();
+    expense.category = category;
+    await expense.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "miscellaneousExpense",
+      resourceId: expense._id,
+      details: `Edited unverified miscellaneous expense (name/category)`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Miscellaneous expense updated",
+      expense,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getMiscellaneousExpensesBySite = async (
   req: Request,
   res: Response,
@@ -333,5 +386,6 @@ export default {
   addMiscellaneousExpense,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
+  updateMiscellaneousExpense,
   deleteMiscellaneousExpense,
 };

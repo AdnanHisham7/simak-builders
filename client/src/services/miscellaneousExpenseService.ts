@@ -31,6 +31,17 @@ export const verifyMiscellaneousExpense = async (expenseId: string) => {
   return response.data;
 };
 
+export const updateMiscellaneousExpense = async (
+  expenseId: string,
+  data: { name: string; category: string },
+) => {
+  const response = await privateClient.patch(
+    `/miscellaneous-expenses/${expenseId}`,
+    data,
+  );
+  return response.data;
+};
+
 export const deleteMiscellaneousExpense = async (expenseId: string) => {
   await privateClient.delete(`/miscellaneous-expenses/${expenseId}`);
 };

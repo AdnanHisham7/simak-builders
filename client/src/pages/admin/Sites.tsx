@@ -521,8 +521,9 @@ const Sites: React.FC = () => {
                           return (
                             <tr
                               key={site.id}
-                              className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group"
+                              className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group cursor-pointer"
                               style={{ animationDelay: `${index * 50}ms` }}
+                              onClick={() => handleViewSite(site.id)}
                             >
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center">
@@ -613,16 +614,17 @@ const Sites: React.FC = () => {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td
+                                className="px-6 py-4 whitespace-nowrap"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <div className="flex space-x-2">
-                                  {actions.includes("view") && (
                                     <button
                                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
                                       onClick={() => handleViewSite(site.id)}
                                     >
                                       <Eye size={16} />
                                     </button>
-                                  )}
                                   {actions.includes("edit") && (
                                     <button
                                       className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"

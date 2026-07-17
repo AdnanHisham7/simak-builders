@@ -72,6 +72,7 @@ import {
   deleteMiscellaneousExpense,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
+  updateMiscellaneousExpense,
 } from "@/services/miscellaneousExpenseService";
 import TransactionsModal from "./TransactionsModal";
 import { toast } from "sonner";
@@ -342,6 +343,55 @@ const SiteDetail: React.FC = () => {
       console.error(err);
     }
   };
+
+  const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
+  const [editMiscName, setEditMiscName] = useState("");
+  const [editMiscCategory, setEditMiscCategory] = useState("");
+  const [savingMiscEdit, setSavingMiscEdit] = useState(false);
+
+  const startEditMiscExpense = (exp: any) => {
+    setEditingMiscId(exp._id);
+    setEditMiscName(exp.name);
+    setEditMiscCategory(exp.category);
+  };
+
+  const cancelEditMiscExpense = () => {
+    setEditingMiscId(null);
+    setEditMiscName("");
+    setEditMiscCategory("");
+  };
+
+  const saveEditMiscExpense = async () => {
+    if (!editingMiscId) return;
+    if (!editMiscName.trim() || !editMiscCategory) {
+      toast.error("Name and category are required");
+      return;
+    }
+    setSavingMiscEdit(true);
+    try {
+      await updateMiscellaneousExpense(editingMiscId, {
+        name: editMiscName.trim(),
+        category: editMiscCategory,
+      });
+      toast.success("Expense updated successfully");
+      cancelEditMiscExpense();
+      fetchMiscellaneousExpenses();
+    } catch (err: any) {
+      console.error(err);
+      toast.error(
+        err.response?.data?.message || "Failed to update expense.",
+      );
+    } finally {
+      setSavingMiscEdit(false);
+    }
+  };
+
+  const MISC_EXPENSE_CATEGORIES = [
+    "machinery",
+    "rental",
+    "service",
+    "material",
+  ];
 
   const handleLogUsage = async (usageData) => {
     try {
@@ -1240,8 +1290,7 @@ const SiteDetail: React.FC = () => {
               </div>
             </div>
 
-            {site.architects.length > 0 && (
-              <div
+            <div
                 className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
                   isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
                 }`}
@@ -1264,44 +1313,51 @@ const SiteDetail: React.FC = () => {
                       </button>
                     )}
                   </div>
-                  <div className="grid gap-3">
-                    {site.architects.map((architect, index) => (
-                      <div
-                        key={architect.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                            <span className="text-purple-600 font-semibold text-sm">
-                              {architect.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
+                  {site.architects.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-4 text-center">
+                      No architect assigned to this site yet.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {site.architects.map((architect, index) => (
+                        <div
+                          key={architect.id}
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                              <span className="text-purple-600 font-semibold text-sm">
+                                {architect.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                              </span>
+                            </div>
+                            <span className="font-medium text-gray-900">
+                              {architect.name}
                             </span>
                           </div>
-                          <span className="font-medium text-gray-900">
-                            {architect.name}
-                          </span>
+                          {userType === "admin" && (
+                            <button
+                              onClick={() =>
+                                handleRemoveTeamMember(
+                                  architect.id,
+                                  "architect",
+                                )
+                              }
+                              className="text-red-600 hover:text-red-800 p-2 rounded-lg"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        {userType === "admin" && (
-                          <button
-                            onClick={() =>
-                              handleRemoveTeamMember(architect.id, "architect")
-                            }
-                            className="text-red-600 hover:text-red-800 p-2 rounded-lg"
-                          >
-                            <UserX className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
 
-            {site.supervisors.length > 0 && (
-              <div
+            <div
                 className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
                   isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
                 }`}
@@ -1324,44 +1380,49 @@ const SiteDetail: React.FC = () => {
                       </button>
                     )}
                   </div>
-                  <div className="grid gap-3">
-                    {site.supervisors.map((supervisor, index) => (
-                      <div
-                        key={supervisor.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                            <span className="text-green-600 font-semibold text-sm">
-                              {supervisor.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")}
+                  {site.supervisors.length === 0 ? (
+                    <p className="text-sm text-gray-500 py-4 text-center">
+                      No supervisor assigned to this site yet.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3">
+                      {site.supervisors.map((supervisor, index) => (
+                        <div
+                          key={supervisor.id}
+                          className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
+                        >
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                              <span className="text-green-600 font-semibold text-sm">
+                                {supervisor.name
+                                  .split(" ")
+                                  .map((n) => n[0])
+                                  .join("")}
+                              </span>
+                            </div>
+                            <span className="font-medium text-gray-900">
+                              {supervisor.name}
                             </span>
                           </div>
-                          <span className="font-medium text-gray-900">
-                            {supervisor.name}
-                          </span>
+                          {userType === "admin" && (
+                            <button
+                              onClick={() =>
+                                handleRemoveTeamMember(
+                                  supervisor.id,
+                                  "supervisor",
+                                )
+                              }
+                              className="text-red-600 hover:text-red-800 p-2 rounded-lg"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                        {userType === "admin" && (
-                          <button
-                            onClick={() =>
-                              handleRemoveTeamMember(
-                                supervisor.id,
-                                "supervisor",
-                              )
-                            }
-                            className="text-red-600 hover:text-red-800 p-2 rounded-lg"
-                          >
-                            <UserX className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
           </div>
         )}
 
@@ -2032,10 +2093,37 @@ const SiteDetail: React.FC = () => {
                             {new Date(exp.date).toLocaleDateString()}
                           </td>
                           <td className="px-4 py-4 capitalize">
-                            {exp.category}
+                            {editingMiscId === exp._id ? (
+                              <select
+                                value={editMiscCategory}
+                                onChange={(e) =>
+                                  setEditMiscCategory(e.target.value)
+                                }
+                                className="px-2 py-1 border border-gray-200 rounded-md text-sm capitalize focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              >
+                                {MISC_EXPENSE_CATEGORIES.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              exp.category
+                            )}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
-                            {exp.name}
+                            {editingMiscId === exp._id ? (
+                              <input
+                                type="text"
+                                value={editMiscName}
+                                onChange={(e) =>
+                                  setEditMiscName(e.target.value)
+                                }
+                                className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                              />
+                            ) : (
+                              exp.name
+                            )}
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             ₹{exp.amount.toLocaleString()}
@@ -2059,33 +2147,68 @@ const SiteDetail: React.FC = () => {
                           </td>
                           <td className="px-4 py-4 whitespace-nowrap">
                             <div className="flex items-center space-x-2">
-                              {userType === "admin" &&
-                                exp.status === "pending" && (
+                              {editingMiscId === exp._id ? (
+                                <>
                                   <button
-                                    onClick={() =>
-                                      handleVerifyMiscellaneous(exp._id)
-                                    }
-                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                                    onClick={saveEditMiscExpense}
+                                    disabled={savingMiscEdit}
+                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
                                   >
-                                    Verify
+                                    {savingMiscEdit ? "Saving..." : "Save"}
                                   </button>
-                                )}
-                              {/* Delete button – admin can delete any, non-admin only pending (own) */}
-                              {(userType === "admin" ||
-                                exp.status === "pending") && (
-                                <button
-                                  onClick={() =>
-                                    handleDeleteMiscellaneous(exp._id)
-                                  }
-                                  className="text-red-600 hover:text-red-800 p-1"
-                                  title={
-                                    exp.status === "verified"
-                                      ? "Delete verified expense (reversal)"
-                                      : "Delete unverified expense"
-                                  }
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
+                                  <button
+                                    onClick={cancelEditMiscExpense}
+                                    disabled={savingMiscEdit}
+                                    className="px-3 py-1 border border-gray-200 text-gray-600 rounded-md hover:bg-gray-50 text-sm disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {exp.status === "pending" &&
+                                    (userType === "admin" ||
+                                      exp.addedBy?._id === user?.id ||
+                                      exp.addedBy === user?.id) && (
+                                      <button
+                                        onClick={() =>
+                                          startEditMiscExpense(exp)
+                                        }
+                                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
+                                        title="Edit name/category"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  {userType === "admin" &&
+                                    exp.status === "pending" && (
+                                      <button
+                                        onClick={() =>
+                                          handleVerifyMiscellaneous(exp._id)
+                                        }
+                                        className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                                      >
+                                        Verify
+                                      </button>
+                                    )}
+                                  {/* Delete button – admin can delete any, non-admin only pending (own) */}
+                                  {(userType === "admin" ||
+                                    exp.status === "pending") && (
+                                    <button
+                                      onClick={() =>
+                                        handleDeleteMiscellaneous(exp._id)
+                                      }
+                                      className="text-red-600 hover:text-red-800 p-1"
+                                      title={
+                                        exp.status === "verified"
+                                          ? "Delete verified expense (reversal)"
+                                          : "Delete unverified expense"
+                                      }
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                             {/* Notes with purchase link tooltip */}
