@@ -7,6 +7,13 @@ const router = express.Router();
 
 router.post("/initialize", companyController.initializeComapny);
 router.get("/dashboard", companyController.getDashboardData);
+router.get("/summary", authMiddleware, companyController.getCompanySummary);
+router.post("/add-funds", authMiddleware, companyController.addCompanyFunds);
+router.get(
+  "/amount-to-be-received",
+  authMiddleware,
+  companyController.getAmountToBeReceived,
+);
 router.get("/activity-logs", companyController.getAllActivityLogs);
 router.post(
   "/bulk-import",

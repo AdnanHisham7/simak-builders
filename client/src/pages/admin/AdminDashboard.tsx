@@ -50,10 +50,13 @@ import {
   getAllActivityLogs,
   getDashboardData,
 } from "@/services/dashboardService";
+import { getCompanySummary, getAmountToBeReceived } from "@/services/companyService";
 import { privateClient } from "@/api";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import BulkImportForm from "./BulkImportForm";
+import CompanyFundsModal from "./CompanyFundsModal";
+import AmountToBeReceivedModal from "./AmountToBeReceivedModal";
 
 // Define interfaces for data structures
 interface DashboardData {
@@ -222,6 +225,15 @@ const AdminDashboard = () => {
   const [clients, setClients] = useState<[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [companyTotalAmount, setCompanyTotalAmount] = useState<number | null>(
+    null,
+  );
+  const [amountToBeReceived, setAmountToBeReceived] = useState<number | null>(
+    null,
+  );
+  const [isCompanyFundsModalOpen, setIsCompanyFundsModalOpen] =
+    useState(false);
+  const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -254,6 +266,17 @@ const AdminDashboard = () => {
         setStocks(stocksRes.data);
         setContractors(contractorsRes.data);
         setClients(clientsRes.data);
+
+        try {
+          const [companySummary, receivableSummary] = await Promise.all([
+            getCompanySummary(),
+            getAmountToBeReceived(),
+          ]);
+          setCompanyTotalAmount(companySummary.totalAmount);
+          setAmountToBeReceived(receivableSummary.total);
+        } catch (financialErr) {
+          console.error("Failed to load company financial summary", financialErr);
+        }
       } catch (err) {
         setError("Failed to fetch dashboard data");
         setLoading(false);
@@ -483,6 +506,71 @@ const AdminDashboard = () => {
           <>
             {activeSection === "overview" && (
               <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div
+                    onClick={() => setIsCompanyFundsModalOpen(true)}
+                    className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 transform hover:scale-105 hover:shadow-3xl overflow-hidden cursor-pointer group"
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
+                    <div className="p-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 mb-1">
+                          Company Funds
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          ₹
+                          {companyTotalAmount !== null
+                            ? formatNumber(companyTotalAmount)
+                            : "—"}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Click to view transaction history
+                        </p>
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="p-3 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 bg-opacity-10">
+                          <DollarSign size={24} className="text-emerald-600" />
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsCompanyFundsModalOpen(true);
+                          }}
+                          className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-lg text-xs font-medium flex items-center gap-1 hover:shadow-lg"
+                        >
+                          <Plus size={14} /> Add
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setIsReceivableModalOpen(true)}
+                    className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-300 transform hover:scale-105 hover:shadow-3xl overflow-hidden cursor-pointer group"
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+                    <div className="p-6 flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 mb-1">
+                          Amount To Be Received
+                        </p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          ₹
+                          {amountToBeReceived !== null
+                            ? formatNumber(Math.round(amountToBeReceived))
+                            : "—"}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Click for a per-site breakdown
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 bg-opacity-10">
+                        <AlertCircle size={24} className="text-amber-600" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <StatCard
                     icon={Users}
@@ -928,6 +1016,16 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div> */}
+
+      <CompanyFundsModal
+        isOpen={isCompanyFundsModalOpen}
+        onClose={() => setIsCompanyFundsModalOpen(false)}
+        onUpdated={(newTotal) => setCompanyTotalAmount(newTotal)}
+      />
+      <AmountToBeReceivedModal
+        isOpen={isReceivableModalOpen}
+        onClose={() => setIsReceivableModalOpen(false)}
+      />
     </div>
   );
 };

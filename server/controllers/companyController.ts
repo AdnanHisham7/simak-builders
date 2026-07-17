@@ -639,9 +639,128 @@ const createSiteWithBulkData = async (
   }
 };
 
+const getCompanySummary = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const company = await CompanyModel.findOne().populate(
+      "transactions.site",
+      "name",
+    );
+    if (!company) {
+      throw new ApiError("Company not found", HttpStatus.NOT_FOUND);
+    }
+    const sortedTransactions = [...company.transactions].sort(
+      (a: any, b: any) =>
+        new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    res.status(HttpStatus.OK).json({
+      totalAmount: company.totalAmount,
+      transactions: sortedTransactions,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const addCompanyFunds = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+    const { amount, notes } = req.body;
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ApiError(
+        "Amount must be greater than zero",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const company = await CompanyModel.findOne();
+    if (!company) {
+      throw new ApiError("Company not found", HttpStatus.NOT_FOUND);
+    }
+
+    company.totalAmount += numAmount;
+    company.transactions.push({
+      date: new Date(),
+      amount: numAmount,
+      type: "incoming",
+      description: notes ? String(notes).trim() : "Funds added to company",
+    });
+    await company.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "create",
+      resource: "company",
+      resourceId: company._id,
+      details: `Added ${numAmount} to company funds`,
+    });
+
+    res.status(HttpStatus.CREATED).json({
+      message: "Funds added successfully",
+      totalAmount: company.totalAmount,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getAmountToBeReceived = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const sites = await SiteModel.find()
+      .select("name expenses client")
+      .populate("client", "name");
+
+    const receivedBySite = await ClientTransactionModel.aggregate([
+      { $match: { status: "verified", site: { $ne: null } } }, // 1. Prevents null sites from aggregating
+      { $group: { _id: "$site", totalReceived: { $sum: "$amount" } } },
+    ]);
+    
+    const receivedMap = new Map(
+      receivedBySite.map((r: any) => [r._id?.toString(), r.totalReceived]), // 2. Optional chaining fallback
+    );
+
+    const bySite = sites.map((site: any) => {
+      // 3. Optional chaining fallback just in case a site lacks an _id
+      const amountReceived = receivedMap.get(site._id?.toString()) || 0; 
+      const difference = (site.expenses || 0) - amountReceived;
+      return {
+        siteId: site._id,
+        siteName: site.name,
+        clientName: site.client?.name || "Unassigned",
+        expenses: site.expenses || 0,
+        amountReceived,
+        amountToBeReceived: difference,
+      };
+    });
+
+    const total = bySite.reduce((sum, s) => sum + s.amountToBeReceived, 0);
+
+    res.status(HttpStatus.OK).json({ total, bySite });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   initializeComapny,
   getDashboardData,
   getAllActivityLogs,
   createSiteWithBulkData,
+  getCompanySummary,
+  addCompanyFunds,
+  getAmountToBeReceived,
 };
