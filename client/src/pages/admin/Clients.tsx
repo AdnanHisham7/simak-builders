@@ -4,6 +4,8 @@ import {
   regeneratePassword,
   toggleUserStatus,
   updateClient,
+  deleteClient,
+  restoreClient,
   assignSitesToClients,
   getUsersByRole, // Assuming this can be reused or replaced with assignSitesToClient
 } from "@/services/userService";
@@ -24,6 +26,7 @@ import {
   Copy,
   Settings,
   Trash2,
+  RotateCcw,
 } from "lucide-react";
 import AddClientModal from "./AddClientModal";
 import EditClientModal from "./EditClientModal";
@@ -36,6 +39,7 @@ interface Client {
   name: string;
   email: string;
   isBlocked: boolean;
+  isDeleted?: boolean;
   assignedSites: Site[]; // Updated from assignedSite to assignedSites
 }
 
@@ -56,6 +60,11 @@ const Clients: React.FC = () => {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isAnimating, setIsAnimating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
+  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>(
+    {},
+  );
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -79,7 +88,7 @@ const Clients: React.FC = () => {
       setLoading(true);
       try {
         const [clientsData, sitesData] = await Promise.all([
-          getUsersByRole("client"),
+          getUsersByRole("client", showDeleted),
           getSites(),
         ]);
         setClients(clientsData);
@@ -92,7 +101,7 @@ const Clients: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [showDeleted]);
 
   const filteredClients = clients.filter((client) => {
     const matchesSearch =
@@ -103,8 +112,8 @@ const Clients: React.FC = () => {
       client.assignedSites?.some((site) => site.id === selectedSiteId); // Updated for array
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !client.isBlocked) ||
-      (selectedStatus === "blocked" && client.isBlocked);
+      (selectedStatus === "active" && !client.isBlocked && !client.isDeleted) ||
+      (selectedStatus === "blocked" && client.isBlocked && !client.isDeleted);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
@@ -116,8 +125,13 @@ const Clients: React.FC = () => {
     indexOfLastItem
   );
 
-  const activeClients = clients.filter((c) => !c.isBlocked).length;
-  const blockedClients = clients.filter((c) => c.isBlocked).length;
+  const activeClients = clients.filter(
+    (c) => !c.isBlocked && !c.isDeleted,
+  ).length;
+  const blockedClients = clients.filter(
+    (c) => c.isBlocked && !c.isDeleted,
+  ).length;
+  const deletedClientsCount = clients.filter((c) => c.isDeleted).length;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
@@ -197,6 +211,86 @@ const Clients: React.FC = () => {
             ...prev,
             isLoading: false,
             isOpen: false,
+          }));
+        }
+      },
+    });
+  };
+
+  const handleDeleteClient = (client: Client) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Client",
+      message: `Are you sure you want to delete ${client.name}? This is a soft delete — the client's historical data (sites, transactions, reports) is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({
+          ...prev,
+          isOpen: false,
+          isLoading: true,
+        }));
+        setIsDeleting((prev) => ({ ...prev, [client.id]: true }));
+        try {
+          await deleteClient(client.id);
+          if (showDeleted) {
+            setClients((prev) =>
+              prev.map((c) =>
+                c.id === client.id ? { ...c, isDeleted: true } : c,
+              ),
+            );
+          } else {
+            setClients((prev) => prev.filter((c) => c.id !== client.id));
+          }
+          toast.success(`${client.name} has been deleted.`);
+        } catch (err: any) {
+          console.error("Error deleting client:", err);
+          toast.error(
+            err?.response?.data?.message || "Failed to delete client.",
+          );
+        } finally {
+          setIsDeleting((prev) => ({ ...prev, [client.id]: false }));
+          setConfirmModal((prev) => ({
+            ...prev,
+            isOpen: false,
+            isLoading: false,
+          }));
+        }
+      },
+    });
+  };
+
+  const handleRestoreClient = (client: Client) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Restore Client",
+      message: `Restore ${client.name}? They will reappear in active client lists and be able to log in again.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({
+          ...prev,
+          isOpen: false,
+          isLoading: true,
+        }));
+        setIsRestoring((prev) => ({ ...prev, [client.id]: true }));
+        try {
+          await restoreClient(client.id);
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === client.id ? { ...c, isDeleted: false } : c,
+            ),
+          );
+          toast.success(`${client.name} has been restored.`);
+        } catch (err: any) {
+          console.error("Error restoring client:", err);
+          toast.error(
+            err?.response?.data?.message || "Failed to restore client.",
+          );
+        } finally {
+          setIsRestoring((prev) => ({ ...prev, [client.id]: false }));
+          setConfirmModal((prev) => ({
+            ...prev,
+            isOpen: false,
+            isLoading: false,
           }));
         }
       },
@@ -432,6 +526,21 @@ const Clients: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
+                <label className="flex items-center gap-2 px-4 py-3 border-2 border-gray-200 rounded-xl bg-gray-50 cursor-pointer select-none whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => {
+                      setShowDeleted(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Show deleted clients
+                    {deletedClientsCount > 0 ? ` (${deletedClientsCount})` : ""}
+                  </span>
+                </label>
               </div>
             </div>
           </div>
@@ -571,12 +680,18 @@ const Clients: React.FC = () => {
                     <td className="px-6 py-4">
                       <div
                         className={`inline-flex items-center px-3 py-1 text-xs font-semibold rounded-full border-2 ${
-                          client.isBlocked
+                          client.isDeleted
+                            ? "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-600 border-gray-300"
+                            : client.isBlocked
                             ? "bg-gradient-to-r from-red-50 to-red-100 text-red-800 border-red-200"
                             : "bg-gradient-to-r from-green-50 to-green-100 text-green-800 border-green-200"
                         }`}
                       >
-                        {client.isBlocked ? (
+                        {client.isDeleted ? (
+                          <>
+                            <Trash2 size={12} className="mr-1" /> Deleted
+                          </>
+                        ) : client.isBlocked ? (
                           <>
                             <ShieldX size={12} className="mr-1" /> Blocked
                           </>
@@ -589,51 +704,89 @@ const Clients: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => handleToggleStatus(client)}
-                          disabled={isToggling[client.id]}
-                          className={`group relative px-3 py-2 text-xs rounded-lg font-medium transition-all duration-200 ${
-                            client.isBlocked
-                              ? "bg-gradient-to-r from-green-100 to-green-200 text-green-700 hover:from-green-200 hover:to-green-300 border border-green-300"
-                              : "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 border border-gray-300"
-                          } ${
-                            isToggling[client.id]
-                              ? "opacity-50 cursor-not-allowed"
-                              : "hover:scale-105"
-                          }`}
-                        >
-                          {isToggling[client.id] ? (
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          ) : client.isBlocked ? (
-                            "Unblock"
-                          ) : (
-                            "Block"
-                          )}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedClient(client);
-                            setIsEditModalOpen(true);
-                          }}
-                          className="group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-yellow-100 to-amber-200 text-yellow-700 hover:from-yellow-200 hover:to-amber-300 border border-yellow-300 hover:scale-105 transition-all duration-200"
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleRegeneratePassword(client)}
-                          disabled={isRegenerating[client.id]}
-                          className={`group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 hover:from-purple-200 hover:to-purple-300 border border-purple-300 transition-all duration-200 ${
-                            isRegenerating[client.id]
-                              ? "opacity-50 cursor-not-allowed"
-                              : "hover:scale-105"
-                          }`}
-                        >
-                          {isRegenerating[client.id] ? (
-                            <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <RefreshCw size={14} />
-                          )}
-                        </button>
+                        {client.isDeleted ? (
+                          <button
+                            onClick={() => handleRestoreClient(client)}
+                            disabled={isRestoring[client.id]}
+                            className={`group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-green-100 to-green-200 text-green-700 hover:from-green-200 hover:to-green-300 border border-green-300 transition-all duration-200 ${
+                              isRestoring[client.id]
+                                ? "opacity-50 cursor-not-allowed"
+                                : "hover:scale-105"
+                            }`}
+                          >
+                            {isRestoring[client.id] ? (
+                              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <RotateCcw size={14} /> Restore
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => handleToggleStatus(client)}
+                              disabled={isToggling[client.id]}
+                              className={`group relative px-3 py-2 text-xs rounded-lg font-medium transition-all duration-200 ${
+                                client.isBlocked
+                                  ? "bg-gradient-to-r from-green-100 to-green-200 text-green-700 hover:from-green-200 hover:to-green-300 border border-green-300"
+                                  : "bg-gradient-to-r from-gray-100 to-gray-200 text-gray-700 hover:from-gray-200 hover:to-gray-300 border border-gray-300"
+                              } ${
+                                isToggling[client.id]
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:scale-105"
+                              }`}
+                            >
+                              {isToggling[client.id] ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : client.isBlocked ? (
+                                "Unblock"
+                              ) : (
+                                "Block"
+                              )}
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedClient(client);
+                                setIsEditModalOpen(true);
+                              }}
+                              className="group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-yellow-100 to-amber-200 text-yellow-700 hover:from-yellow-200 hover:to-amber-300 border border-yellow-300 hover:scale-105 transition-all duration-200"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleRegeneratePassword(client)}
+                              disabled={isRegenerating[client.id]}
+                              className={`group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-purple-100 to-purple-200 text-purple-700 hover:from-purple-200 hover:to-purple-300 border border-purple-300 transition-all duration-200 ${
+                                isRegenerating[client.id]
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:scale-105"
+                              }`}
+                            >
+                              {isRegenerating[client.id] ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <RefreshCw size={14} />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClient(client)}
+                              disabled={isDeleting[client.id]}
+                              className={`group relative px-3 py-2 text-xs rounded-lg font-medium bg-gradient-to-r from-red-100 to-red-200 text-red-700 hover:from-red-200 hover:to-red-300 border border-red-300 transition-all duration-200 ${
+                                isDeleting[client.id]
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : "hover:scale-105"
+                              }`}
+                              title="Delete client"
+                            >
+                              {isDeleting[client.id] ? (
+                                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

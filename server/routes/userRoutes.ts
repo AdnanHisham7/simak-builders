@@ -32,6 +32,8 @@ router.post('/clients', authMiddleware, userController.createClient);
 router.put('/clients/:id', authMiddleware, userController.updateClient);
 router.get("/clients/unassigned", authMiddleware, userController.getUnassignedClients);
 router.put('/clients/:id/assign-sites', authMiddleware, userController.assignSitesToClients);
+router.delete('/clients/:id', authMiddleware, userController.deleteClient);
+router.patch('/clients/:id/restore', authMiddleware, userController.restoreClient);
 
 // Salaries
 router.get('/salaries', authMiddleware, userController.listSalaries);

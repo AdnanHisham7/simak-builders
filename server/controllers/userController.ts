@@ -52,13 +52,19 @@ const getUsersByRole = async (
     }
     // console.log("allUsers",allUsers)
     // Fetch users with the specified role, selecting only necessary fields
-    const users = await UserModel.find({ role }).populate("assignedSites");
+    const includeDeleted = req.query.includeDeleted === "true";
+    const query: Record<string, any> = { role };
+    if (!includeDeleted) {
+      query.isDeleted = { $ne: true };
+    }
+    const users = await UserModel.find(query).populate("assignedSites");
     // Map to the expected response format
     const response = users.map((user) => ({
       id: user._id.toString(),
       name: user.name,
       email: user.email,
       isBlocked: user.isBlocked,
+      isDeleted: user.isDeleted || false,
       role: user.role,
       assignedSites:
         user.assignedSites?.map((site: any) => ({
@@ -469,6 +475,12 @@ const updateClient = async (
     if (!user || user.role !== "client") {
       throw new ApiError("Client not found", HttpStatus.NOT_FOUND);
     }
+    if (user.isDeleted) {
+      throw new ApiError(
+        "This client has been deleted. Restore it first to make changes.",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     if (email && email !== user.email) {
       const emailExists = await UserModel.findOne({ email });
@@ -487,6 +499,72 @@ const updateClient = async (
       message: "Client updated successfully",
       updatedFields: Object.keys(req.body).filter((key) => key !== "id"),
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteClient = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const user = await UserModel.findById(id);
+    if (!user || user.role !== "client") {
+      throw new ApiError("Client not found", HttpStatus.NOT_FOUND);
+    }
+    if (user.isDeleted) {
+      throw new ApiError("Client is already deleted", HttpStatus.BAD_REQUEST);
+    }
+
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "delete",
+      resource: "client",
+      resourceId: user._id,
+      details: `Soft-deleted client: ${user.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({ message: "Client deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const restoreClient = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const user = await UserModel.findById(id);
+    if (!user || user.role !== "client") {
+      throw new ApiError("Client not found", HttpStatus.NOT_FOUND);
+    }
+    if (!user.isDeleted) {
+      throw new ApiError("Client is not deleted", HttpStatus.BAD_REQUEST);
+    }
+
+    user.isDeleted = false;
+    user.deletedAt = undefined;
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "client",
+      resourceId: user._id,
+      details: `Restored client: ${user.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({ message: "Client restored successfully" });
   } catch (error) {
     next(error);
   }
@@ -975,6 +1053,8 @@ export default {
   updateArchitect,
   createClient,
   updateClient,
+  deleteClient,
+  restoreClient,
   assignSitesToArchitect,
   assignSalary,
   verifySalaryAssignment,

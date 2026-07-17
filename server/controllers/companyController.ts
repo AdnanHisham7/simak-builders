@@ -51,6 +51,7 @@ const getDashboardData = async (
     const clientsCount = await UserModel.countDocuments({
       role: "client",
       isBlocked: false,
+      isDeleted: { $ne: true },
     });
     const architectsCount = await UserModel.countDocuments({
       role: "architect",

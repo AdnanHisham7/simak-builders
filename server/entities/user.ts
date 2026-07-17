@@ -26,6 +26,8 @@ export interface User {
   isKYCCompleted?: boolean; // For Client
   kycDocuments?: { type: string; url: string }[]; // For Client
   isBlocked?: boolean; // For SiteManager, Supervisor
+  isDeleted?: boolean;
+  deletedAt?: Date;
   isAdmin?: boolean;
   enabledFunctionalities?: string[]; // For SiteManager, Supervisor customization
   googleId?: string;

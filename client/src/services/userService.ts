@@ -9,6 +9,7 @@ export interface User {
   assignedSites: Site[];
   password?: string;
   isBlocked: boolean;
+  isDeleted?: boolean;
   siteExpensesBalance: number;
 }
 
@@ -37,8 +38,13 @@ export interface Client {
   assignedSite: Site | null;
 }
 
-export const getUsersByRole = async (role: string): Promise<User[]> => {
-  const response = await privateClient.get("/users", { params: { role } });
+export const getUsersByRole = async (
+  role: string,
+  includeDeleted = false,
+): Promise<User[]> => {
+  const response = await privateClient.get("/users", {
+    params: { role, ...(includeDeleted ? { includeDeleted: "true" } : {}) },
+  });
   return response.data.map((user: any) => ({
     id: user.id, // Corrected from user.id to user._id
     name: user.name,
@@ -50,6 +56,7 @@ export const getUsersByRole = async (role: string): Promise<User[]> => {
         name: site.name,
       })) || [],
     isBlocked: user.isBlocked,
+    isDeleted: user.isDeleted || false,
     password: user.password,
     siteExpensesBalance: user.siteExpensesBalance,
   }));
@@ -284,6 +291,14 @@ export const updateClient = async (
     isBlocked: response.data.isBlocked,
     assignedSite: null, // Site assignment handled elsewhere
   };
+};
+
+export const deleteClient = async (userId: string): Promise<void> => {
+  await privateClient.delete(`/users/clients/${userId}`);
+};
+
+export const restoreClient = async (userId: string): Promise<void> => {
+  await privateClient.patch(`/users/clients/${userId}/restore`);
 };
 
 export const assignSiteExpenses = async (

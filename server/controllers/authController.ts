@@ -106,6 +106,13 @@ const login = async (req: Request, res: Response, next: NextFunction) => {
       throw new ApiError("User is blocked", HttpStatus.CONFLICT);
     }
 
+    if (user.isDeleted) {
+      throw new ApiError(
+        "This account has been deactivated. Please contact your administrator.",
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const accessToken = authService.generateAccessToken(
       user._id.toString(),
       user.role
@@ -365,6 +372,13 @@ const refreshToken = async (
 
     if (user.isBlocked) {
       throw new ApiError("User is blocked", HttpStatus.CONFLICT);
+    }
+
+    if (user.isDeleted) {
+      throw new ApiError(
+        "This account has been deactivated. Please contact your administrator.",
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     const accessToken = authService.generateAccessToken(userId, role);

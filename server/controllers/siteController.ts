@@ -82,7 +82,11 @@ const createSite = async (req: Request, res: Response, next: NextFunction) => {
       usersToUpdate.push(...architectIds);
     }
     if (clientId) {
-      const client = await UserModel.findOne({ _id: clientId, role: "client" });
+      const client = await UserModel.findOne({
+        _id: clientId,
+        role: "client",
+        isDeleted: { $ne: true },
+      });
       if (!client) throw new ApiError("Invalid client", HttpStatus.BAD_REQUEST);
       usersToUpdate.push(clientId);
     }

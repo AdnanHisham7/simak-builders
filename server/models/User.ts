@@ -23,6 +23,8 @@ const UserSchema = new Schema<User>(
       },
     ],
     isBlocked: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
     isAdmin: { type: Boolean, default: false },
     enabledFunctionalities: [{ type: String }],
     salaryAssignments: [
