@@ -10,6 +10,7 @@ router.get("/:siteId", siteController.getSiteDetails);
 router.post("/", authMiddleware, siteController.createSite);
 router.put("/", siteController.updateSite);
 router.put("/:siteId/phases/:phaseId/status", authMiddleware, siteController.updatePhaseStatus);
+router.patch("/:siteId/supervision-percentage", authMiddleware, siteController.updateSupervisionPercentage);
 router.post("/:siteId/documents", authMiddleware, upload.single("file"), siteController.uploadDocument);
 router.patch("/phases/:phaseId/approve", authMiddleware, siteController.approvePhase);
 router.patch("/phases/:phaseId/reject", authMiddleware, siteController.rejectPhase);

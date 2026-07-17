@@ -4,9 +4,85 @@ import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { StockModel } from "@models/Stock";
 import { VendorModel } from "@models/Vendor";
 import { UserModel } from "@models/User";
+import { SiteModel } from "@models/Site";
+import { ClientTransactionModel } from "./clientController";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
 import mongoose, { Types } from "mongoose";
+
+interface ExpenseSummary {
+  transactions: Array<{
+    _id: unknown;
+    date: Date;
+    amount: number;
+    type: string;
+    description?: string;
+    relatedId?: unknown;
+    user?: { _id: unknown; name?: string; email?: string; role?: string };
+  }>;
+  totalAmount: number;
+  supervisionPercentage: number;
+  supervisionAmount: number;
+  netTotal: number;
+}
+
+const buildExpenseSummary = (
+  site: any,
+  supervisionPercentageParam?: string,
+  startDate?: string,
+  endDate?: string,
+): ExpenseSummary => {
+  let transactions: any[] = (site.transactions || []).map((t: any) =>
+    typeof t.toObject === "function" ? t.toObject() : t,
+  );
+
+  if (startDate) {
+    const start = new Date(startDate as string);
+    transactions = transactions.filter((t) => new Date(t.date) >= start);
+  }
+  if (endDate) {
+    const end = new Date(endDate as string);
+    end.setHours(23, 59, 59, 999);
+    transactions = transactions.filter((t) => new Date(t.date) <= end);
+  }
+
+  transactions.sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
+  const totalAmount = Number(
+    transactions.reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2),
+  );
+
+  let supervisionPercentage = Number(site.supervisionPercentage) || 0;
+  if (
+    supervisionPercentageParam !== undefined &&
+    supervisionPercentageParam !== null &&
+    supervisionPercentageParam !== ""
+  ) {
+    const parsed = parseFloat(supervisionPercentageParam);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+      throw new ApiError(
+        "Supervision percentage must be a number between 0 and 100",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    supervisionPercentage = parsed;
+  }
+
+  const supervisionAmount = Number(
+    ((totalAmount * supervisionPercentage) / 100).toFixed(2),
+  );
+  const netTotal = Number((totalAmount + supervisionAmount).toFixed(2));
+
+  return {
+    transactions,
+    totalAmount,
+    supervisionPercentage,
+    supervisionAmount,
+    netTotal,
+  };
+};
 
 // Stock Transactions Report
 export const getStockTransactions = async (
@@ -202,10 +278,128 @@ export const getVendorPurchases = async (
   }
 };
 
+// Expense Report (per-site itemized expenses with supervision calculation)
+export const getExpenseReport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { siteId, supervisionPercentage, startDate, endDate } =
+      req.query as {
+        siteId?: string;
+        supervisionPercentage?: string;
+        startDate?: string;
+        endDate?: string;
+      };
+
+    if (!siteId || !Types.ObjectId.isValid(siteId)) {
+      throw new ApiError("Valid site ID is required", HttpStatus.BAD_REQUEST);
+    }
+
+    const site: any = await SiteModel.findById(siteId)
+      .populate("transactions.user", "name email role")
+      .populate("client", "name email");
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const summary = buildExpenseSummary(
+      site,
+      supervisionPercentage,
+      startDate,
+      endDate,
+    );
+
+    res.status(HttpStatus.OK).json({
+      site: {
+        id: site._id,
+        name: site.name,
+        address: site.address,
+        city: site.city,
+        state: site.state,
+        zip: site.zip,
+        status: site.status,
+        client: site.client
+          ? { id: site.client._id, name: site.client.name }
+          : null,
+      },
+      ...summary,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Client Report (per-site expense statement with supervision, amount received, and balance)
+export const getClientReport = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { siteId, supervisionPercentage, startDate, endDate } =
+      req.query as {
+        siteId?: string;
+        supervisionPercentage?: string;
+        startDate?: string;
+        endDate?: string;
+      };
+
+    if (!siteId || !Types.ObjectId.isValid(siteId)) {
+      throw new ApiError("Valid site ID is required", HttpStatus.BAD_REQUEST);
+    }
+
+    const site: any = await SiteModel.findById(siteId)
+      .populate("transactions.user", "name email role")
+      .populate("client", "name email");
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const summary = buildExpenseSummary(
+      site,
+      supervisionPercentage,
+      startDate,
+      endDate,
+    );
+
+    const varavAggregate = await ClientTransactionModel.aggregate([
+      {
+        $match: {
+          site: new Types.ObjectId(siteId),
+          status: "verified",
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const varav = Number((varavAggregate[0]?.total || 0).toFixed(2));
+    const balance = Number((summary.netTotal - varav).toFixed(2));
+
+    res.status(HttpStatus.OK).json({
+      site: {
+        id: site._id,
+        name: site.name,
+        address: site.address,
+        city: site.city,
+        state: site.state,
+        zip: site.zip,
+        status: site.status,
+        client: site.client
+          ? { id: site.client._id, name: site.client.name }
+          : null,
+      },
+      ...summary,
+      varav,
+      balance,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getStockTransactions,
   getStockInventory,
   getVendorsReport,
   getVendorPurchases,
   getClientsReport,
+  getExpenseReport,
+  getClientReport,
 };

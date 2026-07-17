@@ -18,6 +18,7 @@ export interface Site {
   }>;
   budget: number;
   expenses: number;
+  supervisionPercentage: number;
   transactions: Array<{
     date: Date;
     amount: number;

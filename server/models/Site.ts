@@ -28,6 +28,7 @@ const SiteSchema = new Schema<Site>(
     ],
     budget: { type: Number, required: true },
     expenses: { type: Number, default: 0 },
+    supervisionPercentage: { type: Number, default: 0, min: 0, max: 100 },
     transactions: [
       {
         date: { type: Date, default: Date.now },

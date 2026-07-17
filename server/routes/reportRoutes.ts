@@ -14,5 +14,7 @@ router.get("/vendors", reportController.getVendorsReport);
 router.get("/clients", reportController.getClientsReport);
 // router.get("/clients-aggregate", reportController.getClientsAggregate);
 router.get("/vendor-purchases", reportController.getVendorPurchases);
+router.get("/expense-report", authMiddleware, reportController.getExpenseReport);
+router.get("/client-report", authMiddleware, reportController.getClientReport);
 
 export default router;

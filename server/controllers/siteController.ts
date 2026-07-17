@@ -182,6 +182,60 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
+const updateSupervisionPercentage = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { siteId } = req.params;
+    const { supervisionPercentage } = req.body;
+
+    if (req.user?.role !== "admin") {
+      throw new ApiError(
+        "Only admins can update the supervision percentage",
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    const parsed = Number(supervisionPercentage);
+    if (
+      supervisionPercentage === undefined ||
+      supervisionPercentage === null ||
+      supervisionPercentage === "" ||
+      Number.isNaN(parsed) ||
+      parsed < 0 ||
+      parsed > 100
+    ) {
+      throw new ApiError(
+        "Supervision percentage must be a number between 0 and 100",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    site.supervisionPercentage = parsed;
+    await site.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "site",
+      resourceId: site._id,
+      details: `Updated supervision percentage to ${parsed}% for site: ${site.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Supervision percentage updated",
+      supervisionPercentage: site.supervisionPercentage,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getSiteDetails = async (
   req: Request,
   res: Response,
@@ -737,6 +791,7 @@ const markSiteAsCompleted = async (
 export default {
   createSite,
   updateSite,
+  updateSupervisionPercentage,
   getSiteDetails,
   getSites,
   updatePhaseStatus,

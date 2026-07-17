@@ -10,6 +10,7 @@ import {
   updatePhaseStatus,
   uploadDocument,
   markSiteAsCompleted,
+  updateSupervisionPercentage,
 } from "@/services/siteService";
 import SelectUserModal from "./SelectUserModal";
 import AddPurchaseModal from "./AddPurchaseModal";
@@ -42,6 +43,8 @@ import {
   FileX,
   Trash2,
   Edit2,
+  Percent,
+  Check,
 } from "lucide-react";
 import RequestTransferModal from "./RequestTransferModal";
 import {
@@ -153,6 +156,9 @@ const SiteDetail: React.FC = () => {
   >(null);
   const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [isEditingSupervision, setIsEditingSupervision] = useState(false);
+  const [supervisionInput, setSupervisionInput] = useState("0");
+  const [isSavingSupervision, setIsSavingSupervision] = useState(false);
 
   // Client payments related state
   const [isClientPaymentsModalOpen, setIsClientPaymentsModalOpen] =
@@ -220,6 +226,36 @@ const SiteDetail: React.FC = () => {
       setClientPayments(data);
     } catch (err) {
       console.error("Error fetching client payments:", err);
+    }
+  };
+
+  const handleStartEditingSupervision = () => {
+    setSupervisionInput(String(site?.supervisionPercentage ?? 0));
+    setIsEditingSupervision(true);
+  };
+
+  const handleCancelEditingSupervision = () => {
+    setIsEditingSupervision(false);
+    setSupervisionInput(String(site?.supervisionPercentage ?? 0));
+  };
+
+  const handleSaveSupervision = async () => {
+    const parsed = Number(supervisionInput);
+    if (Number.isNaN(parsed) || parsed < 0 || parsed > 100) {
+      toast.error("Supervision percentage must be between 0 and 100");
+      return;
+    }
+    setIsSavingSupervision(true);
+    try {
+      await updateSupervisionPercentage(siteId!, parsed);
+      setSite((prev) => (prev ? { ...prev, supervisionPercentage: parsed } : prev));
+      setIsEditingSupervision(false);
+      toast.success("Supervision percentage updated");
+    } catch (err) {
+      console.error("Error updating supervision percentage:", err);
+      toast.error("Failed to update supervision percentage");
+    } finally {
+      setIsSavingSupervision(false);
     }
   };
 
@@ -944,6 +980,52 @@ const SiteDetail: React.FC = () => {
                 }`}
               >
                 {site.status}
+              </div>
+              <div className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-50 text-indigo-800 border border-indigo-100">
+                <Percent className="w-3.5 h-3.5" />
+                {isEditingSupervision ? (
+                  <>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      autoFocus
+                      value={supervisionInput}
+                      onChange={(e) => setSupervisionInput(e.target.value)}
+                      className="w-16 px-1 py-0.5 rounded border border-indigo-200 text-indigo-900 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <button
+                      onClick={handleSaveSupervision}
+                      disabled={isSavingSupervision}
+                      className="text-green-600 hover:text-green-800 disabled:opacity-50"
+                      title="Save"
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={handleCancelEditingSupervision}
+                      disabled={isSavingSupervision}
+                      className="text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                      title="Cancel"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span>Supervision: {site.supervisionPercentage ?? 0}%</span>
+                    {userType === "admin" && (
+                      <button
+                        onClick={handleStartEditingSupervision}
+                        className="text-indigo-600 hover:text-indigo-900"
+                        title="Edit supervision percentage"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
               </div>
               {userType === "admin" && site.status === "InProgress" && (
                 <button

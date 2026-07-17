@@ -14,6 +14,8 @@ import {
   Settings,
   Eye,
   FileDown,
+  Receipt,
+  Wallet,
 } from "lucide-react";
 import { privateClient } from "@/api";
 import { jsPDF } from "jspdf";
@@ -65,6 +67,20 @@ const Reports = () => {
       description: "Comprehensive client analytics and insights",
       icon: FileText,
       color: "from-pink-500 to-rose-600",
+    },
+    {
+      id: "expenseReport",
+      title: "Expense Report",
+      description: "Itemized site expenses with supervision calculation",
+      icon: Receipt,
+      color: "from-orange-500 to-amber-600",
+    },
+    {
+      id: "clientReport",
+      title: "Client Report",
+      description: "Client statement with supervision, amount received and balance",
+      icon: Wallet,
+      color: "from-teal-500 to-cyan-600",
     },
   ];
 
@@ -204,6 +220,12 @@ const Reports = () => {
             )}
             {selectedReport === "vendors" && <VendorsReport sites={sites} />}
             {selectedReport === "clients" && <ClientsReportDetailed />}
+            {selectedReport === "expenseReport" && (
+              <ExpenseReport sites={sites} />
+            )}
+            {selectedReport === "clientReport" && (
+              <ClientSiteReport sites={sites} />
+            )}
           </div>
         </div>
       </div>
@@ -221,6 +243,18 @@ const StockTransactionsReport = ({ sites }) => {
     endDate: "",
     type: "",
   });
+
+  const getItemDescription = (item) => {
+    if (item.type === "miscellaneous") {
+      const label = item.name || "Miscellaneous expense";
+      return item.notes ? `${label} - ${item.notes}` : label;
+    }
+    return (
+      item.description ||
+      item.items?.map((i) => i.name).join(", ") ||
+      "-"
+    );
+  };
 
   useEffect(() => {
     setIsAnimating(true);
@@ -352,20 +386,21 @@ const StockTransactionsReport = ({ sites }) => {
             "Added By",
           ],
         ],
-        body: data.map((item) => [
-          new Date(item.date || item.createdAt).toLocaleDateString("en-IN"),
-          item.type.charAt(0).toUpperCase() +
-            item.type.slice(1).toLowerCase() || "-",
-          (
-            item.description ||
-            item.items?.map((i) => i.name).join(", ") ||
-            "-"
-          ).substring(0, 50) + (item.description?.length > 50 ? "..." : ""),
-          item.items?.reduce((sum, i) => sum + i.quantity, 0) || "-",
-          `₹${(item.amount || item.totalAmount || 0).toLocaleString("en-IN")}`,
-          item.vendor?.name || "-",
-          item.addedBy?.name || "-",
-        ]),
+        body: data.map((item) => {
+          const fullDescription = getItemDescription(item);
+          return [
+            new Date(item.date || item.createdAt).toLocaleDateString("en-IN"),
+            item.type.charAt(0).toUpperCase() +
+              item.type.slice(1).toLowerCase() || "-",
+            fullDescription.length > 50
+              ? `${fullDescription.substring(0, 50)}...`
+              : fullDescription,
+            item.items?.reduce((sum, i) => sum + i.quantity, 0) || "-",
+            `₹${(item.amount || item.totalAmount || 0).toLocaleString("en-IN")}`,
+            item.vendor?.name || "-",
+            item.addedBy?.name || "-",
+          ];
+        }),
         ...tableOptions,
         styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
       });
@@ -600,9 +635,7 @@ const StockTransactionsReport = ({ sites }) => {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-                      {item.description ||
-                        item.items?.map((i) => i.name).join(", ") ||
-                        "-"}
+                      {getItemDescription(item)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
                       {item.items?.reduce((sum, i) => sum + i.quantity, 0) ||
@@ -1810,6 +1843,904 @@ const ClientsReportDetailed = () => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+const ExpenseReport = ({ sites }) => {
+  const [filters, setFilters] = useState({
+    siteId: "",
+    supervisionPercentage: "",
+    startDate: "",
+    endDate: "",
+  });
+  const [supervisionTouched, setSupervisionTouched] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    setIsAnimating(true);
+  }, []);
+
+  const handleSiteChange = (siteId) => {
+    const selectedSite = sites.find((s) => s._id === siteId);
+    setSupervisionTouched(false);
+    setFilters((prev) => ({
+      ...prev,
+      siteId,
+      supervisionPercentage: String(selectedSite?.supervisionPercentage ?? 0),
+    }));
+    setReportData(null);
+  };
+
+  const handleSupervisionChange = (value) => {
+    setSupervisionTouched(true);
+    setFilters((prev) => ({ ...prev, supervisionPercentage: value }));
+  };
+
+  const fetchData = async () => {
+    if (!filters.siteId) {
+      setReportData(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await privateClient.get("/reports/expense-report", {
+        params: {
+          siteId: filters.siteId,
+          supervisionPercentage:
+            filters.supervisionPercentage !== ""
+              ? filters.supervisionPercentage
+              : undefined,
+          startDate: filters.startDate || undefined,
+          endDate: filters.endDate || undefined,
+        },
+      });
+      setReportData(res.data);
+    } catch (err) {
+      console.error("Error fetching expense report:", err);
+      setReportData(null);
+    }
+    setLoading(false);
+  };
+
+  const loadImage = (url) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const exportToPDF = async () => {
+    if (!reportData) return;
+    try {
+      const templateDataURL = await loadImage(templateImage);
+      const doc = new jsPDF();
+
+      doc.addImage(
+        templateDataURL,
+        "PNG",
+        0,
+        0,
+        doc.internal.pageSize.width,
+        doc.internal.pageSize.height
+      );
+
+      const originalAddPage = doc.addPage;
+      doc.addPage = function () {
+        const page = originalAddPage.apply(this, arguments);
+        doc.addImage(
+          templateDataURL,
+          "PNG",
+          0,
+          0,
+          doc.internal.pageSize.width,
+          doc.internal.pageSize.height
+        );
+        return page;
+      };
+
+      let yOffset = 50;
+      doc.setFontSize(18);
+      doc.text(`Expense Report - ${reportData.site.name}`, 14, yOffset);
+      yOffset += 8;
+
+      doc.setFontSize(10);
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}`,
+        14,
+        yOffset
+      );
+      yOffset += 5;
+      doc.text(
+        `Address: ${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
+        14,
+        yOffset
+      );
+      yOffset += 5;
+      if (filters.startDate && filters.endDate) {
+        doc.text(
+          `Period: ${filters.startDate} to ${filters.endDate}`,
+          14,
+          yOffset
+        );
+        yOffset += 5;
+      }
+
+      doc.setLineWidth(0.1);
+      doc.line(14, yOffset, 196, yOffset);
+      yOffset += 8;
+
+      doc.setFont("Roboto-Regular");
+
+      const bodyRows = reportData.transactions.map((t, idx) => [
+        String(idx + 1),
+        new Date(t.date).toLocaleDateString("en-IN"),
+        t.description || t.type,
+        `Rs. ${t.amount.toLocaleString("en-IN")}`,
+      ]);
+      const itemRowCount = bodyRows.length;
+
+      const summaryRows = [
+        ["", "", "TOTAL", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
+        [
+          "",
+          "",
+          `SUPERVISION (${reportData.supervisionPercentage}%)`,
+          `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
+        ],
+        [
+          "",
+          "",
+          "NET TOTAL (With Supervision)",
+          `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
+        ],
+      ];
+
+      autoTable(doc, {
+        startY: yOffset,
+        margin: { top: 40, bottom: 35, left: 14, right: 14 },
+        head: [["Sl.No", "Date", "Item of Work", "Amount (INR)"]],
+        body: [...bodyRows, ...summaryRows],
+        styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
+        headStyles: { fillColor: [160, 61, 5], textColor: 255 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 15, halign: "center" },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 95 },
+          3: { cellWidth: 32, halign: "right" },
+        },
+        didParseCell: (data) => {
+          if (data.row.index >= itemRowCount) {
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+
+      doc.save(
+        `expense-report-${reportData.site.name}-${
+          new Date().toISOString().split("T")[0]
+        }.pdf`
+      );
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+    }
+  };
+
+  return (
+    <div
+      className={`transition-all duration-500 ${
+        isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      }`}
+    >
+      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-6 mb-6 border border-orange-100">
+        <div className="flex items-center mb-4">
+          <Filter className="w-5 h-5 text-orange-600 mr-2" />
+          <h3 className="font-semibold text-gray-800">Report Filters</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <select
+            className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+            value={filters.siteId}
+            onChange={(e) => handleSiteChange(e.target.value)}
+          >
+            <option value="">Select Site</option>
+            {sites.map((site) => (
+              <option key={site._id} value={site._id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+          <div className="relative">
+            <Receipt className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              placeholder="Supervision %"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+              value={filters.supervisionPercentage}
+              onChange={(e) => handleSupervisionChange(e.target.value)}
+            />
+          </div>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+              value={filters.startDate}
+              onChange={(e) =>
+                setFilters({ ...filters, startDate: e.target.value })
+              }
+            />
+          </div>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
+              value={filters.endDate}
+              onChange={(e) =>
+                setFilters({ ...filters, endDate: e.target.value })
+              }
+            />
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={fetchData}
+            className="flex items-center px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
+            disabled={loading || !filters.siteId}
+          >
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Generating..." : "Generate Report"}
+          </button>
+          <button
+            onClick={exportToPDF}
+            className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            disabled={loading || !reportData || reportData.transactions.length === 0}
+          >
+            <FileDown className="w-4 h-4 mr-2" /> Export PDF
+          </button>
+        </div>
+      </div>
+
+      {!filters.siteId ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-orange-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Select a Site
+          </h3>
+          <p className="text-gray-500">
+            Please select a site to view its expense report.
+          </p>
+        </div>
+      ) : loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <RefreshCw className="w-8 h-8 text-orange-500 animate-spin" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Loading Report
+          </h3>
+          <p className="text-gray-500">Fetching expense data...</p>
+        </div>
+      ) : !reportData ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Generate Report
+          </h3>
+          <p className="text-gray-500">
+            Click "Generate Report" to load the expense report for this site.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">
+                Total Amount (Without Supervision)
+              </p>
+              <p className="text-xl font-bold text-gray-900 mt-1">
+                ₹{reportData.totalAmount.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">
+                Supervision Amount ({reportData.supervisionPercentage}%)
+              </p>
+              <p className="text-xl font-bold text-orange-600 mt-1">
+                ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">
+                Net Total (With Supervision)
+              </p>
+              <p className="text-xl font-bold text-emerald-600 mt-1">
+                ₹{reportData.netTotal.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {reportData.transactions.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  No Expenses Found
+                </h3>
+                <p className="text-gray-500">
+                  No expenses recorded for this site in the selected period.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Sl.No
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Item of Work
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {reportData.transactions.map((t, idx) => (
+                      <tr
+                        key={t._id || idx}
+                        className="hover:bg-gray-50 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {idx + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(t.date).toLocaleDateString("en-IN")}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {t.description || t.type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                          ₹{t.amount.toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Total
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
+                        ₹{reportData.totalAmount.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Supervision ({reportData.supervisionPercentage}%)
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-orange-600 text-right">
+                        ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Net Total (With Supervision)
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-emerald-600 text-right">
+                        ₹{reportData.netTotal.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const ClientSiteReport = ({ sites }) => {
+  const [filters, setFilters] = useState({
+    siteId: "",
+    supervisionPercentage: "",
+    startDate: "",
+    endDate: "",
+  });
+  const [reportData, setReportData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    setIsAnimating(true);
+  }, []);
+
+  const handleSiteChange = (siteId) => {
+    const selectedSite = sites.find((s) => s._id === siteId);
+    setFilters((prev) => ({
+      ...prev,
+      siteId,
+      supervisionPercentage: String(selectedSite?.supervisionPercentage ?? 0),
+    }));
+    setReportData(null);
+  };
+
+  const fetchData = async () => {
+    if (!filters.siteId) {
+      setReportData(null);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await privateClient.get("/reports/client-report", {
+        params: {
+          siteId: filters.siteId,
+          supervisionPercentage:
+            filters.supervisionPercentage !== ""
+              ? filters.supervisionPercentage
+              : undefined,
+          startDate: filters.startDate || undefined,
+          endDate: filters.endDate || undefined,
+        },
+      });
+      setReportData(res.data);
+    } catch (err) {
+      console.error("Error fetching client report:", err);
+      setReportData(null);
+    }
+    setLoading(false);
+  };
+
+  const loadImage = (url) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const exportToPDF = async () => {
+    if (!reportData) return;
+    try {
+      const templateDataURL = await loadImage(templateImage);
+      const doc = new jsPDF();
+
+      doc.addImage(
+        templateDataURL,
+        "PNG",
+        0,
+        0,
+        doc.internal.pageSize.width,
+        doc.internal.pageSize.height
+      );
+
+      const originalAddPage = doc.addPage;
+      doc.addPage = function () {
+        const page = originalAddPage.apply(this, arguments);
+        doc.addImage(
+          templateDataURL,
+          "PNG",
+          0,
+          0,
+          doc.internal.pageSize.width,
+          doc.internal.pageSize.height
+        );
+        return page;
+      };
+
+      let yOffset = 50;
+      doc.setFontSize(18);
+      doc.text(`Client Report - ${reportData.site.name}`, 14, yOffset);
+      yOffset += 8;
+
+      doc.setFontSize(10);
+      doc.text(
+        `Generated on: ${new Date().toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })}`,
+        14,
+        yOffset
+      );
+      yOffset += 5;
+      doc.text(
+        `Address: ${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
+        14,
+        yOffset
+      );
+      yOffset += 5;
+      if (reportData.site.client?.name) {
+        doc.text(`Client: ${reportData.site.client.name}`, 14, yOffset);
+        yOffset += 5;
+      }
+      if (filters.startDate && filters.endDate) {
+        doc.text(
+          `Period: ${filters.startDate} to ${filters.endDate}`,
+          14,
+          yOffset
+        );
+        yOffset += 5;
+      }
+
+      doc.setLineWidth(0.1);
+      doc.line(14, yOffset, 196, yOffset);
+      yOffset += 8;
+
+      doc.setFont("Roboto-Regular");
+
+      const bodyRows = reportData.transactions.map((t, idx) => [
+        String(idx + 1),
+        new Date(t.date).toLocaleDateString("en-IN"),
+        t.description || t.type,
+        `Rs. ${t.amount.toLocaleString("en-IN")}`,
+      ]);
+      const itemRowCount = bodyRows.length;
+
+      const summaryRows = [
+        ["", "", "TOTAL", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
+        [
+          "",
+          "",
+          `SUPERVISION (${reportData.supervisionPercentage}%)`,
+          `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
+        ],
+        [
+          "",
+          "",
+          "NET TOTAL",
+          `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
+        ],
+        ["", "", "VARAV", `Rs. ${reportData.varav.toLocaleString("en-IN")}`],
+        [
+          "",
+          "",
+          "BALANCE",
+          `Rs. ${reportData.balance.toLocaleString("en-IN")}`,
+        ],
+      ];
+
+      autoTable(doc, {
+        startY: yOffset,
+        margin: { top: 40, bottom: 35, left: 14, right: 14 },
+        head: [["Sl.No", "Date", "Item of Work", "Amount (INR)"]],
+        body: [...bodyRows, ...summaryRows],
+        styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
+        headStyles: { fillColor: [160, 61, 5], textColor: 255 },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        columnStyles: {
+          0: { cellWidth: 15, halign: "center" },
+          1: { cellWidth: 30 },
+          2: { cellWidth: 95 },
+          3: { cellWidth: 32, halign: "right" },
+        },
+        didParseCell: (data) => {
+          if (data.row.index >= itemRowCount) {
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+
+      doc.save(
+        `client-report-${reportData.site.name}-${
+          new Date().toISOString().split("T")[0]
+        }.pdf`
+      );
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+    }
+  };
+
+  return (
+    <div
+      className={`transition-all duration-500 ${
+        isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+      }`}
+    >
+      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 mb-6 border border-teal-100">
+        <div className="flex items-center mb-4">
+          <Filter className="w-5 h-5 text-teal-600 mr-2" />
+          <h3 className="font-semibold text-gray-800">Report Filters</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+          <select
+            className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+            value={filters.siteId}
+            onChange={(e) => handleSiteChange(e.target.value)}
+          >
+            <option value="">Select Site</option>
+            {sites.map((site) => (
+              <option key={site._id} value={site._id}>
+                {site.name}
+              </option>
+            ))}
+          </select>
+          <div className="relative">
+            <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step="0.01"
+              placeholder="Supervision %"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+              value={filters.supervisionPercentage}
+              onChange={(e) =>
+                setFilters({ ...filters, supervisionPercentage: e.target.value })
+              }
+            />
+          </div>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+              value={filters.startDate}
+              onChange={(e) =>
+                setFilters({ ...filters, startDate: e.target.value })
+              }
+            />
+          </div>
+          <div className="relative">
+            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="date"
+              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
+              value={filters.endDate}
+              onChange={(e) =>
+                setFilters({ ...filters, endDate: e.target.value })
+              }
+            />
+          </div>
+        </div>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={fetchData}
+            className="flex items-center px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl hover:from-teal-600 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
+            disabled={loading || !filters.siteId}
+          >
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            />
+            {loading ? "Generating..." : "Generate Report"}
+          </button>
+          <button
+            onClick={exportToPDF}
+            className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+            disabled={loading || !reportData || reportData.transactions.length === 0}
+          >
+            <FileDown className="w-4 h-4 mr-2" /> Export PDF
+          </button>
+        </div>
+      </div>
+
+      {!filters.siteId ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Search className="w-8 h-8 text-teal-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Select a Site
+          </h3>
+          <p className="text-gray-500">
+            Please select a site to view its client report.
+          </p>
+        </div>
+      ) : loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <RefreshCw className="w-8 h-8 text-teal-500 animate-spin" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Loading Report
+          </h3>
+          <p className="text-gray-500">Fetching client report data...</p>
+        </div>
+      ) : !reportData ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <FileText className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">
+            Generate Report
+          </h3>
+          <p className="text-gray-500">
+            Click "Generate Report" to load the client report for this site.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">Total</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">
+                ₹{reportData.totalAmount.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">
+                Supervision ({reportData.supervisionPercentage}%)
+              </p>
+              <p className="text-xl font-bold text-amber-600 mt-1">
+                ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">Net Total</p>
+              <p className="text-xl font-bold text-gray-900 mt-1">
+                ₹{reportData.netTotal.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">Varav (Received)</p>
+              <p className="text-xl font-bold text-emerald-600 mt-1">
+                ₹{reportData.varav.toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 p-5">
+              <p className="text-sm text-gray-500">Balance</p>
+              <p
+                className={`text-xl font-bold mt-1 ${
+                  reportData.balance > 0 ? "text-red-600" : "text-emerald-600"
+                }`}
+              >
+                ₹{reportData.balance.toLocaleString("en-IN")}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            {reportData.transactions.length === 0 ? (
+              <div className="p-12 text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  No Expenses Found
+                </h3>
+                <p className="text-gray-500">
+                  No expenses recorded for this site in the selected period.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Sl.No
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Date
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Item of Work
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Amount
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {reportData.transactions.map((t, idx) => (
+                      <tr
+                        key={t._id || idx}
+                        className="hover:bg-gray-50 transition-colors duration-150"
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {idx + 1}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(t.date).toLocaleDateString("en-IN")}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {t.description || t.type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
+                          ₹{t.amount.toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-gray-50 border-t border-gray-200">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Total
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
+                        ₹{reportData.totalAmount.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Supervision ({reportData.supervisionPercentage}%)
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-amber-600 text-right">
+                        ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Net Total
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
+                        ₹{reportData.netTotal.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Varav (Received from Client)
+                      </td>
+                      <td className="px-6 py-3 text-sm font-bold text-emerald-600 text-right">
+                        ₹{reportData.varav.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-50">
+                      <td colSpan={3} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
+                        Balance
+                      </td>
+                      <td
+                        className={`px-6 py-3 text-sm font-bold text-right ${
+                          reportData.balance > 0 ? "text-red-600" : "text-emerald-600"
+                        }`}
+                      >
+                        ₹{reportData.balance.toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };

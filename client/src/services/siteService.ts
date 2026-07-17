@@ -55,6 +55,7 @@ export interface Site {
   }>;
   budget: number;
   expenses: number;
+  supervisionPercentage: number;
   transactions: Transaction[];
   documents: Document[];
   createdAt: string;
@@ -110,6 +111,7 @@ const mapSiteData = (site: any) => ({
   })),
   budget: site?.budget || 0,
   expenses: site?.expenses || 0,
+  supervisionPercentage: site?.supervisionPercentage || 0,
   documents: site?.documents?.map((doc: any) => ({
     id: doc?._id.toString(),
     name: doc?.name,
@@ -158,6 +160,7 @@ const mapSiteDetailsData = (
     phases: any[];
     budget: any;
     expenses: any;
+    supervisionPercentage: any;
     transactions: Transaction[];
     documents: any;
     createdAt: any;
@@ -251,6 +254,7 @@ const mapSiteDetailsData = (
   })),
   budget: site?.budget || 0,
   expenses: site?.expenses || 0,
+  supervisionPercentage: site?.supervisionPercentage || 0,
   createdAt: site?.createdAt,
   updatedAt: site?.updatedAt,
 });
@@ -310,4 +314,15 @@ export const markSiteAsCompleted = async (
     deleteSiteDocuments,
     deletePurchaseBills,
   });
+};
+
+export const updateSupervisionPercentage = async (
+  siteId: string,
+  supervisionPercentage: number
+) => {
+  const response = await privateClient?.patch(
+    `/sites/${siteId}/supervision-percentage`,
+    { supervisionPercentage }
+  );
+  return response.data;
 };
