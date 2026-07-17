@@ -26,12 +26,13 @@ interface ExpenseSummary {
   netTotal: number;
 }
 
-const buildExpenseSummary = (
+const buildExpenseSummary = async (
   site: any,
   supervisionPercentageParam?: string,
   startDate?: string,
   endDate?: string,
-): ExpenseSummary => {
+  isClientReport: boolean = false
+): Promise<ExpenseSummary> => {
   let transactions: any[] = (site.transactions || []).map((t: any) =>
     typeof t.toObject === "function" ? t.toObject() : t,
   );
@@ -46,10 +47,7 @@ const buildExpenseSummary = (
     transactions = transactions.filter((t) => new Date(t.date) <= end);
   }
 
-  transactions.sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-  );
-
+  // Calculate totals based on ALL matching transactions before display filters are applied
   const totalAmount = Number(
     transactions.reduce((sum, t) => sum + (t.amount || 0), 0).toFixed(2),
   );
@@ -75,8 +73,76 @@ const buildExpenseSummary = (
   );
   const netTotal = Number((totalAmount + supervisionAmount).toFixed(2));
 
+  // Build itemized transaction array for rows
+  const expandedTransactions: any[] = [];
+
+  // Batch query detailed documents for efficiency
+  const purchaseIds = transactions.filter(t => t.type === "purchase" && t.relatedId).map(t => t.relatedId);
+  const miscIds = transactions.filter(t => t.type === "miscellaneous" && t.relatedId).map(t => t.relatedId);
+
+  const [purchasesDocs, miscDocs] = await Promise.all([
+    PurchaseModel.find({ _id: { $in: purchaseIds } }).lean(),
+    MiscellaneousExpenseModel.find({ _id: { $in: miscIds } }).lean()
+  ]);
+
+  const purchaseMap = new Map(purchasesDocs.map(p => [p._id.toString(), p]));
+  const miscMap = new Map(miscDocs.map(m => [m._id.toString(), m]));
+
+  for (const t of transactions) {
+    if (t.type === "attendance") {
+      // Client Report hides attendance rows completely (but amount remains reflected in total summary)
+      if (isClientReport) {
+        continue;
+      }
+      expandedTransactions.push({
+        ...t,
+        itemOfWork: t.description || "Attendance Expense",
+        quantity: null // Make quantity blank
+      });
+    } else if (t.type === "purchase") {
+      const detailedPurchase = t.relatedId ? purchaseMap.get(t.relatedId.toString()) : null;
+      
+      if (detailedPurchase && detailedPurchase.items && detailedPurchase.items.length > 0) {
+        // Create an entry per purchase item to show the exact item name and quantity
+        detailedPurchase.items.forEach((item: any) => {
+          expandedTransactions.push({
+            ...t,
+            date: detailedPurchase.date || t.date,
+            itemOfWork: item.name,
+            quantity: item.quantity,
+            amount: item.totalAmount // Cost for this item row specifically
+          });
+        });
+      } else {
+        expandedTransactions.push({
+          ...t,
+          itemOfWork: t.description || "Purchase",
+          quantity: null
+        });
+      }
+    } else if (t.type === "miscellaneous") {
+      const detailedMisc = t.relatedId ? miscMap.get(t.relatedId.toString()) : null;
+      expandedTransactions.push({
+        ...t,
+        itemOfWork: detailedMisc ? detailedMisc.name : (t.description || "Miscellaneous Expense"),
+        quantity: null // Quantity remains blank for miscellaneous expenses
+      });
+    } else {
+      expandedTransactions.push({
+        ...t,
+        itemOfWork: t.description || t.type,
+        quantity: null
+      });
+    }
+  }
+
+  // Final chronological sort for itemized lines
+  expandedTransactions.sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
   return {
-    transactions,
+    transactions: expandedTransactions,
     totalAmount,
     supervisionPercentage,
     supervisionAmount,
@@ -302,11 +368,13 @@ export const getExpenseReport = async (
       .populate("client", "name email");
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    const summary = buildExpenseSummary(
+    // Await updated async helper
+    const summary = await buildExpenseSummary(
       site,
       supervisionPercentage,
       startDate,
       endDate,
+      false // isClientReport = false
     );
 
     res.status(HttpStatus.OK).json({
@@ -319,7 +387,7 @@ export const getExpenseReport = async (
         zip: site.zip,
         status: site.status,
         client: site.client
-          ? { id: site.client._id, name: site.client.name }
+        ? { id: site.client._id, name: site.client.name }
           : null,
       },
       ...summary,
@@ -353,11 +421,13 @@ export const getClientReport = async (
       .populate("client", "name email");
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
 
-    const summary = buildExpenseSummary(
+    // Await updated async helper with client report formatting enabled
+    const summary = await buildExpenseSummary(
       site,
       supervisionPercentage,
       startDate,
       endDate,
+      true // isClientReport = true
     );
 
     const varavAggregate = await ClientTransactionModel.aggregate([
