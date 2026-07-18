@@ -1817,7 +1817,7 @@ const ExpenseReport = ({ sites }) => {
       doc.text(`Expense Report - ${reportData.site.name}`, 14, yOffset);
       yOffset += 8;
 
-      doc.setFontSize(10);
+      doc.setFontSize(12); // increased from 10
       doc.text(
         `Generated on: ${new Date().toLocaleDateString("en-US", {
           weekday: "long",
@@ -1850,33 +1850,29 @@ const ExpenseReport = ({ sites }) => {
 
       doc.setFont("Roboto-Regular");
 
-      // Duplicate purchase items and cancelled (deleted + reversal) transactions
-      // are already merged out server-side, so the export uses the report rows as-is.
+      // Transactions (Date column removed)
       const processedTransactions = reportData.transactions;
-
       const bodyRows = processedTransactions.map((t, idx) => [
         String(idx + 1),
-        new Date(t.date).toLocaleDateString("en-IN"),
         t.itemOfWork || t.description || t.type,
         t.quantity !== null && t.quantity !== undefined ? String(t.quantity) : "-",
         `Rs. ${t?.amount?.toLocaleString("en-IN")}`,
       ]);
       const itemRowCount = bodyRows.length;
 
+      // Summary rows adjusted to 4 columns
       const summaryRows = [
-        ["", "", "", "TOTAL", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
+        ["", "TOTAL", "", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
         [
           "",
-          "",
-          "",
           `SUPERVISION (${reportData.supervisionPercentage}%)`,
+          "",
           `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
         ],
         [
           "",
-          "",
-          "",
           "NET TOTAL (With Supervision)",
+          "",
           `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
         ],
       ];
@@ -1884,17 +1880,24 @@ const ExpenseReport = ({ sites }) => {
       autoTable(doc, {
         startY: yOffset,
         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-        head: [["Sl.No", "Date", "Item of Work", "Quantity", "Amount (INR)"]],
+        head: [["Sl.No", "Item of Work", "Quantity", "Amount (INR)"]],
         body: [...bodyRows, ...summaryRows],
-        styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
-        headStyles: { fillColor: [160, 61, 5], textColor: 255 },
+        styles: { 
+          font: "Roboto-Regular", 
+          fontSize: 12,          // increased from 10
+          cellPadding: 2 
+        },
+        headStyles: { 
+          fontStyle: "bold",     // bold header, no color
+          fillColor: [255,255,255], 
+          textColor: [0,0,0] 
+        },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
           0: { cellWidth: 15, halign: "center" },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 85 },
-          3: { cellWidth: 22, halign: "center" },
-          4: { cellWidth: 35, halign: "right" },
+          1: { cellWidth: 95 },  // widened for Item of Work
+          2: { cellWidth: 22, halign: "center" },
+          3: { cellWidth: 35, halign: "right" },
         },
         didParseCell: (data) => {
           if (data.row.index >= itemRowCount) {
@@ -1903,7 +1906,6 @@ const ExpenseReport = ({ sites }) => {
         },
       });
 
-      // Post-process header/footer layers
       addHeaderFooter(doc, headerData, footerData);
 
       doc.save(
@@ -2222,7 +2224,7 @@ const ClientSiteReport = ({ sites }) => {
       doc.text(`Client Report - ${reportData.site.name}`, 14, yOffset);
       yOffset += 8;
 
-      doc.setFontSize(10);
+      doc.setFontSize(12); // increased from 10
       doc.text(
         `Generated on: ${new Date().toLocaleDateString("en-US", {
           weekday: "long",
@@ -2259,41 +2261,36 @@ const ClientSiteReport = ({ sites }) => {
 
       doc.setFont("Roboto-Regular");
 
-      // Duplicate purchase items and cancelled (deleted + reversal) transactions
-      // are already merged out server-side, so the export uses the report rows as-is.
+      // Transactions (Date column removed)
       const processedTransactions = reportData.transactions;
-
       const bodyRows = processedTransactions.map((t, idx) => [
         String(idx + 1),
-        new Date(t.date).toLocaleDateString("en-IN"),
         t.itemOfWork || t.description || t.type,
         t.quantity !== null && t.quantity !== undefined ? String(t.quantity) : "-",
         `Rs. ${t?.amount?.toLocaleString("en-IN")}`,
       ]);
       const itemRowCount = bodyRows.length;
 
+      // Summary rows adjusted to 4 columns
       const summaryRows = [
-        ["", "", "", "TOTAL", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
+        ["", "TOTAL", "", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
         [
           "",
-          "",
-          "",
           `SUPERVISION (${reportData.supervisionPercentage}%)`,
+          "",
           `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
         ],
         [
           "",
-          "",
-          "",
           "NET TOTAL",
+          "",
           `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
         ],
-        ["", "", "", "VARAV", `Rs. ${reportData.varav.toLocaleString("en-IN")}`],
+        ["", "VARAV", "", `Rs. ${reportData.varav.toLocaleString("en-IN")}`],
         [
           "",
-          "",
-          "",
           "BALANCE",
+          "",
           `Rs. ${reportData.balance.toLocaleString("en-IN")}`,
         ],
       ];
@@ -2301,17 +2298,24 @@ const ClientSiteReport = ({ sites }) => {
       autoTable(doc, {
         startY: yOffset,
         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-        head: [["Sl.No", "Date", "Item of Work", "Quantity", "Amount (INR)"]],
+        head: [["Sl.No", "Item of Work", "Quantity", "Amount (INR)"]],
         body: [...bodyRows, ...summaryRows],
-        styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
-        headStyles: { fillColor: [160, 61, 5], textColor: 255 },
+        styles: { 
+          font: "Roboto-Regular", 
+          fontSize: 12,          // increased from 10
+          cellPadding: 2 
+        },
+        headStyles: { 
+          fontStyle: "bold",     // bold header, no color
+          fillColor: [255,255,255], 
+          textColor: [0,0,0] 
+        },
         alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
           0: { cellWidth: 15, halign: "center" },
-          1: { cellWidth: 25 },
-          2: { cellWidth: 85 },
-          3: { cellWidth: 22, halign: "center" },
-          4: { cellWidth: 35, halign: "right" },
+          1: { cellWidth: 95 },  // widened for Item of Work
+          2: { cellWidth: 22, halign: "center" },
+          3: { cellWidth: 35, halign: "right" },
         },
         didParseCell: (data) => {
           if (data.row.index >= itemRowCount) {
@@ -2320,7 +2324,6 @@ const ClientSiteReport = ({ sites }) => {
         },
       });
 
-      // Render header asset on front page and footer asset on back page
       addHeaderFooter(doc, headerData, footerData);
 
       doc.save(
