@@ -139,11 +139,5 @@ export const computeTotals = (
   return { totalAmount, supervisionAmount, netTotal };
 };
 
-export const computeBalance = (
-  netTotal: number,
-  varav: number,
-  roundBalance: boolean,
-): number => {
-  const raw = netTotal - (Number(varav) || 0);
-  return roundBalance ? Math.round(raw) : roundToCents(raw);
-};
+export const computeBalance = (rawBalance: number, roundBalance: boolean): number =>
+  roundBalance ? Math.round(rawBalance) : roundToCents(rawBalance);

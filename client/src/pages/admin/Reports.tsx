@@ -16,6 +16,7 @@ import {
   FileDown,
   Receipt,
   Wallet,
+  RotateCcw,
 } from "lucide-react";
 import { privateClient } from "@/api";
 import { jsPDF } from "jspdf";
@@ -24,6 +25,7 @@ import * as XLSX from "xlsx";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
 import ReportRowEditor from "./reports/ReportRowEditor";
+import EditableAmountField from "./reports/EditableAmountField";
 import { loadImage, generateProfessionalReportPdf } from "./reports/reportPdf";
 import { buildEditableRows, computeTotals, computeBalance, displayAmount } from "./reports/editableReport";
 import templateImage from "@/assets/template.png";
@@ -2000,6 +2002,7 @@ const ClientSiteReport = ({ sites }) => {
   const [editableRows, setEditableRows] = useState([]);
   const [roundAmounts, setRoundAmounts] = useState(false);
   const [roundBalance, setRoundBalance] = useState(false);
+  const [balanceOverride, setBalanceOverride] = useState(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -2017,6 +2020,7 @@ const ClientSiteReport = ({ sites }) => {
     setEditableRows([]);
     setRoundAmounts(false);
     setRoundBalance(false);
+    setBalanceOverride(null);
   };
 
   const fetchData = async () => {
@@ -2042,6 +2046,7 @@ const ClientSiteReport = ({ sites }) => {
       setEditableRows(buildEditableRows(res.data.transactions));
       setRoundAmounts(false);
       setRoundBalance(false);
+      setBalanceOverride(null);
     } catch (err) {
       console.error("Error fetching client report:", err);
       setReportData(null);
@@ -2053,9 +2058,12 @@ const ClientSiteReport = ({ sites }) => {
   const totals = reportData
     ? computeTotals(editableRows, Number(reportData.supervisionPercentage) || 0, roundAmounts)
     : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
-  const balance = reportData
-    ? computeBalance(totals.netTotal, reportData.varav, roundBalance)
+  const rawBalance = reportData
+    ? balanceOverride !== null
+      ? balanceOverride
+      : totals.netTotal - (Number(reportData.varav) || 0)
     : 0;
+  const balance = reportData ? computeBalance(rawBalance, roundBalance) : 0;
 
   const exportToPDF = async () => {
     if (!reportData || editableRows.length === 0) return;
@@ -2242,23 +2250,43 @@ const ClientSiteReport = ({ sites }) => {
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500">Balance</p>
-                <label className="flex items-center gap-1.5 text-xs text-gray-500 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
-                    checked={roundBalance}
-                    onChange={(e) => setRoundBalance(e.target.checked)}
-                  />
-                  Round off
-                </label>
+                <div className="flex items-center gap-2">
+                  {balanceOverride !== null && (
+                    <button
+                      type="button"
+                      title="Reset to computed balance"
+                      onClick={() => setBalanceOverride(null)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 select-none cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                      checked={roundBalance}
+                      onChange={(e) => setRoundBalance(e.target.checked)}
+                    />
+                    Round off
+                  </label>
+                </div>
               </div>
-              <p
-                className={`text-xl font-bold mt-1 ${
-                  balance > 0 ? "text-red-600" : "text-emerald-600"
-                }`}
-              >
-                ₹{balance.toLocaleString("en-IN")}
-              </p>
+              <div className="mt-1">
+                <EditableAmountField
+                  value={balance}
+                  onCommit={(value) => setBalanceOverride(value)}
+                  inputClassName={`w-full px-0 py-0 text-xl font-bold text-right border-0 border-b border-transparent hover:border-gray-300 focus:border-teal-500 focus:ring-0 bg-transparent transition-colors ${
+                    balance > 0 ? "text-red-600" : "text-emerald-600"
+                  }`}
+                  currencyClassName={`text-xl font-bold mr-1 ${
+                    balance > 0 ? "text-red-600" : "text-emerald-600"
+                  }`}
+                />
+              </div>
+              {balanceOverride !== null && (
+                <p className="text-[11px] text-amber-600 mt-1">Manually overridden</p>
+              )}
             </div>
           </div>
 

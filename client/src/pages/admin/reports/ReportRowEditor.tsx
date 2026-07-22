@@ -11,6 +11,7 @@ import {
   roundToCents,
   updateRowAmount,
 } from "./editableReport";
+import EditableAmountField from "./EditableAmountField";
 
 interface ReportRowEditorProps {
   rows: EditableReportRow[];
@@ -36,42 +37,6 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
   const [newRowQuantity, setNewRowQuantity] = useState("");
   const [newRowAmount, setNewRowAmount] = useState("");
   const [addRowError, setAddRowError] = useState("");
-
-  const [amountDrafts, setAmountDrafts] = useState<Record<string, string>>({});
-
-  const getAmountInputValue = (row: EditableReportRow): string =>
-    amountDrafts[row.id] !== undefined ? amountDrafts[row.id] : String(row.amount);
-
-  const handleAmountInputChange = (id: string, value: string) => {
-    setAmountDrafts((prev) => ({ ...prev, [id]: value }));
-  };
-
-  const commitAmount = (id: string) => {
-    setAmountDrafts((prev) => {
-      if (prev[id] === undefined) return prev;
-      const draft = prev[id];
-      const parsed = parseFloat(draft);
-      if (draft.trim() !== "" && !Number.isNaN(parsed)) {
-        onRowsChange(updateRowAmount(rows, id, parsed));
-      }
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-  };
-
-  const handleAmountKeyDown = (id: string, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Escape") {
-      setAmountDrafts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      e.currentTarget.blur();
-    }
-  };
 
 
   const toggleSelectForMerge = (id: string) => {
@@ -286,7 +251,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
           </div>,
           document.body
         )}
-        
+
       <div className="overflow-x-auto border border-gray-200 rounded-xl">
         <table className="w-full">
           <thead>
@@ -334,26 +299,16 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                   {row.quantity !== null && row.quantity !== undefined ? row.quantity : "-"}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-right">
-                  <div className="inline-flex flex-col items-end">
-                    <div className="flex items-center justify-end">
-                      <span className="text-sm text-gray-400 mr-1">₹</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="w-32 px-2 py-1.5 text-sm font-medium text-gray-900 text-right border border-transparent rounded-md hover:border-gray-300 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:bg-white transition-colors"
-                        value={getAmountInputValue(row)}
-                        disabled={disabled}
-                        onChange={(e) => handleAmountInputChange(row.id, e.target.value)}
-                        onBlur={() => commitAmount(row.id)}
-                        onKeyDown={(e) => handleAmountKeyDown(row.id, e)}
-                      />
-                    </div>
-                    {roundAmounts && roundToCents(row.amount) !== displayAmount(row.amount, true) && (
-                      <span className="text-[11px] text-gray-400 mt-0.5">
-                        rounds to ₹{displayAmount(row.amount, true).toLocaleString("en-IN")}
-                      </span>
-                    )}
-                  </div>
+                  <EditableAmountField
+                    value={row.amount}
+                    disabled={disabled}
+                    onCommit={(amount) => onRowsChange(updateRowAmount(rows, row.id, amount))}
+                    hint={
+                      roundAmounts && roundToCents(row.amount) !== displayAmount(row.amount, true)
+                        ? `rounds to ₹${displayAmount(row.amount, true).toLocaleString("en-IN")}`
+                        : undefined
+                    }
+                  />
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-1">
