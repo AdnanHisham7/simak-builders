@@ -23,51 +23,14 @@ import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
+import ReportRowEditor from "./reports/ReportRowEditor";
+import { loadImage, generateProfessionalReportPdf } from "./reports/reportPdf";
+import { buildEditableRows, computeTotals, computeBalance, displayAmount } from "./reports/editableReport";
 import templateImage from "@/assets/template.png";
 import { UserOptions } from "jspdf-autotable";
 import "@/assets/Roboto-Regular";
 
 // Shared helper to load images and extract dimensions for accurate aspect ratio scaling
-const loadImage = (url) => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0);
-      resolve({
-        dataURL: canvas.toDataURL("image/png"),
-        width: img.width,
-        height: img.height,
-      });
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-};
-
-// Shared helper to apply header strictly to page 1 and footer strictly to the final page
-const addHeaderFooter = (doc, headerData, footerData) => {
-  const totalPages = doc.internal.getNumberOfPages();
-  const pageWidth = doc.internal.pageSize.width;
-  const pageHeight = doc.internal.pageSize.height;
-
-  // Scale heights matching original proportions relative to full PDF width
-  const headerHeight = (headerData.height / headerData.width) * pageWidth;
-  const footerHeight = (footerData.height / footerData.width) * pageWidth;
-
-  // Render header at the top of the first page
-  doc.setPage(1);
-  doc.addImage(headerData.dataURL, "PNG", 0, 0, pageWidth, headerHeight);
-
-  // Render footer at the bottom of the last page
-  doc.setPage(totalPages);
-  doc.addImage(footerData.dataURL, "PNG", 0, pageHeight - footerHeight, pageWidth, footerHeight);
-};
-
 const Reports = () => {
   const [selectedReport, setSelectedReport] = useState("clientReport");
   const [sites, setSites] = useState([]);
@@ -1758,6 +1721,9 @@ const ExpenseReport = ({ sites }) => {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [editableRows, setEditableRows] = useState([]);
+  const [roundAmounts, setRoundAmounts] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     setIsAnimating(true);
@@ -1772,6 +1738,8 @@ const ExpenseReport = ({ sites }) => {
       supervisionPercentage: String(selectedSite?.supervisionPercentage ?? 0),
     }));
     setReportData(null);
+    setEditableRows([]);
+    setRoundAmounts(false);
   };
 
   const handleSupervisionChange = (value) => {
@@ -1782,6 +1750,7 @@ const ExpenseReport = ({ sites }) => {
   const fetchData = async () => {
     if (!filters.siteId) {
       setReportData(null);
+      setEditableRows([]);
       return;
     }
     setLoading(true);
@@ -1798,129 +1767,52 @@ const ExpenseReport = ({ sites }) => {
         },
       });
       setReportData(res.data);
+      setEditableRows(buildEditableRows(res.data.transactions));
+      setRoundAmounts(false);
     } catch (err) {
       console.error("Error fetching expense report:", err);
       setReportData(null);
+      setEditableRows([]);
     }
     setLoading(false);
   };
 
+  const totals = reportData
+    ? computeTotals(editableRows, Number(reportData.supervisionPercentage) || 0, roundAmounts)
+    : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
+
   const exportToPDF = async () => {
-    if (!reportData) return;
+    if (!reportData || editableRows.length === 0) return;
+    setExporting(true);
     try {
       const headerData = await loadImage(headerImg);
       const footerData = await loadImage(footerImg);
-      const doc = new jsPDF();
 
-      let yOffset = 50;
-      doc.setFontSize(18);
-      doc.text(`Expense Report - ${reportData.site.name}`, 14, yOffset);
-      yOffset += 8;
-
-      doc.setFontSize(12); // increased from 10
-      doc.text(
-        `Generated on: ${new Date().toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}`,
-        14,
-        yOffset
-      );
-      yOffset += 5;
-      doc.text(
-        `Address: ${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
-        14,
-        yOffset
-      );
-      yOffset += 5;
-      if (filters.startDate && filters.endDate) {
-        doc.text(
-          `Period: ${filters.startDate} to ${filters.endDate}`,
-          14,
-          yOffset
-        );
-        yOffset += 5;
-      }
-
-      doc.setLineWidth(0.1);
-      doc.line(14, yOffset, 196, yOffset);
-      yOffset += 8;
-
-      doc.setFont("Roboto-Regular");
-
-      // Transactions (Date column removed)
-      const processedTransactions = reportData.transactions;
-      const bodyRows = processedTransactions.map((t, idx) => [
-        String(idx + 1),
-        t.itemOfWork || t.description || t.type,
-        t.quantity !== null && t.quantity !== undefined ? String(t.quantity) : "-",
-        `Rs. ${t?.amount?.toLocaleString("en-IN")}`,
-      ]);
-      const itemRowCount = bodyRows.length;
-
-      // Summary rows adjusted to 4 columns
-      const summaryRows = [
-        ["", "TOTAL", "", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
-        [
-          "",
-          `SUPERVISION (${reportData.supervisionPercentage}%)`,
-          "",
-          `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
+      generateProfessionalReportPdf({
+        title: `Expense Report - ${reportData.site.name}`,
+        siteName: reportData.site.name,
+        address: `${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
+        periodLabel:
+          filters.startDate && filters.endDate ? `${filters.startDate} to ${filters.endDate}` : null,
+        rows: editableRows.map((row) => ({
+          itemOfWork: row.itemOfWork,
+          quantity: row.quantity,
+          amount: displayAmount(row.amount, roundAmounts),
+        })),
+        summaryRows: [
+          { label: "TOTAL", amount: totals.totalAmount },
+          { label: `SUPERVISION (${reportData.supervisionPercentage}%)`, amount: totals.supervisionAmount },
+          { label: "NET TOTAL (With Supervision)", amount: totals.netTotal },
         ],
-        [
-          "",
-          "NET TOTAL (With Supervision)",
-          "",
-          `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
-        ],
-      ];
-
-      autoTable(doc, {
-        startY: yOffset,
-        margin: { top: 20, bottom: 25, left: 14, right: 14 },
-        head: [["Sl.No", "Item of Work", "Quantity", "Amount (INR)"]],
-        body: [...bodyRows, ...summaryRows],
-        styles: { 
-          font: "Roboto-Regular", 
-          fontSize: 12,          // increased from 10
-          cellPadding: 2 
-        },
-        headStyles: { 
-          fontStyle: "bold",     // bold header, no color
-          fillColor: [255,255,255], 
-          textColor: [0,0,0] 
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 15, halign: "center" },
-          1: { cellWidth: 95 },  // widened for Item of Work
-          2: { cellWidth: 22, halign: "center" },
-          3: { cellWidth: 35, halign: "right" },
-        },
-        didParseCell: (data) => {
-          if (data.row.index >= itemRowCount) {
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
+        headerImage: headerData,
+        footerImage: footerData,
+        fileName: `expense-report-${reportData.site.name}-${new Date().toISOString().split("T")[0]}.pdf`,
       });
-
-      addHeaderFooter(doc, headerData, footerData);
-
-      doc.save(
-        `expense-report-${reportData.site.name}-${
-          new Date().toISOString().split("T")[0]
-        }.pdf`
-      );
     } catch (error) {
       console.error("Error generating PDF:", error);
     }
+    setExporting(false);
   };
-
-  // Duplicate purchase items and cancelled (deleted + reversal) transactions
-  // are already merged out server-side, so the UI renders the report rows as-is.
-  const uiTransactions = reportData && reportData.transactions ? reportData.transactions : [];
 
   return (
     <div
@@ -1996,9 +1888,9 @@ const ExpenseReport = ({ sites }) => {
           <button
             onClick={exportToPDF}
             className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            disabled={loading || !reportData || reportData.transactions.length === 0}
+            disabled={loading || exporting || !reportData || editableRows.length === 0}
           >
-            <FileDown className="w-4 h-4 mr-2" /> Export PDF
+            <FileDown className="w-4 h-4 mr-2" /> {exporting ? "Exporting..." : "Export PDF"}
           </button>
         </div>
       </div>
@@ -2045,7 +1937,7 @@ const ExpenseReport = ({ sites }) => {
                 Total Amount (Without Supervision)
               </p>
               <p className="text-xl font-bold text-gray-900 mt-1">
-                ₹{reportData.totalAmount.toLocaleString("en-IN")}
+                ₹{totals.totalAmount.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -2053,7 +1945,7 @@ const ExpenseReport = ({ sites }) => {
                 Supervision Amount ({reportData.supervisionPercentage}%)
               </p>
               <p className="text-xl font-bold text-orange-600 mt-1">
-                ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+                ₹{totals.supervisionAmount.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -2061,14 +1953,14 @@ const ExpenseReport = ({ sites }) => {
                 Net Total (With Supervision)
               </p>
               <p className="text-xl font-bold text-emerald-600 mt-1">
-                ₹{reportData.netTotal.toLocaleString("en-IN")}
+                ₹{totals.netTotal.toLocaleString("en-IN")}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {uiTransactions.length === 0 ? (
-              <div className="p-12 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            {editableRows.length === 0 ? (
+              <div className="p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-gray-400" />
                 </div>
@@ -2080,79 +1972,13 @@ const ExpenseReport = ({ sites }) => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Sl.No
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Item of Work
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {uiTransactions.map((t, idx) => (
-                      <tr
-                        key={t._id || idx}
-                        className="hover:bg-gray-50 transition-colors duration-150"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {idx + 1}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(t.date).toLocaleDateString("en-IN")}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {t.itemOfWork || t.description || t.type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                          {t.quantity !== null && t.quantity !== undefined ? t.quantity : "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-                          ₹{t?.amount?.toLocaleString("en-IN")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t border-gray-200">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Total
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
-                        ₹{reportData.totalAmount.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Supervision ({reportData.supervisionPercentage}%)
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-orange-600 text-right">
-                        ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Net Total (With Supervision)
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-emerald-600 text-right">
-                        ₹{reportData.netTotal.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <ReportRowEditor
+                rows={editableRows}
+                onRowsChange={setEditableRows}
+                roundAmounts={roundAmounts}
+                onToggleRoundAmounts={setRoundAmounts}
+                disabled={loading || exporting}
+              />
             )}
           </div>
         </>
@@ -2171,6 +1997,10 @@ const ClientSiteReport = ({ sites }) => {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [editableRows, setEditableRows] = useState([]);
+  const [roundAmounts, setRoundAmounts] = useState(false);
+  const [roundBalance, setRoundBalance] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     setIsAnimating(true);
@@ -2184,11 +2014,15 @@ const ClientSiteReport = ({ sites }) => {
       supervisionPercentage: String(selectedSite?.supervisionPercentage ?? 0),
     }));
     setReportData(null);
+    setEditableRows([]);
+    setRoundAmounts(false);
+    setRoundBalance(false);
   };
 
   const fetchData = async () => {
     if (!filters.siteId) {
       setReportData(null);
+      setEditableRows([]);
       return;
     }
     setLoading(true);
@@ -2205,140 +2039,59 @@ const ClientSiteReport = ({ sites }) => {
         },
       });
       setReportData(res.data);
+      setEditableRows(buildEditableRows(res.data.transactions));
+      setRoundAmounts(false);
+      setRoundBalance(false);
     } catch (err) {
       console.error("Error fetching client report:", err);
       setReportData(null);
+      setEditableRows([]);
     }
     setLoading(false);
   };
 
+  const totals = reportData
+    ? computeTotals(editableRows, Number(reportData.supervisionPercentage) || 0, roundAmounts)
+    : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
+  const balance = reportData
+    ? computeBalance(totals.netTotal, reportData.varav, roundBalance)
+    : 0;
+
   const exportToPDF = async () => {
-    if (!reportData) return;
+    if (!reportData || editableRows.length === 0) return;
+    setExporting(true);
     try {
       const headerData = await loadImage(headerImg);
       const footerData = await loadImage(footerImg);
-      const doc = new jsPDF();
 
-      let yOffset = 50;
-      doc.setFontSize(18);
-      doc.text(`Client Report - ${reportData.site.name}`, 14, yOffset);
-      yOffset += 8;
-
-      doc.setFontSize(12); // increased from 10
-      doc.text(
-        `Generated on: ${new Date().toLocaleDateString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-        })}`,
-        14,
-        yOffset
-      );
-      yOffset += 5;
-      doc.text(
-        `Address: ${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
-        14,
-        yOffset
-      );
-      yOffset += 5;
-      if (reportData.site.client?.name) {
-        doc.text(`Client: ${reportData.site.client.name}`, 14, yOffset);
-        yOffset += 5;
-      }
-      if (filters.startDate && filters.endDate) {
-        doc.text(
-          `Period: ${filters.startDate} to ${filters.endDate}`,
-          14,
-          yOffset
-        );
-        yOffset += 5;
-      }
-
-      doc.setLineWidth(0.1);
-      doc.line(14, yOffset, 196, yOffset);
-      yOffset += 8;
-
-      doc.setFont("Roboto-Regular");
-
-      // Transactions (Date column removed)
-      const processedTransactions = reportData.transactions;
-      const bodyRows = processedTransactions.map((t, idx) => [
-        String(idx + 1),
-        t.itemOfWork || t.description || t.type,
-        t.quantity !== null && t.quantity !== undefined ? String(t.quantity) : "-",
-        `Rs. ${t?.amount?.toLocaleString("en-IN")}`,
-      ]);
-      const itemRowCount = bodyRows.length;
-
-      // Summary rows adjusted to 4 columns
-      const summaryRows = [
-        ["", "TOTAL", "", `Rs. ${reportData.totalAmount.toLocaleString("en-IN")}`],
-        [
-          "",
-          `SUPERVISION (${reportData.supervisionPercentage}%)`,
-          "",
-          `Rs. ${reportData.supervisionAmount.toLocaleString("en-IN")}`,
+      generateProfessionalReportPdf({
+        title: `Client Report - ${reportData.site.name}`,
+        siteName: reportData.site.name,
+        address: `${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
+        clientName: reportData.site.client?.name || null,
+        periodLabel:
+          filters.startDate && filters.endDate ? `${filters.startDate} to ${filters.endDate}` : null,
+        rows: editableRows.map((row) => ({
+          itemOfWork: row.itemOfWork,
+          quantity: row.quantity,
+          amount: displayAmount(row.amount, roundAmounts),
+        })),
+        summaryRows: [
+          { label: "TOTAL", amount: totals.totalAmount },
+          { label: `SUPERVISION (${reportData.supervisionPercentage}%)`, amount: totals.supervisionAmount },
+          { label: "NET TOTAL", amount: totals.netTotal },
+          { label: "VARAV", amount: reportData.varav },
+          { label: "BALANCE", amount: balance },
         ],
-        [
-          "",
-          "NET TOTAL",
-          "",
-          `Rs. ${reportData.netTotal.toLocaleString("en-IN")}`,
-        ],
-        ["", "VARAV", "", `Rs. ${reportData.varav.toLocaleString("en-IN")}`],
-        [
-          "",
-          "BALANCE",
-          "",
-          `Rs. ${reportData.balance.toLocaleString("en-IN")}`,
-        ],
-      ];
-
-      autoTable(doc, {
-        startY: yOffset,
-        margin: { top: 20, bottom: 25, left: 14, right: 14 },
-        head: [["Sl.No", "Item of Work", "Quantity", "Amount (INR)"]],
-        body: [...bodyRows, ...summaryRows],
-        styles: { 
-          font: "Roboto-Regular", 
-          fontSize: 12,          // increased from 10
-          cellPadding: 2 
-        },
-        headStyles: { 
-          fontStyle: "bold",     // bold header, no color
-          fillColor: [255,255,255], 
-          textColor: [0,0,0] 
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        columnStyles: {
-          0: { cellWidth: 15, halign: "center" },
-          1: { cellWidth: 95 },  // widened for Item of Work
-          2: { cellWidth: 22, halign: "center" },
-          3: { cellWidth: 35, halign: "right" },
-        },
-        didParseCell: (data) => {
-          if (data.row.index >= itemRowCount) {
-            data.cell.styles.fontStyle = "bold";
-          }
-        },
+        headerImage: headerData,
+        footerImage: footerData,
+        fileName: `client-report-${reportData.site.name}-${new Date().toISOString().split("T")[0]}.pdf`,
       });
-
-      addHeaderFooter(doc, headerData, footerData);
-
-      doc.save(
-        `client-report-${reportData.site.name}-${
-          new Date().toISOString().split("T")[0]
-        }.pdf`
-      );
     } catch (error) {
       console.error("Error generating PDF:", error);
     }
+    setExporting(false);
   };
-
-  // Duplicate purchase items and cancelled (deleted + reversal) transactions
-  // are already merged out server-side, so the UI renders the report rows as-is.
-  const uiTransactions = reportData && reportData.transactions ? reportData.transactions : [];
 
   return (
     <div
@@ -2416,9 +2169,9 @@ const ClientSiteReport = ({ sites }) => {
           <button
             onClick={exportToPDF}
             className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            disabled={loading || !reportData || reportData.transactions.length === 0}
+            disabled={loading || exporting || !reportData || editableRows.length === 0}
           >
-            <FileDown className="w-4 h-4 mr-2" /> Export PDF
+            <FileDown className="w-4 h-4 mr-2" /> {exporting ? "Exporting..." : "Export PDF"}
           </button>
         </div>
       </div>
@@ -2463,7 +2216,7 @@ const ClientSiteReport = ({ sites }) => {
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-sm text-gray-500">Total</p>
               <p className="text-xl font-bold text-gray-900 mt-1">
-                ₹{reportData.totalAmount.toLocaleString("en-IN")}
+                ₹{totals.totalAmount.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -2471,13 +2224,13 @@ const ClientSiteReport = ({ sites }) => {
                 Supervision ({reportData.supervisionPercentage}%)
               </p>
               <p className="text-xl font-bold text-amber-600 mt-1">
-                ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
+                ₹{totals.supervisionAmount.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               <p className="text-sm text-gray-500">Net Total</p>
               <p className="text-xl font-bold text-gray-900 mt-1">
-                ₹{reportData.netTotal.toLocaleString("en-IN")}
+                ₹{totals.netTotal.toLocaleString("en-IN")}
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -2487,20 +2240,31 @@ const ClientSiteReport = ({ sites }) => {
               </p>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">Balance</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">Balance</p>
+                <label className="flex items-center gap-1.5 text-xs text-gray-500 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    checked={roundBalance}
+                    onChange={(e) => setRoundBalance(e.target.checked)}
+                  />
+                  Round off
+                </label>
+              </div>
               <p
                 className={`text-xl font-bold mt-1 ${
-                  reportData.balance > 0 ? "text-red-600" : "text-emerald-600"
+                  balance > 0 ? "text-red-600" : "text-emerald-600"
                 }`}
               >
-                ₹{reportData.balance.toLocaleString("en-IN")}
+                ₹{balance.toLocaleString("en-IN")}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            {uiTransactions.length === 0 ? (
-              <div className="p-12 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-5">
+            {editableRows.length === 0 ? (
+              <div className="p-8 text-center">
                 <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-8 h-8 text-gray-400" />
                 </div>
@@ -2512,99 +2276,13 @@ const ClientSiteReport = ({ sites }) => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Sl.No
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Item of Work
-                      </th>
-                      <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Amount
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {uiTransactions.map((t, idx) => (
-                      <tr
-                        key={t._id || idx}
-                        className="hover:bg-gray-50 transition-colors duration-150"
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {idx + 1}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(t.date).toLocaleDateString("en-IN")}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-900">
-                          {t.itemOfWork || t.description || t.type}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-                          {t.quantity !== null && t.quantity !== undefined ? t.quantity : "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-                          ₹{t?.amount?.toLocaleString("en-IN")}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="bg-gray-50 border-t border-gray-200">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Total
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
-                        ₹{reportData.totalAmount.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Supervision ({reportData.supervisionPercentage}%)
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-amber-600 text-right">
-                        ₹{reportData.supervisionAmount.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Net Total
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-gray-900 text-right">
-                        ₹{reportData.netTotal.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Varav (Received from Client)
-                      </td>
-                      <td className="px-6 py-3 text-sm font-bold text-emerald-600 text-right">
-                        ₹{reportData.varav.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="px-6 py-3 text-sm font-semibold text-gray-800 text-right">
-                        Balance
-                      </td>
-                      <td
-                        className={`px-6 py-3 text-sm font-bold text-right ${
-                          reportData.balance > 0 ? "text-red-600" : "text-emerald-600"
-                        }`}
-                      >
-                        ₹{reportData.balance.toLocaleString("en-IN")}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <ReportRowEditor
+                rows={editableRows}
+                onRowsChange={setEditableRows}
+                roundAmounts={roundAmounts}
+                onToggleRoundAmounts={setRoundAmounts}
+                disabled={loading || exporting}
+              />
             )}
           </div>
         </>
