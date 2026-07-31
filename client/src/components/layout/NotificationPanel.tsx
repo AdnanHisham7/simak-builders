@@ -208,7 +208,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
           ${isAnimating ? "opacity-100" : "opacity-0"}
         `}
       >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-brand-600" />
         <div className="relative bg-white border-b border-gray-100 p-6 pb-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -288,7 +288,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                     }}
                     className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors capitalize first:rounded-t-lg last:rounded-b-lg ${
                       filter === status
-                        ? "bg-blue-50 text-blue-700"
+                        ? "bg-brand-50 text-brand-700"
                         : "text-gray-700"
                     }`}
                   >

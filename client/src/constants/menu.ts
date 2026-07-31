@@ -16,23 +16,42 @@ import {
 
 export const adminMenus = [
   {
-    title: "Main",
+    title: "Overview",
     items: [
       { name: "Dashboard", icon: Grid, path: "/admin/dashboard" },
-      { name: "Enquiries", icon: Users, path: "/admin/enquiries" },
+      { name: "Enquiries", icon: MessageCircle, path: "/admin/enquiries" },
+    ],
+  },
+  {
+    title: "People",
+    items: [
       { name: "Employees", icon: Users, path: "/admin/employees" },
-      { name: "Contractors", icon: Briefcase, path: "/admin/contractors" },
-      { name: "Vendors", icon: Truck, path: "/admin/vendors" },
-      { name: "Salary", icon: Truck, path: "/admin/salary" },
       { name: "Clients", icon: Users, path: "/admin/clients" },
       { name: "Site Managers", icon: Users, path: "/admin/site-managers" },
       { name: "Supervisors", icon: Users, path: "/admin/supervisors" },
       { name: "Architects", icon: Users, path: "/admin/architects" },
+      { name: "Contractors", icon: Briefcase, path: "/admin/contractors" },
+      { name: "Vendors", icon: Truck, path: "/admin/vendors" },
+    ],
+  },
+  {
+    title: "Operations",
+    items: [
       { name: "Sites", icon: Building, path: "/admin/sites" },
       { name: "Stocks", icon: Package, path: "/admin/stocks" },
-      { name: "Reports", icon: BarChart3, path: "/admin/reports" },
-      { name: "Settings", icon: Settings, path: "/admin/settings" },
     ],
+  },
+  {
+    title: "Finance",
+    items: [{ name: "Salary", icon: DollarSign, path: "/admin/salary" }],
+  },
+  {
+    title: "Insights",
+    items: [{ name: "Reports", icon: BarChart3, path: "/admin/reports" }],
+  },
+  {
+    title: "System",
+    items: [{ name: "Settings", icon: Settings, path: "/admin/settings" }],
   },
 ];
 
