@@ -1,16 +1,5 @@
-import React, { useEffect, useState, useMemo } from "react";
-import {
-  Search,
-  Plus,
-  Users,
-  Eye,
-  DollarSign,
-  Trash2,
-  Edit,
-  X,
-  AlertCircle,
-  UserPlus,
-} from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { Search, Plus, Users, Eye, DollarSign, Trash2, Edit, UserPlus } from "lucide-react";
 import {
   getAllContractors,
   createContractor,
@@ -26,6 +15,13 @@ import AddContractorModal from "./AddContractorModal";
 import AddTransactionModal from "./AddContractorTransactionModal";
 import DeleteContractorModal from "./DeleteContractorModal";
 import { toast } from "sonner";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import PageLoader from "@/components/ui/PageLoader";
+import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Contractor {
   id: string;
@@ -45,32 +41,27 @@ interface SiteContractorsManagerProps {
 
 const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
   siteId,
-  siteName,
   userType,
 }) => {
   const [allContractors, setAllContractors] = useState<Contractor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isAssignExistingModalOpen, setIsAssignExistingModalOpen] =
-    useState(false);
-  const [isAddTransactionModalOpen, setIsAddTransactionModalOpen] =
-    useState(false);
+  const [isAssignExistingModalOpen, setIsAssignExistingModalOpen] = useState(false);
+  const [isAddTransactionModalOpen, setIsAddTransactionModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [isViewTransactionsModalOpen, setIsViewTransactionsModalOpen] =
-    useState(false);
+  const [isViewTransactionsModalOpen, setIsViewTransactionsModalOpen] = useState(false);
 
-  const [selectedContractor, setSelectedContractor] =
-    useState<Contractor | null>(null);
-  const [contractorToEdit, setContractorToEdit] = useState<Contractor | null>(
-    null,
-  );
-  const [contractorToDelete, setContractorToDelete] =
-    useState<Contractor | null>(null);
+  const [selectedContractor, setSelectedContractor] = useState<Contractor | null>(null);
+  const [contractorToEdit, setContractorToEdit] = useState<Contractor | null>(null);
+  const [contractorToDelete, setContractorToDelete] = useState<Contractor | null>(null);
+  const [removeTarget, setRemoveTarget] = useState<Contractor | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const [multiSiteDeleteConfirm, setMultiSiteDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [newContractorForm, setNewContractorForm] = useState({
     name: "",
@@ -85,7 +76,6 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
     company: false,
   });
 
-  // Permission checks
   const isAdmin = userType === "admin";
   const canAdd = isAdmin || userType === "siteManager";
   const canAssign = isAdmin;
@@ -93,30 +83,28 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
   const canDelete = isAdmin;
   const canAddTransaction = isAdmin || userType === "siteManager";
 
-  // Fetch all contractors
   const fetchAllContractors = async () => {
     try {
       const data = await getAllContractors();
       setAllContractors(data);
-      setLoading(false);
+      setPageError(null);
     } catch (err) {
-      setError("Failed to load contractors");
+      setPageError("Failed to load contractors");
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchAllContractors();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
 
-  // Filter contractors assigned to this site
-  const assignedContractors = useMemo(() => {
-    return allContractors.filter((c) =>
-      c.siteAssignments.some((sa) => sa.site.id === siteId),
-    );
-  }, [allContractors, siteId]);
+  const assignedContractors = useMemo(
+    () => allContractors.filter((c) => c.siteAssignments.some((sa) => sa.site.id === siteId)),
+    [allContractors, siteId],
+  );
 
-  // Further search filter
   const filteredContractors = assignedContractors.filter(
     (c) =>
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -124,24 +112,17 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       (c.company && c.company.toLowerCase().includes(searchTerm.toLowerCase())),
   );
 
-  // Helper: get total amount for current site
   const getTotalAmountForSite = (contractor: Contractor) => {
-    const assignment = contractor.siteAssignments.find(
-      (sa) => sa.site.id === siteId,
-    );
+    const assignment = contractor.siteAssignments.find((sa) => sa.site.id === siteId);
     return assignment ? assignment.totalAmount : 0;
   };
 
-  // ----- Handlers -----
   const handleAddNewContractor = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const isValidEmail = (email: string) =>
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const errors = {
       name: !newContractorForm.name.trim(),
-      email:
-        !newContractorForm.email.trim() ||
-        !isValidEmail(newContractorForm.email),
+      email: !newContractorForm.email.trim() || !isValidEmail(newContractorForm.email),
       phone: false,
       company: false,
     };
@@ -154,28 +135,19 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       await fetchAllContractors();
       setNewContractorForm({ name: "", email: "", phone: "", company: "" });
       setIsAddModalOpen(false);
+      toast.success("Contractor added and assigned to this site");
     } catch (err) {
-      setError("Failed to add contractor and assign to site");
+      toast.error("Failed to add contractor and assign to site");
     }
   };
 
   const handleDeleteTransaction = async (transactionId: string) => {
-    if (
-      !window.confirm(
-        "Delete this transaction? This action will reverse all accounting entries.",
-      )
-    )
-      return;
     try {
       await deleteContractorTransaction(transactionId);
-      // refresh transactions and contractor list
       if (selectedContractor) {
-        const txs = await getContractorTransactions(
-          selectedContractor.id,
-          siteId,
-        );
+        const txs = await getContractorTransactions(selectedContractor.id, siteId);
         setTransactions(txs);
-        await fetchAllContractors(); // refresh balances
+        await fetchAllContractors();
         toast.success("Transaction deleted");
       }
     } catch (err) {
@@ -188,18 +160,24 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       await assignSiteToContractor(contractorId, siteId);
       await fetchAllContractors();
       setIsAssignExistingModalOpen(false);
+      toast.success("Contractor assigned to this site");
     } catch (err) {
-      setError("Failed to assign contractor");
+      toast.error("Failed to assign contractor");
     }
   };
 
-  const handleRemoveFromSite = async (contractor: Contractor) => {
-    if (!window.confirm(`Remove ${contractor.name} from this site?`)) return;
+  const handleRemoveFromSite = async () => {
+    if (!removeTarget) return;
+    setIsRemoving(true);
     try {
-      await unassignSiteFromContractor(contractor.id, siteId);
+      await unassignSiteFromContractor(removeTarget.id, siteId);
       await fetchAllContractors();
+      toast.success("Contractor removed from this site");
+      setRemoveTarget(null);
     } catch (err) {
-      setError("Failed to remove contractor from site");
+      toast.error("Failed to remove contractor from site");
+    } finally {
+      setIsRemoving(false);
     }
   };
 
@@ -209,7 +187,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       await fetchAllContractors();
       setIsAddTransactionModalOpen(false);
     } catch (err) {
-      setError("Transaction failed");
+      toast.error("Transaction failed");
       throw err;
     }
   };
@@ -221,20 +199,17 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       setTransactions(txs);
       setIsViewTransactionsModalOpen(true);
     } catch (err) {
-      setError("Failed to load transactions");
+      toast.error("Failed to load transactions");
     }
   };
 
   const handleEditContractor = async (e: React.MouseEvent) => {
     e.preventDefault();
     if (!contractorToEdit) return;
-    const isValidEmail = (email: string) =>
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
     const errors = {
       name: !newContractorForm.name.trim(),
-      email:
-        !newContractorForm.email.trim() ||
-        !isValidEmail(newContractorForm.email),
+      email: !newContractorForm.email.trim() || !isValidEmail(newContractorForm.email),
       phone: false,
       company: false,
     };
@@ -252,249 +227,212 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
       setIsEditModalOpen(false);
       setContractorToEdit(null);
       setNewContractorForm({ name: "", email: "", phone: "", company: "" });
+      toast.success("Contractor updated");
     } catch (err) {
-      setError("Update failed");
+      toast.error("Update failed");
     }
   };
 
-  const handleDeleteContractor = async () => {
+  const proceedDeleteContractor = async () => {
     if (!contractorToDelete) return;
-    const otherSites = contractorToDelete.siteAssignments.filter(
-      (sa) => sa.site.id !== siteId,
-    );
-    if (otherSites.length > 0) {
-      if (
-        !window.confirm(
-          `This contractor is also assigned to ${otherSites.length} other site(s). Deleting will remove them completely. Continue?`,
-        )
-      )
-        return;
-    }
+    setIsDeleting(true);
     try {
       await deleteContractor(contractorToDelete.id);
       await fetchAllContractors();
       setIsDeleteModalOpen(false);
       setContractorToDelete(null);
+      setMultiSiteDeleteConfirm(false);
+      toast.success("Contractor deleted");
     } catch (err) {
-      setError("Delete failed");
+      toast.error("Delete failed");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  if (loading)
-    return (
-      <div className="relative bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-        <div className="text-center py-8">Loading contractors...</div>
-      </div>
-    );
-  if (error)
-    return (
-      <div className="relative bg-white rounded-2xl shadow-lg border border-gray-200 p-6">
-        <div className="text-red-500 py-4">{error}</div>
-      </div>
-    );
+  const handleDeleteContractor = async () => {
+    if (!contractorToDelete) return;
+    const otherSites = contractorToDelete.siteAssignments.filter((sa) => sa.site.id !== siteId);
+    if (otherSites.length > 0) {
+      setMultiSiteDeleteConfirm(true);
+      return;
+    }
+    await proceedDeleteContractor();
+  };
 
-  // Unassigned contractors list for assignment modal
+  if (loading) {
+    return (
+      <Card>
+        <PageLoader label="Loading contractors" fullHeight={false} />
+      </Card>
+    );
+  }
+
+  if (pageError) {
+    return (
+      <Card>
+        <p className="py-4 text-center text-sm text-danger-600">{pageError}</p>
+      </Card>
+    );
+  }
+
   const unassignedContractors = allContractors.filter(
     (c) => !c.siteAssignments.some((sa) => sa.site.id === siteId),
   );
 
   return (
-    <div className="relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500">
-      {/* Gradient header bar */}
-      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-cyan-500 rounded-t-2xl" />
-
-      <div className="p-6">
-        {/* Header with title and action buttons */}
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-            <Users className="w-6 h-6 text-indigo-600" />
-            <span>Contractors ({filteredContractors.length})</span>
-          </h3>
-          <div className="flex gap-3">
-            {canAdd && (
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center space-x-2"
-              >
-                <UserPlus className="w-4 h-4" />
-                <span>Add Contractor</span>
-              </button>
-            )}
-            {canAssign && (
-              <button
-                onClick={() => setIsAssignExistingModalOpen(true)}
-                className="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-lg hover:bg-indigo-50 flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Assign Existing</span>
-              </button>
-            )}
-          </div>
+    <Card>
+      <div className="mb-6 flex items-center justify-between">
+        <h3 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+          <Users size={20} className="text-brand-600" />
+          Contractors ({filteredContractors.length})
+        </h3>
+        <div className="flex gap-2">
+          {canAdd && (
+            <Button size="sm" onClick={() => setIsAddModalOpen(true)}>
+              <UserPlus size={15} /> Add contractor
+            </Button>
+          )}
+          {canAssign && (
+            <Button size="sm" variant="secondary" onClick={() => setIsAssignExistingModalOpen(true)}>
+              <Plus size={15} /> Assign existing
+            </Button>
+          )}
         </div>
-
-        {/* Search bar */}
-        <div className="relative mb-6">
-          <Search className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search contractors by name, email or company..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-          />
-        </div>
-
-        {/* Contractors list */}
-        {filteredContractors.length === 0 ? (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">
-              {searchTerm
-                ? "No contractors match your search."
-                : "No contractors assigned to this site yet."}
-            </p>
-            {canAdd && !searchTerm && (
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="mt-3 text-indigo-600 hover:text-indigo-700 font-medium"
-              >
-                + Add your first contractor
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            {filteredContractors.map((contractor) => (
-              <div
-                key={contractor.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors flex-wrap gap-3"
-              >
-                {/* Left section: Avatar + Details */}
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
-                    <span className="text-indigo-600 font-semibold text-sm">
-                      {contractor.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")
-                        .slice(0, 2)}
-                    </span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-gray-900">
-                        {contractor.name}
-                      </span>
-                      {contractor.company && (
-                        <span className="text-sm text-gray-500">
-                          ({contractor.company})
-                        </span>
-                      )}
-                      <span
-                        className={`px-2 py-0.5 text-xs rounded-full ${
-                          contractor.status === "active"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {contractor.status}
-                      </span>
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      {contractor.email}
-                    </div>
-                    <div className="text-sm font-medium text-emerald-600 mt-0.5">
-                      Total Amount: ₹
-                      {getTotalAmountForSite(contractor).toLocaleString(
-                        "en-IN",
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Right section: Action buttons */}
-                <div className="flex flex-wrap gap-2">
-                  {canAddTransaction && (
-                    <button
-                      onClick={() => {
-                        setSelectedContractor(contractor);
-                        setIsAddTransactionModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm flex items-center gap-1 hover:bg-emerald-700 transition-colors"
-                    >
-                      <DollarSign size={14} />
-                      <span className="hidden sm:inline">Add Tx</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleViewTransactions(contractor)}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm flex items-center gap-1 hover:bg-blue-700 transition-colors"
-                  >
-                    <Eye size={14} />
-                    <span className="hidden sm:inline">Txns</span>
-                  </button>
-                  {canEdit && (
-                    <button
-                      onClick={() => {
-                        setContractorToEdit(contractor);
-                        setNewContractorForm({
-                          name: contractor.name,
-                          email: contractor.email,
-                          phone: contractor.phone,
-                          company: contractor.company,
-                        });
-                        setIsEditModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-amber-500 text-white rounded-lg text-sm hover:bg-amber-600 transition-colors"
-                    >
-                      <Edit size={14} />
-                    </button>
-                  )}
-                  {canAssign && (
-                    <button
-                      onClick={() => handleRemoveFromSite(contractor)}
-                      className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
-                    >
-                      <X size={14} />
-                      <span className="hidden sm:inline">Remove</span>
-                    </button>
-                  )}
-                  {canDelete && (
-                    <button
-                      onClick={() => {
-                        setContractorToDelete(contractor);
-                        setIsDeleteModalOpen(true);
-                      }}
-                      className="px-3 py-1.5 bg-gray-600 text-white rounded-lg text-sm hover:bg-gray-700 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* MODALS */}
+      <div className="relative mb-5">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
+        <input
+          type="text"
+          placeholder="Search contractors by name, email, or company..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        />
+      </div>
+
+      {filteredContractors.length === 0 ? (
+        <EmptyState
+          icon={Users}
+          title={searchTerm ? "No contractors match your search" : "No contractors assigned to this site yet"}
+          action={
+            canAdd &&
+            !searchTerm && (
+              <Button variant="secondary" onClick={() => setIsAddModalOpen(true)}>
+                Add your first contractor
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <div className="grid gap-3">
+          {filteredContractors.map((contractor) => (
+            <div
+              key={contractor.id}
+              className="flex flex-wrap items-center justify-between gap-3 rounded-console bg-console-bg p-4 transition-colors hover:bg-slate-100"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+                  {contractor.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                </div>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-console-text">{contractor.name}</span>
+                    {contractor.company && (
+                      <span className="text-xs text-console-muted">({contractor.company})</span>
+                    )}
+                    <Badge variant={contractor.status === "active" ? "success" : "error"}>
+                      {contractor.status}
+                    </Badge>
+                  </div>
+                  <div className="text-sm text-console-muted">{contractor.email}</div>
+                  <div className="mt-0.5 text-sm font-medium text-success-700">
+                    Total amount: ₹{getTotalAmountForSite(contractor).toLocaleString("en-IN")}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {canAddTransaction && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedContractor(contractor);
+                      setIsAddTransactionModalOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-success-700"
+                  >
+                    <DollarSign size={13} />
+                    <span className="hidden sm:inline">Add Tx</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleViewTransactions(contractor)}
+                  className="flex items-center gap-1.5 rounded-lg bg-info-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-info-700"
+                >
+                  <Eye size={13} />
+                  <span className="hidden sm:inline">Txns</span>
+                </button>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContractorToEdit(contractor);
+                      setNewContractorForm({
+                        name: contractor.name,
+                        email: contractor.email,
+                        phone: contractor.phone,
+                        company: contractor.company,
+                      });
+                      setIsEditModalOpen(true);
+                    }}
+                    aria-label="Edit contractor"
+                    className="rounded-lg bg-warning-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-600"
+                  >
+                    <Edit size={13} />
+                  </button>
+                )}
+                {canAssign && (
+                  <button
+                    type="button"
+                    onClick={() => setRemoveTarget(contractor)}
+                    className="rounded-lg bg-danger-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-danger-600"
+                  >
+                    Remove
+                  </button>
+                )}
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContractorToDelete(contractor);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    aria-label="Delete contractor"
+                    className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-700"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <AddContractorModal
         isOpen={isAddModalOpen}
         onClose={() => {
           setIsAddModalOpen(false);
           setNewContractorForm({ name: "", email: "", phone: "", company: "" });
-          setInputErrors({
-            name: false,
-            email: false,
-            phone: false,
-            company: false,
-          });
+          setInputErrors({ name: false, email: false, phone: false, company: false });
         }}
         onSubmit={handleAddNewContractor}
         newContractor={newContractorForm}
         setNewContractor={setNewContractorForm}
         inputErrors={inputErrors}
-        sizeStyles="max-w-2xl w-full"
       />
 
       <AddContractorModal
@@ -508,55 +446,38 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
         newContractor={newContractorForm}
         setNewContractor={setNewContractorForm}
         inputErrors={inputErrors}
-        sizeStyles="max-w-2xl w-full"
-        isEditMode={true}
+        isEditMode
       />
 
-      {/* Assign Existing Contractor Modal */}
-      {isAssignExistingModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">Assign Existing Contractor</h3>
-              <button
-                onClick={() => setIsAssignExistingModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
+      <Modal
+        isOpen={isAssignExistingModalOpen}
+        onClose={() => setIsAssignExistingModalOpen(false)}
+        title="Assign Existing Contractor"
+      >
+        {unassignedContractors.length === 0 ? (
+          <p className="py-4 text-center text-sm text-console-muted">
+            All contractors are already assigned to this site.
+          </p>
+        ) : (
+          <ul className="max-h-96 space-y-2 overflow-auto">
+            {unassignedContractors.map((c) => (
+              <li
+                key={c.id}
+                className="flex items-center justify-between rounded-lg border border-console-border p-3 hover:bg-console-bg"
               >
-                <X />
-              </button>
-            </div>
-            {unassignedContractors.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">
-                All contractors are already assigned to this site.
-              </p>
-            ) : (
-              <ul className="space-y-2 max-h-96 overflow-auto">
-                {unassignedContractors.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex justify-between items-center p-3 border rounded-lg hover:bg-gray-50"
-                  >
-                    <div>
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {c.company || "No company"}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => handleAssignExisting(c.id)}
-                      className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
-                    >
-                      Assign
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      )}
+                <div>
+                  <div className="text-sm font-medium text-console-text">{c.name}</div>
+                  <div className="text-xs text-console-muted">{c.company || "No company"}</div>
+                </div>
+                <Button size="sm" onClick={() => handleAssignExisting(c.id)}>
+                  Assign
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
 
-      {/* Add Transaction Modal */}
       {selectedContractor && (
         <AddTransactionModal
           isOpen={isAddTransactionModalOpen}
@@ -567,85 +488,97 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
         />
       )}
 
-      {/* View Transactions Modal */}
-      {isViewTransactionsModalOpen && selectedContractor && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">
-                Transactions – {selectedContractor.name}
-              </h3>
-              <button
-                onClick={() => setIsViewTransactionsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X />
-              </button>
-            </div>
-            {transactions.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">
-                No transactions yet.
-              </p>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Amount
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Category
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Description
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                      Date
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {transactions
-                    .sort(
-                      (a, b) =>
-                        new Date(b.date).getTime() - new Date(a.date).getTime(),
-                    )
-                    .map((tx) => (
-                      <tr key={tx.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm capitalize">
-                          {tx.type}
-                        </td>
-                        <td className="px-4 py-3 text-sm font-medium">
-                          ₹{tx.amount.toLocaleString("en-IN")}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {tx.category || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {tx.description || "-"}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {new Date(tx.date).toLocaleDateString()}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            )}
+      <Modal
+        isOpen={isViewTransactionsModalOpen && !!selectedContractor}
+        onClose={() => setIsViewTransactionsModalOpen(false)}
+        title={`Transactions — ${selectedContractor?.name ?? ""}`}
+        size="lg"
+      >
+        {transactions.length === 0 ? (
+          <EmptyState icon={DollarSign} title="No transactions yet" />
+        ) : (
+          <div className="overflow-x-auto rounded-console border border-console-border">
+            <table className="min-w-full divide-y divide-console-border">
+              <thead className="bg-console-bg">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-console-border bg-white">
+                {[...transactions]
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((tx) => (
+                    <tr key={tx.id}>
+                      <td className="px-4 py-3 text-sm capitalize text-console-text">{tx.type}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-console-text">
+                        ₹{tx.amount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-console-muted">{tx.category || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "-"}</td>
+                      <td className="px-4 py-3 text-sm text-console-muted">
+                        {new Date(tx.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTransaction(tx.id)}
+                          aria-label="Delete transaction"
+                          className="rounded-lg p-1.5 text-danger-600 transition-colors hover:bg-danger-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       <DeleteContractorModal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
+        isOpen={isDeleteModalOpen && !multiSiteDeleteConfirm}
+        onClose={() => {
+          setIsDeleteModalOpen(false);
+          setContractorToDelete(null);
+        }}
         onConfirm={handleDeleteContractor}
         contractorName={contractorToDelete?.name || ""}
       />
-    </div>
+
+      <ConfirmDialog
+        isOpen={multiSiteDeleteConfirm}
+        onClose={() => {
+          setMultiSiteDeleteConfirm(false);
+          setIsDeleteModalOpen(false);
+          setContractorToDelete(null);
+        }}
+        onConfirm={proceedDeleteContractor}
+        title="Contractor assigned to other sites"
+        message={`This contractor is also assigned to ${
+          contractorToDelete?.siteAssignments.filter((sa) => sa.site.id !== siteId).length ?? 0
+        } other site(s). Deleting will remove them completely from all sites. Continue?`}
+        variant="danger"
+        confirmText="Delete everywhere"
+        isLoading={isDeleting}
+      />
+
+      <ConfirmDialog
+        isOpen={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={handleRemoveFromSite}
+        title="Remove contractor"
+        message={`Remove ${removeTarget?.name} from this site?`}
+        variant="warning"
+        confirmText="Remove"
+        isLoading={isRemoving}
+      />
+    </Card>
   );
 };
 
