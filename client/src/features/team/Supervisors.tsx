@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  createClient,
+  createSupervisor,
   regeneratePassword,
   toggleUserStatus,
-  updateClient,
-  deleteClient,
-  restoreClient,
+  updateSupervisor,
   assignSitesToClients,
   getUsersByRole,
 } from "@/services/userService";
@@ -24,14 +22,13 @@ import {
   ShieldX,
   Copy,
   Trash2,
-  RotateCcw,
   Plus,
   Loader2,
 } from "lucide-react";
-import AddClientModal from "./AddClientModal";
-import EditClientModal from "./EditClientModal";
-import AssignSitesModal from "./AssignSitesModal";
-import ConfirmModal from "./ConfirmModal";
+import AddSupervisorModal from "./AddSupervisorModal";
+import EditSupervisorModal from "./EditSupervisorModal";
+import AssignSitesModal from "@/features/sites/AssignSitesModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -39,17 +36,17 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 
-interface Client {
+interface Supervisor {
   id: string;
   name: string;
   email: string;
+  password: string;
   isBlocked: boolean;
-  isDeleted?: boolean;
-  assignedSites: Site[];
+  sites: Site[];
 }
 
-const Clients: React.FC = () => {
-  const [clients, setClients] = useState<Client[]>([]);
+const Supervisors: React.FC = () => {
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [allSites, setAllSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -57,18 +54,11 @@ const Clients: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedSupervisor, setSelectedSupervisor] = useState<Supervisor | null>(null);
   const [isToggling, setIsToggling] = useState<{ [key: string]: boolean }>({});
-  const [isRegenerating, setIsRegenerating] = useState<{
-    [key: string]: boolean;
-  }>({});
+  const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
-  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>(
-    {},
-  );
-  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -90,11 +80,20 @@ const Clients: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [clientsData, sitesData] = await Promise.all([
-          getUsersByRole("client", showDeleted),
+        const [supervisorsData, sitesData] = await Promise.all([
+          getUsersByRole("supervisor"),
           getSites(),
         ]);
-        setClients(clientsData);
+        setSupervisors(
+          supervisorsData.map((user) => ({
+            id: user.id,
+            name: user.name,
+            sites: user.assignedSites || [],
+            email: user.email,
+            password: user.password || "********",
+            isBlocked: user.isBlocked,
+          })),
+        );
         setAllSites(sitesData);
       } catch (err) {
         toast.error("Failed to fetch data. Please try again later.");
@@ -103,42 +102,31 @@ const Clients: React.FC = () => {
       }
     };
     fetchData();
-  }, [showDeleted]);
+  }, []);
 
-  const filteredClients = clients.filter((client) => {
+  const filteredSupervisors = supervisors.filter((supervisor) => {
     const matchesSearch =
-      client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      supervisor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supervisor.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite =
-      !selectedSiteId ||
-      client.assignedSites?.some((site) => site.id === selectedSiteId);
+      !selectedSiteId || supervisor.sites.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !client.isBlocked && !client.isDeleted) ||
-      (selectedStatus === "blocked" && client.isBlocked && !client.isDeleted);
+      (selectedStatus === "active" && !supervisor.isBlocked) ||
+      (selectedStatus === "blocked" && supervisor.isBlocked);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
-  const totalPages = Math.ceil(filteredClients.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(filteredSupervisors.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentClients = filteredClients.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
+  const currentSupervisors = filteredSupervisors.slice(indexOfFirstItem, indexOfLastItem);
 
-  const activeClients = clients.filter(
-    (c) => !c.isBlocked && !c.isDeleted,
-  ).length;
-  const blockedClients = clients.filter(
-    (c) => c.isBlocked && !c.isDeleted,
-  ).length;
-  const deletedClientsCount = clients.filter((c) => c.isDeleted).length;
+  const activeSupervisors = supervisors.filter((a) => !a.isBlocked).length;
+  const blockedSupervisors = supervisors.filter((a) => a.isBlocked).length;
 
   const paginate = (pageNumber: number) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) {
-      setCurrentPage(pageNumber);
-    }
+    if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -148,138 +136,81 @@ const Clients: React.FC = () => {
       .catch(() => toast.error(`Failed to copy ${label}`));
   };
 
-  const handleToggleStatus = (client: Client) => {
-    const action = client.isBlocked ? "unblock" : "block";
+  const handleToggleStatus = (supervisor: Supervisor) => {
+    const action = supervisor.isBlocked ? "unblock" : "block";
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: `Confirm ${action}`,
-      message: `Are you sure you want to ${action} ${client.name}?`,
+      message: `Are you sure you want to ${action} ${supervisor.name}?`,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
-        setIsToggling((prev) => ({ ...prev, [client.id]: true }));
+        setIsToggling((prev) => ({ ...prev, [supervisor.id]: true }));
         try {
-          const newIsBlocked = !client.isBlocked;
-          await toggleUserStatus(client.id, newIsBlocked);
-          setClients((prev) =>
-            prev.map((c) =>
-              c.id === client.id ? { ...c, isBlocked: newIsBlocked } : c
-            )
+          const newIsBlocked = !supervisor.isBlocked;
+          await toggleUserStatus(supervisor.id, newIsBlocked);
+          setSupervisors((prev) =>
+            prev.map((a) => (a.id === supervisor.id ? { ...a, isBlocked: newIsBlocked } : a)),
           );
-          toast.success(`Client ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
+          toast.success(`Supervisor ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
         } catch (err) {
           toast.error("Failed to update status");
         } finally {
-          setIsToggling((prev) => ({ ...prev, [client.id]: false }));
+          setIsToggling((prev) => ({ ...prev, [supervisor.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
   };
 
-  const handleRegeneratePassword = (client: Client) => {
+  const handleRegeneratePassword = (supervisor: Supervisor) => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${client.name}?`,
+      message: `Are you sure you want to regenerate the password for ${supervisor.name}?`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
-        setIsRegenerating((prev) => ({ ...prev, [client.id]: true }));
+        setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: true }));
         try {
-          const newPassword = await regeneratePassword(client.id);
+          const newPassword = await regeneratePassword(supervisor.id);
           navigator.clipboard
             .writeText(newPassword)
             .then(() => toast.success("Password copied to clipboard!"))
             .catch(() => toast.error("Failed to copy password."));
+          setSupervisors((prev) =>
+            prev.map((a) => (a.id === supervisor.id ? { ...a, password: newPassword } : a)),
+          );
           toast.success("Password regenerated successfully!");
         } catch (err) {
           toast.error("Failed to regenerate password.");
         } finally {
-          setIsRegenerating((prev) => ({ ...prev, [client.id]: false }));
+          setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
         }
       },
     });
   };
 
-  const handleDeleteClient = (client: Client) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Delete Client",
-      message: `Are you sure you want to delete ${client.name}? This is a soft delete — the client's historical data (sites, transactions, reports) is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
-      isLoading: false,
-      onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
-        setIsDeleting((prev) => ({ ...prev, [client.id]: true }));
-        try {
-          await deleteClient(client.id);
-          if (showDeleted) {
-            setClients((prev) =>
-              prev.map((c) => (c.id === client.id ? { ...c, isDeleted: true } : c)),
-            );
-          } else {
-            setClients((prev) => prev.filter((c) => c.id !== client.id));
-          }
-          toast.success(`${client.name} has been deleted.`);
-        } catch (err: any) {
-          toast.error(err?.response?.data?.message || "Failed to delete client.");
-        } finally {
-          setIsDeleting((prev) => ({ ...prev, [client.id]: false }));
-          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
-        }
-      },
-    });
-  };
-
-  const handleRestoreClient = (client: Client) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Restore Client",
-      message: `Restore ${client.name}? They will reappear in active client lists and be able to log in again.`,
-      isLoading: false,
-      onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
-        setIsRestoring((prev) => ({ ...prev, [client.id]: true }));
-        try {
-          await restoreClient(client.id);
-          setClients((prev) =>
-            prev.map((c) => (c.id === client.id ? { ...c, isDeleted: false } : c)),
-          );
-          toast.success(`${client.name} has been restored.`);
-        } catch (err: any) {
-          toast.error(err?.response?.data?.message || "Failed to restore client.");
-        } finally {
-          setIsRestoring((prev) => ({ ...prev, [client.id]: false }));
-          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
-        }
-      },
-    });
-  };
-
-  const handleRemoveSite = (clientId: string, siteId: string) => {
-    const client = clients.find((c) => c.id === clientId);
+  const handleRemoveSite = (supervisorId: string, siteId: string) => {
+    const supervisor = supervisors.find((a) => a.id === supervisorId);
     const site = allSites.find((s) => s.id === siteId);
-    if (!client || !site) return;
+    if (!supervisor || !site) return;
 
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: "Confirm Site Removal",
-      message: `Are you sure you want to remove ${site.name} from ${client.name}?`,
+      message: `Are you sure you want to remove ${site.name} from ${supervisor.name}?`,
       onConfirm: async () => {
         try {
-          const updatedSites = (client.assignedSites || []).filter(
-            (s) => s.id !== siteId
-          );
+          const updatedSites = supervisor.sites.filter((s) => s.id !== siteId);
           await assignSitesToClients(
-            clientId,
-            updatedSites.map((s) => s.id)
+            supervisorId,
+            updatedSites.map((s) => s.id),
           );
-          setClients((prev) =>
-            prev.map((c) =>
-              c.id === clientId ? { ...c, assignedSites: updatedSites } : c
-            )
+          setSupervisors((prev) =>
+            prev.map((a) => (a.id === supervisorId ? { ...a, sites: updatedSites } : a)),
           );
           toast.success("Site removed successfully!");
         } catch (err) {
@@ -292,16 +223,14 @@ const Clients: React.FC = () => {
   };
 
   const handleAssignSites = async (selectedSiteIds: string[]) => {
-    if (!selectedClient) return;
+    if (!selectedSupervisor) return;
     try {
-      const currentSiteIds = (selectedClient.assignedSites || []).map((site) => site.id);
+      const currentSiteIds = selectedSupervisor.sites.map((site) => site.id);
       const newSiteIds = [...new Set([...currentSiteIds, ...selectedSiteIds])];
-      await assignSitesToClients(selectedClient.id, newSiteIds);
+      await assignSitesToClients(selectedSupervisor.id, newSiteIds);
       const updatedSites = allSites.filter((site) => newSiteIds.includes(site.id));
-      setClients((prev) =>
-        prev.map((c) =>
-          c.id === selectedClient.id ? { ...c, assignedSites: updatedSites } : c
-        )
+      setSupervisors((prev) =>
+        prev.map((a) => (a.id === selectedSupervisor.id ? { ...a, sites: updatedSites } : a)),
       );
       toast.success("Sites assigned successfully!");
     } catch (err) {
@@ -313,13 +242,13 @@ const Clients: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-console-text">Clients</h1>
+          <h1 className="text-xl font-semibold text-console-text">Supervisors</h1>
           <p className="mt-0.5 text-sm text-console-muted">
-            Manage and oversee clients across your organization
+            Manage and oversee supervisors across your organization
           </p>
         </div>
         <Button onClick={() => setIsAddModalOpen(true)}>
-          <Plus size={16} /> Add client
+          <Plus size={16} /> Add supervisor
         </Button>
       </div>
 
@@ -331,9 +260,9 @@ const Clients: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total Clients" value={clients.length} icon={Users} />
-            <StatCard label="Active" value={activeClients} icon={ShieldCheck} />
-            <StatCard label="Blocked" value={blockedClients} icon={ShieldX} />
+            <StatCard label="Total Supervisors" value={supervisors.length} icon={Users} />
+            <StatCard label="Active" value={activeSupervisors} icon={ShieldCheck} />
+            <StatCard label="Blocked" value={blockedSupervisors} icon={ShieldX} />
             <StatCard label="Total Sites" value={allSites.length} icon={Building2} />
           </div>
 
@@ -386,27 +315,15 @@ const Clients: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
-                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-console-border bg-console-bg px-4 py-2.5 text-sm text-console-text">
-                  <input
-                    type="checkbox"
-                    checked={showDeleted}
-                    onChange={(e) => {
-                      setShowDeleted(e.target.checked);
-                      setCurrentPage(1);
-                    }}
-                    className="rounded border-console-border text-brand-600 focus:ring-brand-500"
-                  />
-                  Show deleted{deletedClientsCount > 0 ? ` (${deletedClientsCount})` : ""}
-                </label>
               </div>
             </div>
           </Card>
 
           <Card className="p-0">
-            {currentClients.length === 0 ? (
+            {currentSupervisors.length === 0 ? (
               <EmptyState
                 icon={Users}
-                title="No clients found"
+                title="No supervisors found"
                 description="Try adjusting your search or filter criteria."
               />
             ) : (
@@ -414,7 +331,7 @@ const Clients: React.FC = () => {
                 <table className="min-w-full divide-y divide-console-border">
                   <thead className="bg-console-bg">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Client</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Supervisor</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Assigned Sites</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Contact</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
@@ -422,14 +339,14 @@ const Clients: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-console-border">
-                    {currentClients.map((client) => (
-                      <tr key={client.id} className="hover:bg-console-bg">
+                    {currentSupervisors.map((supervisor) => (
+                      <tr key={supervisor.id} className="hover:bg-console-bg">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className="relative">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                                {client.name
-                                  ?.split(" ")
+                                {supervisor.name
+                                  .split(" ")
                                   .map((n) => n[0])
                                   .join("")
                                   .toUpperCase()}
@@ -437,25 +354,25 @@ const Clients: React.FC = () => {
                               <div
                                 className={cn(
                                   "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",
-                                  client.isBlocked ? "bg-danger-500" : "bg-success-500",
+                                  supervisor.isBlocked ? "bg-danger-500" : "bg-success-500",
                                 )}
                               />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-console-text">{client.name}</div>
-                              <div className="text-xs text-console-muted">ID: {client.id.slice(-8)}</div>
+                              <div className="text-sm font-medium text-console-text">{supervisor.name}</div>
+                              <div className="text-xs text-console-muted">ID: {supervisor.id.slice(-8)}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex max-w-xs flex-wrap items-center gap-1.5">
-                            {(client.assignedSites || []).length === 0 ? (
+                            {supervisor.sites.length === 0 ? (
                               <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
                                 No sites assigned
                               </span>
                             ) : (
                               <>
-                                {client.assignedSites.slice(0, 2).map((site) => (
+                                {supervisor.sites.slice(0, 2).map((site) => (
                                   <span
                                     key={site.id}
                                     className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
@@ -463,7 +380,7 @@ const Clients: React.FC = () => {
                                     {site.name}
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveSite(client.id, site.id)}
+                                      onClick={() => handleRemoveSite(supervisor.id, site.id)}
                                       className="text-brand-600 transition-colors hover:text-danger-600"
                                       aria-label={`Remove ${site.name}`}
                                     >
@@ -471,9 +388,9 @@ const Clients: React.FC = () => {
                                     </button>
                                   </span>
                                 ))}
-                                {client.assignedSites.length > 2 && (
+                                {supervisor.sites.length > 2 && (
                                   <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
-                                    +{client.assignedSites.length - 2} more
+                                    +{supervisor.sites.length - 2} more
                                   </span>
                                 )}
                               </>
@@ -481,7 +398,7 @@ const Clients: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedClient(client);
+                                setSelectedSupervisor(supervisor);
                                 setIsAssignModalOpen(true);
                               }}
                               aria-label="Assign site"
@@ -494,10 +411,10 @@ const Clients: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Mail size={13} className="text-console-muted" />
-                            <span className="text-sm text-console-text">{client.email}</span>
+                            <span className="text-sm text-console-text">{supervisor.email}</span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(client.email, "Email")}
+                              onClick={() => copyToClipboard(supervisor.email, "Email")}
                               aria-label="Copy email"
                               className="text-console-muted transition-colors hover:text-brand-700"
                             >
@@ -509,18 +426,12 @@ const Clients: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              client.isDeleted
-                                ? "bg-slate-100 text-slate-600"
-                                : client.isBlocked
-                                  ? "bg-danger-50 text-danger-700"
-                                  : "bg-success-50 text-success-700",
+                              supervisor.isBlocked
+                                ? "bg-danger-50 text-danger-700"
+                                : "bg-success-50 text-success-700",
                             )}
                           >
-                            {client.isDeleted ? (
-                              <>
-                                <Trash2 size={11} /> Deleted
-                              </>
-                            ) : client.isBlocked ? (
+                            {supervisor.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -533,82 +444,50 @@ const Clients: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex gap-1">
-                            {client.isDeleted ? (
-                              <button
-                                type="button"
-                                onClick={() => handleRestoreClient(client)}
-                                disabled={isRestoring[client.id]}
-                                className="flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 transition-colors hover:bg-success-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {isRestoring[client.id] ? (
-                                  <Loader2 size={13} className="animate-spin" />
-                                ) : (
-                                  <RotateCcw size={13} />
-                                )}
-                                Restore
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleToggleStatus(client)}
-                                  disabled={isToggling[client.id]}
-                                  aria-label={client.isBlocked ? "Unblock client" : "Block client"}
-                                  className={cn(
-                                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                    client.isBlocked
-                                      ? "bg-success-50 text-success-700 hover:bg-success-100"
-                                      : "bg-console-bg text-console-text hover:bg-slate-200",
-                                  )}
-                                >
-                                  {isToggling[client.id] ? (
-                                    <Loader2 size={13} className="animate-spin" />
-                                  ) : client.isBlocked ? (
-                                    "Unblock"
-                                  ) : (
-                                    "Block"
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedClient(client);
-                                    setIsEditModalOpen(true);
-                                  }}
-                                  aria-label="Edit client"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRegeneratePassword(client)}
-                                  disabled={isRegenerating[client.id]}
-                                  aria-label="Regenerate password"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isRegenerating[client.id] ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    <RefreshCw size={14} />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteClient(client)}
-                                  disabled={isDeleting[client.id]}
-                                  aria-label="Delete client"
-                                  title="Delete client"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isDeleting[client.id] ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    <Trash2 size={14} />
-                                  )}
-                                </button>
-                              </>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleStatus(supervisor)}
+                              disabled={isToggling[supervisor.id]}
+                              aria-label={supervisor.isBlocked ? "Unblock supervisor" : "Block supervisor"}
+                              className={cn(
+                                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                supervisor.isBlocked
+                                  ? "bg-success-50 text-success-700 hover:bg-success-100"
+                                  : "bg-console-bg text-console-text hover:bg-slate-200",
+                              )}
+                            >
+                              {isToggling[supervisor.id] ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : supervisor.isBlocked ? (
+                                "Unblock"
+                              ) : (
+                                "Block"
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedSupervisor(supervisor);
+                                setIsEditModalOpen(true);
+                              }}
+                              aria-label="Edit supervisor"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRegeneratePassword(supervisor)}
+                              disabled={isRegenerating[supervisor.id]}
+                              aria-label="Regenerate password"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isRegenerating[supervisor.id] ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <RefreshCw size={14} />
+                              )}
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -625,9 +504,9 @@ const Clients: React.FC = () => {
                 Showing{" "}
                 <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
                 <span className="font-semibold text-console-text">
-                  {Math.min(indexOfLastItem, filteredClients.length)}
+                  {Math.min(indexOfLastItem, filteredSupervisors.length)}
                 </span>{" "}
-                of <span className="font-semibold text-console-text">{filteredClients.length}</span> clients
+                of <span className="font-semibold text-console-text">{filteredSupervisors.length}</span> supervisors
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -682,37 +561,47 @@ const Clients: React.FC = () => {
         </>
       )}
 
-      <AddClientModal
+      <AddSupervisorModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSubmit={async (newClient) => {
+        onSubmit={async (newSupervisor: { name: string; email: string }) => {
           try {
-            const createdClient = await createClient(newClient);
-            setClients((prev) => [...prev, createdClient]);
+            await createSupervisor(newSupervisor);
+            const updatedSupervisors = await getUsersByRole("supervisor");
+            setSupervisors(
+              updatedSupervisors.map((user) => ({
+                id: user.id,
+                name: user.name,
+                sites: user.assignedSites || [],
+                email: user.email,
+                password: user.password || "********",
+                isBlocked: user.isBlocked,
+              })),
+            );
             setIsAddModalOpen(false);
-            toast.success("Client added successfully!");
+            toast.success("Supervisor added successfully!");
           } catch (err) {
-            toast.error("Failed to add client.");
+            toast.error("Failed to add supervisor.");
           }
         }}
       />
 
-      {selectedClient && (
+      {selectedSupervisor && (
         <>
-          <EditClientModal
+          <EditSupervisorModal
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
-            client={selectedClient}
-            onSubmit={async (updatedClientData) => {
+            supervisor={selectedSupervisor}
+            onSubmit={async (updatedSupervisor: { name: string; email: string }) => {
               try {
-                const updatedClient = await updateClient(selectedClient.id, updatedClientData);
-                setClients((prev) =>
-                  prev.map((c) => (c.id === updatedClient.id ? { ...c, ...updatedClient } : c))
+                await updateSupervisor(selectedSupervisor.id, updatedSupervisor);
+                setSupervisors((prev) =>
+                  prev.map((a) => (a.id === selectedSupervisor.id ? { ...a, ...updatedSupervisor } : a)),
                 );
                 setIsEditModalOpen(false);
-                toast.success("Client updated successfully!");
+                toast.success("Supervisor updated successfully!");
               } catch (err) {
-                toast.error("Failed to update client.");
+                toast.error("Failed to update supervisor.");
               }
             }}
           />
@@ -720,7 +609,7 @@ const Clients: React.FC = () => {
             isOpen={isAssignModalOpen}
             onClose={() => setIsAssignModalOpen(false)}
             allSites={allSites}
-            assignedSites={selectedClient.assignedSites}
+            assignedSites={selectedSupervisor.sites}
             onAssign={handleAssignSites}
           />
         </>
@@ -737,4 +626,4 @@ const Clients: React.FC = () => {
   );
 };
 
-export default Clients;
+export default Supervisors;

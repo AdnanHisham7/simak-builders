@@ -17,7 +17,7 @@ import {
   LucideIcon,
 } from "lucide-react";
 import SendMoneyCard from "./SendMoneyCard";
-import ConfirmationModal from "./ConfirmationModal";
+import ConfirmationModal from "@/components/ui/ConfirmationModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";

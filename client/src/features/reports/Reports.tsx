@@ -13,15 +13,15 @@ import {
 import { privateClient } from "@/api";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
-import ReportRowEditor from "./reports/ReportRowEditor";
-import EditableAmountField from "./reports/EditableAmountField";
-import { loadImage, generateProfessionalReportPdf } from "./reports/reportPdf";
+import ReportRowEditor from "./components/ReportRowEditor";
+import EditableAmountField from "./components/EditableAmountField";
+import { loadImage, generateProfessionalReportPdf } from "./components/reportPdf";
 import {
   buildEditableRows,
   computeTotals,
   computeBalance,
   displayAmount,
-} from "./reports/editableReport";
+} from "./components/editableReport";
 import "@/assets/Roboto-Regular";
 import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";

@@ -47,7 +47,7 @@ import {
   Check,
   Search,
 } from "lucide-react";
-import RequestTransferModal from "./RequestTransferModal";
+import RequestTransferModal from "../stocks/RequestTransferModal";
 import {
   getPurchasesBySite,
   verifyPurchase,
@@ -63,7 +63,7 @@ import {
   requestStockTransfer,
   Stock,
 } from "@/services/stockService";
-import LogUsageModal from "./LogUsageModal";
+import LogUsageModal from "../stocks/LogUsageModal";
 import {
   getAttendanceDetailsForDay,
   getSiteAttendance,
@@ -82,7 +82,7 @@ import { toast } from "sonner";
 import { privateClient } from "@/api";
 import CompleteSiteModal from "./CompleteSiteModal";
 import ClientPaymentsModal from "./ClientPaymentsModal";
-import SiteContractorsManager from "./SiteContractorsManager";
+import SiteContractorsManager from "../contractors/SiteContractorsManager";
 import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";

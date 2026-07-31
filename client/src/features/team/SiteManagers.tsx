@@ -30,9 +30,9 @@ import {
 } from "lucide-react";
 import AddSiteManagerModal from "./AddSiteManagerModal";
 import EditSiteManagerModal from "./EditSiteManagerModal";
-import AssignSitesModal from "./AssignSitesModal";
+import AssignSitesModal from "@/features/sites/AssignSitesModal";
 import AssignFundsModal from "./AssignFundsModal";
-import ConfirmModal from "./ConfirmModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";

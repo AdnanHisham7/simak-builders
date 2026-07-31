@@ -38,7 +38,7 @@ export const applyHeaderFooter = (
   headerData: LoadedImage,
   footerData: LoadedImage,
 ): void => {
-  const totalPages = doc.internal.getNumberOfPages();
+  const totalPages = (doc.internal as any).getNumberOfPages();
   const pageWidth = doc.internal.pageSize.width;
   const pageHeight = doc.internal.pageSize.height;
 

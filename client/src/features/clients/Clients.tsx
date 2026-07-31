@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  createArchitect,
+  createClient,
   regeneratePassword,
   toggleUserStatus,
-  updateArchitect,
+  updateClient,
+  deleteClient,
+  restoreClient,
   assignSitesToClients,
   getUsersByRole,
 } from "@/services/userService";
@@ -22,13 +24,14 @@ import {
   ShieldX,
   Copy,
   Trash2,
+  RotateCcw,
   Plus,
   Loader2,
 } from "lucide-react";
-import AddArchitectModal from "./AddArchitectModal";
-import EditArchitectModal from "./EditArchitectModal";
-import AssignSitesModal from "./AssignSitesModal";
-import ConfirmModal from "./ConfirmModal";
+import AddClientModal from "./AddClientModal";
+import EditClientModal from "./EditClientModal";
+import AssignSitesModal from "@/features/sites/AssignSitesModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -36,17 +39,17 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 
-export interface Architect {
+interface Client {
   id: string;
   name: string;
   email: string;
-  password: string;
   isBlocked: boolean;
-  sites: Site[];
+  isDeleted?: boolean;
+  assignedSites: Site[];
 }
 
-const Architects: React.FC = () => {
-  const [architects, setArchitects] = useState<Architect[]>([]);
+const Clients: React.FC = () => {
+  const [clients, setClients] = useState<Client[]>([]);
   const [allSites, setAllSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,11 +57,18 @@ const Architects: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedArchitect, setSelectedArchitect] = useState<Architect | null>(null);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [isToggling, setIsToggling] = useState<{ [key: string]: boolean }>({});
-  const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
+  const [isRegenerating, setIsRegenerating] = useState<{
+    [key: string]: boolean;
+  }>({});
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
+  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>(
+    {},
+  );
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -80,20 +90,11 @@ const Architects: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [architectsData, sitesData] = await Promise.all([
-          getUsersByRole("architect"),
+        const [clientsData, sitesData] = await Promise.all([
+          getUsersByRole("client", showDeleted),
           getSites(),
         ]);
-        setArchitects(
-          architectsData.map((user) => ({
-            id: user.id,
-            name: user.name,
-            sites: user.assignedSites || [],
-            email: user.email,
-            password: user.password || "********",
-            isBlocked: user.isBlocked,
-          })),
-        );
+        setClients(clientsData);
         setAllSites(sitesData);
       } catch (err) {
         toast.error("Failed to fetch data. Please try again later.");
@@ -102,31 +103,42 @@ const Architects: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [showDeleted]);
 
-  const filteredArchitects = architects.filter((architect) => {
+  const filteredClients = clients.filter((client) => {
     const matchesSearch =
-      architect.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      architect.email.toLowerCase().includes(searchTerm.toLowerCase());
+      client.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      client.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite =
-      !selectedSiteId || architect.sites.some((site) => site.id === selectedSiteId);
+      !selectedSiteId ||
+      client.assignedSites?.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !architect.isBlocked) ||
-      (selectedStatus === "blocked" && architect.isBlocked);
+      (selectedStatus === "active" && !client.isBlocked && !client.isDeleted) ||
+      (selectedStatus === "blocked" && client.isBlocked && !client.isDeleted);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
-  const totalPages = Math.ceil(filteredArchitects.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(filteredClients.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentArchitects = filteredArchitects.slice(indexOfFirstItem, indexOfLastItem);
+  const currentClients = filteredClients.slice(
+    indexOfFirstItem,
+    indexOfLastItem
+  );
 
-  const activeArchitects = architects.filter((a) => !a.isBlocked).length;
-  const blockedArchitects = architects.filter((a) => a.isBlocked).length;
+  const activeClients = clients.filter(
+    (c) => !c.isBlocked && !c.isDeleted,
+  ).length;
+  const blockedClients = clients.filter(
+    (c) => c.isBlocked && !c.isDeleted,
+  ).length;
+  const deletedClientsCount = clients.filter((c) => c.isDeleted).length;
 
   const paginate = (pageNumber: number) => {
-    if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -136,81 +148,138 @@ const Architects: React.FC = () => {
       .catch(() => toast.error(`Failed to copy ${label}`));
   };
 
-  const handleToggleStatus = (architect: Architect) => {
-    const action = architect.isBlocked ? "unblock" : "block";
+  const handleToggleStatus = (client: Client) => {
+    const action = client.isBlocked ? "unblock" : "block";
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: `Confirm ${action}`,
-      message: `Are you sure you want to ${action} ${architect.name}?`,
+      message: `Are you sure you want to ${action} ${client.name}?`,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
-        setIsToggling((prev) => ({ ...prev, [architect.id]: true }));
+        setIsToggling((prev) => ({ ...prev, [client.id]: true }));
         try {
-          const newIsBlocked = !architect.isBlocked;
-          await toggleUserStatus(architect.id, newIsBlocked);
-          setArchitects((prev) =>
-            prev.map((a) => (a.id === architect.id ? { ...a, isBlocked: newIsBlocked } : a)),
+          const newIsBlocked = !client.isBlocked;
+          await toggleUserStatus(client.id, newIsBlocked);
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === client.id ? { ...c, isBlocked: newIsBlocked } : c
+            )
           );
-          toast.success(`Architect ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
+          toast.success(`Client ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
         } catch (err) {
           toast.error("Failed to update status");
         } finally {
-          setIsToggling((prev) => ({ ...prev, [architect.id]: false }));
+          setIsToggling((prev) => ({ ...prev, [client.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
   };
 
-  const handleRegeneratePassword = (architect: Architect) => {
+  const handleRegeneratePassword = (client: Client) => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${architect.name}?`,
+      message: `Are you sure you want to regenerate the password for ${client.name}?`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
-        setIsRegenerating((prev) => ({ ...prev, [architect.id]: true }));
+        setIsRegenerating((prev) => ({ ...prev, [client.id]: true }));
         try {
-          const newPassword = await regeneratePassword(architect.id);
+          const newPassword = await regeneratePassword(client.id);
           navigator.clipboard
             .writeText(newPassword)
             .then(() => toast.success("Password copied to clipboard!"))
             .catch(() => toast.error("Failed to copy password."));
-          setArchitects((prev) =>
-            prev.map((a) => (a.id === architect.id ? { ...a, password: newPassword } : a)),
-          );
           toast.success("Password regenerated successfully!");
         } catch (err) {
           toast.error("Failed to regenerate password.");
         } finally {
-          setIsRegenerating((prev) => ({ ...prev, [architect.id]: false }));
+          setIsRegenerating((prev) => ({ ...prev, [client.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
         }
       },
     });
   };
 
-  const handleRemoveSite = (architectId: string, siteId: string) => {
-    const architect = architects.find((a) => a.id === architectId);
+  const handleDeleteClient = (client: Client) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Client",
+      message: `Are you sure you want to delete ${client.name}? This is a soft delete — the client's historical data (sites, transactions, reports) is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsDeleting((prev) => ({ ...prev, [client.id]: true }));
+        try {
+          await deleteClient(client.id);
+          if (showDeleted) {
+            setClients((prev) =>
+              prev.map((c) => (c.id === client.id ? { ...c, isDeleted: true } : c)),
+            );
+          } else {
+            setClients((prev) => prev.filter((c) => c.id !== client.id));
+          }
+          toast.success(`${client.name} has been deleted.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.message || "Failed to delete client.");
+        } finally {
+          setIsDeleting((prev) => ({ ...prev, [client.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
+  const handleRestoreClient = (client: Client) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Restore Client",
+      message: `Restore ${client.name}? They will reappear in active client lists and be able to log in again.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsRestoring((prev) => ({ ...prev, [client.id]: true }));
+        try {
+          await restoreClient(client.id);
+          setClients((prev) =>
+            prev.map((c) => (c.id === client.id ? { ...c, isDeleted: false } : c)),
+          );
+          toast.success(`${client.name} has been restored.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.message || "Failed to restore client.");
+        } finally {
+          setIsRestoring((prev) => ({ ...prev, [client.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
+  const handleRemoveSite = (clientId: string, siteId: string) => {
+    const client = clients.find((c) => c.id === clientId);
     const site = allSites.find((s) => s.id === siteId);
-    if (!architect || !site) return;
+    if (!client || !site) return;
 
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: "Confirm Site Removal",
-      message: `Are you sure you want to remove ${site.name} from ${architect.name}?`,
+      message: `Are you sure you want to remove ${site.name} from ${client.name}?`,
       onConfirm: async () => {
         try {
-          const updatedSites = architect.sites.filter((s) => s.id !== siteId);
-          await assignSitesToClients(
-            architectId,
-            updatedSites.map((s) => s.id),
+          const updatedSites = (client.assignedSites || []).filter(
+            (s) => s.id !== siteId
           );
-          setArchitects((prev) =>
-            prev.map((a) => (a.id === architectId ? { ...a, sites: updatedSites } : a)),
+          await assignSitesToClients(
+            clientId,
+            updatedSites.map((s) => s.id)
+          );
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === clientId ? { ...c, assignedSites: updatedSites } : c
+            )
           );
           toast.success("Site removed successfully!");
         } catch (err) {
@@ -223,14 +292,16 @@ const Architects: React.FC = () => {
   };
 
   const handleAssignSites = async (selectedSiteIds: string[]) => {
-    if (!selectedArchitect) return;
+    if (!selectedClient) return;
     try {
-      const currentSiteIds = selectedArchitect.sites.map((site) => site.id);
+      const currentSiteIds = (selectedClient.assignedSites || []).map((site) => site.id);
       const newSiteIds = [...new Set([...currentSiteIds, ...selectedSiteIds])];
-      await assignSitesToClients(selectedArchitect.id, newSiteIds);
+      await assignSitesToClients(selectedClient.id, newSiteIds);
       const updatedSites = allSites.filter((site) => newSiteIds.includes(site.id));
-      setArchitects((prev) =>
-        prev.map((a) => (a.id === selectedArchitect.id ? { ...a, sites: updatedSites } : a)),
+      setClients((prev) =>
+        prev.map((c) =>
+          c.id === selectedClient.id ? { ...c, assignedSites: updatedSites } : c
+        )
       );
       toast.success("Sites assigned successfully!");
     } catch (err) {
@@ -242,13 +313,13 @@ const Architects: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-console-text">Architects</h1>
+          <h1 className="text-xl font-semibold text-console-text">Clients</h1>
           <p className="mt-0.5 text-sm text-console-muted">
-            Manage and oversee architects across your organization
+            Manage and oversee clients across your organization
           </p>
         </div>
         <Button onClick={() => setIsAddModalOpen(true)}>
-          <Plus size={16} /> Add architect
+          <Plus size={16} /> Add client
         </Button>
       </div>
 
@@ -260,9 +331,9 @@ const Architects: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total Architects" value={architects.length} icon={Users} />
-            <StatCard label="Active" value={activeArchitects} icon={ShieldCheck} />
-            <StatCard label="Blocked" value={blockedArchitects} icon={ShieldX} />
+            <StatCard label="Total Clients" value={clients.length} icon={Users} />
+            <StatCard label="Active" value={activeClients} icon={ShieldCheck} />
+            <StatCard label="Blocked" value={blockedClients} icon={ShieldX} />
             <StatCard label="Total Sites" value={allSites.length} icon={Building2} />
           </div>
 
@@ -315,15 +386,27 @@ const Architects: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
+                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-console-border bg-console-bg px-4 py-2.5 text-sm text-console-text">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => {
+                      setShowDeleted(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-console-border text-brand-600 focus:ring-brand-500"
+                  />
+                  Show deleted{deletedClientsCount > 0 ? ` (${deletedClientsCount})` : ""}
+                </label>
               </div>
             </div>
           </Card>
 
           <Card className="p-0">
-            {currentArchitects.length === 0 ? (
+            {currentClients.length === 0 ? (
               <EmptyState
                 icon={Users}
-                title="No architects found"
+                title="No clients found"
                 description="Try adjusting your search or filter criteria."
               />
             ) : (
@@ -331,7 +414,7 @@ const Architects: React.FC = () => {
                 <table className="min-w-full divide-y divide-console-border">
                   <thead className="bg-console-bg">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Architect</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Client</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Assigned Sites</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Contact</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
@@ -339,14 +422,14 @@ const Architects: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-console-border">
-                    {currentArchitects.map((architect) => (
-                      <tr key={architect.id} className="hover:bg-console-bg">
+                    {currentClients.map((client) => (
+                      <tr key={client.id} className="hover:bg-console-bg">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className="relative">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                                {architect.name
-                                  .split(" ")
+                                {client.name
+                                  ?.split(" ")
                                   .map((n) => n[0])
                                   .join("")
                                   .toUpperCase()}
@@ -354,25 +437,25 @@ const Architects: React.FC = () => {
                               <div
                                 className={cn(
                                   "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",
-                                  architect.isBlocked ? "bg-danger-500" : "bg-success-500",
+                                  client.isBlocked ? "bg-danger-500" : "bg-success-500",
                                 )}
                               />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-console-text">{architect.name}</div>
-                              <div className="text-xs text-console-muted">ID: {architect.id.slice(-8)}</div>
+                              <div className="text-sm font-medium text-console-text">{client.name}</div>
+                              <div className="text-xs text-console-muted">ID: {client.id.slice(-8)}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex max-w-xs flex-wrap items-center gap-1.5">
-                            {architect.sites.length === 0 ? (
+                            {(client.assignedSites || []).length === 0 ? (
                               <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
                                 No sites assigned
                               </span>
                             ) : (
                               <>
-                                {architect.sites.slice(0, 2).map((site) => (
+                                {client.assignedSites.slice(0, 2).map((site) => (
                                   <span
                                     key={site.id}
                                     className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
@@ -380,7 +463,7 @@ const Architects: React.FC = () => {
                                     {site.name}
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveSite(architect.id, site.id)}
+                                      onClick={() => handleRemoveSite(client.id, site.id)}
                                       className="text-brand-600 transition-colors hover:text-danger-600"
                                       aria-label={`Remove ${site.name}`}
                                     >
@@ -388,9 +471,9 @@ const Architects: React.FC = () => {
                                     </button>
                                   </span>
                                 ))}
-                                {architect.sites.length > 2 && (
+                                {client.assignedSites.length > 2 && (
                                   <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
-                                    +{architect.sites.length - 2} more
+                                    +{client.assignedSites.length - 2} more
                                   </span>
                                 )}
                               </>
@@ -398,7 +481,7 @@ const Architects: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedArchitect(architect);
+                                setSelectedClient(client);
                                 setIsAssignModalOpen(true);
                               }}
                               aria-label="Assign site"
@@ -411,10 +494,10 @@ const Architects: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Mail size={13} className="text-console-muted" />
-                            <span className="text-sm text-console-text">{architect.email}</span>
+                            <span className="text-sm text-console-text">{client.email}</span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(architect.email, "Email")}
+                              onClick={() => copyToClipboard(client.email, "Email")}
                               aria-label="Copy email"
                               className="text-console-muted transition-colors hover:text-brand-700"
                             >
@@ -426,12 +509,18 @@ const Architects: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              architect.isBlocked
-                                ? "bg-danger-50 text-danger-700"
-                                : "bg-success-50 text-success-700",
+                              client.isDeleted
+                                ? "bg-slate-100 text-slate-600"
+                                : client.isBlocked
+                                  ? "bg-danger-50 text-danger-700"
+                                  : "bg-success-50 text-success-700",
                             )}
                           >
-                            {architect.isBlocked ? (
+                            {client.isDeleted ? (
+                              <>
+                                <Trash2 size={11} /> Deleted
+                              </>
+                            ) : client.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -444,50 +533,82 @@ const Architects: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStatus(architect)}
-                              disabled={isToggling[architect.id]}
-                              aria-label={architect.isBlocked ? "Unblock architect" : "Block architect"}
-                              className={cn(
-                                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                architect.isBlocked
-                                  ? "bg-success-50 text-success-700 hover:bg-success-100"
-                                  : "bg-console-bg text-console-text hover:bg-slate-200",
-                              )}
-                            >
-                              {isToggling[architect.id] ? (
-                                <Loader2 size={13} className="animate-spin" />
-                              ) : architect.isBlocked ? (
-                                "Unblock"
-                              ) : (
-                                "Block"
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedArchitect(architect);
-                                setIsEditModalOpen(true);
-                              }}
-                              aria-label="Edit architect"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRegeneratePassword(architect)}
-                              disabled={isRegenerating[architect.id]}
-                              aria-label="Regenerate password"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isRegenerating[architect.id] ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <RefreshCw size={14} />
-                              )}
-                            </button>
+                            {client.isDeleted ? (
+                              <button
+                                type="button"
+                                onClick={() => handleRestoreClient(client)}
+                                disabled={isRestoring[client.id]}
+                                className="flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 transition-colors hover:bg-success-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {isRestoring[client.id] ? (
+                                  <Loader2 size={13} className="animate-spin" />
+                                ) : (
+                                  <RotateCcw size={13} />
+                                )}
+                                Restore
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(client)}
+                                  disabled={isToggling[client.id]}
+                                  aria-label={client.isBlocked ? "Unblock client" : "Block client"}
+                                  className={cn(
+                                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                    client.isBlocked
+                                      ? "bg-success-50 text-success-700 hover:bg-success-100"
+                                      : "bg-console-bg text-console-text hover:bg-slate-200",
+                                  )}
+                                >
+                                  {isToggling[client.id] ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : client.isBlocked ? (
+                                    "Unblock"
+                                  ) : (
+                                    "Block"
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedClient(client);
+                                    setIsEditModalOpen(true);
+                                  }}
+                                  aria-label="Edit client"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                >
+                                  <Pencil size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRegeneratePassword(client)}
+                                  disabled={isRegenerating[client.id]}
+                                  aria-label="Regenerate password"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isRegenerating[client.id] ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : (
+                                    <RefreshCw size={14} />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteClient(client)}
+                                  disabled={isDeleting[client.id]}
+                                  aria-label="Delete client"
+                                  title="Delete client"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isDeleting[client.id] ? (
+                                    <Loader2 size={14} className="animate-spin" />
+                                  ) : (
+                                    <Trash2 size={14} />
+                                  )}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -504,9 +625,9 @@ const Architects: React.FC = () => {
                 Showing{" "}
                 <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
                 <span className="font-semibold text-console-text">
-                  {Math.min(indexOfLastItem, filteredArchitects.length)}
+                  {Math.min(indexOfLastItem, filteredClients.length)}
                 </span>{" "}
-                of <span className="font-semibold text-console-text">{filteredArchitects.length}</span> architects
+                of <span className="font-semibold text-console-text">{filteredClients.length}</span> clients
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -561,47 +682,37 @@ const Architects: React.FC = () => {
         </>
       )}
 
-      <AddArchitectModal
+      <AddClientModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSubmit={async (newArchitect: { name: string; email: string }) => {
+        onSubmit={async (newClient) => {
           try {
-            await createArchitect(newArchitect);
-            const updatedArchitects = await getUsersByRole("architect");
-            setArchitects(
-              updatedArchitects.map((user) => ({
-                id: user.id,
-                name: user.name,
-                sites: user.assignedSites || [],
-                email: user.email,
-                password: user.password || "********",
-                isBlocked: user.isBlocked,
-              })),
-            );
+            const createdClient = await createClient(newClient);
+            setClients((prev) => [...prev, createdClient]);
             setIsAddModalOpen(false);
-            toast.success("Architect added successfully!");
+            toast.success("Client added successfully!");
           } catch (err) {
-            toast.error("Failed to add architect.");
+            toast.error("Failed to add client.");
           }
         }}
       />
 
-      {selectedArchitect && (
+      {selectedClient && (
         <>
-          <EditArchitectModal
+          <EditClientModal
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
-            architect={selectedArchitect}
-            onSubmit={async (updatedArchitect: { name: string; email: string }) => {
+            client={selectedClient}
+            onSubmit={async (updatedClientData) => {
               try {
-                await updateArchitect(selectedArchitect.id, updatedArchitect);
-                setArchitects((prev) =>
-                  prev.map((a) => (a.id === selectedArchitect.id ? { ...a, ...updatedArchitect } : a)),
+                const updatedClient = await updateClient(selectedClient.id, updatedClientData);
+                setClients((prev) =>
+                  prev.map((c) => (c.id === updatedClient.id ? { ...c, ...updatedClient } : c))
                 );
                 setIsEditModalOpen(false);
-                toast.success("Architect updated successfully!");
+                toast.success("Client updated successfully!");
               } catch (err) {
-                toast.error("Failed to update architect.");
+                toast.error("Failed to update client.");
               }
             }}
           />
@@ -609,7 +720,7 @@ const Architects: React.FC = () => {
             isOpen={isAssignModalOpen}
             onClose={() => setIsAssignModalOpen(false)}
             allSites={allSites}
-            assignedSites={selectedArchitect.sites}
+            assignedSites={selectedClient.assignedSites}
             onAssign={handleAssignSites}
           />
         </>
@@ -626,4 +737,4 @@ const Architects: React.FC = () => {
   );
 };
 
-export default Architects;
+export default Clients;

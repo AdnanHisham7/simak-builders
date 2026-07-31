@@ -21,27 +21,27 @@ import signupIllustration from "@/assets/signup-illustration.svg";
 import loginIllustration from "@/assets/login-illustration.svg";
 import { usePreloadImage } from "./hooks/usePreloadImage.tsx";
 import AdminLogin from "./pages/AdminLogin.tsx";
-import AdminDashboard from "./pages/admin/AdminDashboard.tsx";
+import AdminDashboard from "./features/dashboard/AdminDashboard.tsx";
 import ProtectedDashboardLayout from "./router/ProtectedDashboardLayout.tsx";
-import Employees from "./pages/admin/Employees.tsx";
-import Contractors from "./pages/admin/Contractors.tsx";
-import Vendors from "./pages/admin/Vendors.tsx";
-import SiteManagers from "./pages/admin/SiteManagers.tsx";
-import Supervisors from "./pages/admin/Supervisors.tsx";
-import Architects from "./pages/admin/Architects.tsx";
-import Sites from "./pages/admin/Sites.tsx";
-import Stocks from "./pages/admin/Stocks.tsx";
-import Reports from "./pages/admin/Reports.tsx";
-import { Settings } from "lucide-react";
-import SiteDetail from "./pages/admin/SiteDetail.tsx";
-import Salary from "./pages/admin/Salary.tsx";
+import Employees from "./features/employees/Employees.tsx";
+import Contractors from "./features/contractors/Contractors.tsx";
+import Vendors from "./features/vendors/Vendors.tsx";
+import SiteManagers from "./features/team/SiteManagers.tsx";
+import Supervisors from "./features/team/Supervisors.tsx";
+import Architects from "./features/team/Architects.tsx";
+import Sites from "./features/sites/Sites.tsx";
+import Stocks from "./features/stocks/Stocks.tsx";
+import Reports from "./features/reports/Reports.tsx";
+import SettingsPage from "./features/settings/Settings.tsx";
+import SiteDetail from "./features/sites/SiteDetail.tsx";
+import Salary from "./features/salary/Salary.tsx";
 import SiteManagerDashboard from "./pages/siteManager/SiteManagerDashboard.tsx";
-import ArchitectDashboard from "./pages/admin/architect/ArchitectDashboard.tsx";
+import ArchitectDashboard from "./features/team/ArchitectDashboard.tsx";
 import ArchitectProtected from "./router/ArchitectProtected.tsx";
-import ClientDashboard from "./pages/admin/ClientDashboard.tsx";
-import Clients from "./pages/admin/Clients.tsx";
+import ClientDashboard from "./features/clients/ClientDashboard.tsx";
+import Clients from "./features/clients/Clients.tsx";
 import ClientProtected from "./router/ClientProtected.tsx";
-import ListEnquiries from "./pages/admin/ListEnquiries.tsx";
+import ListEnquiries from "./features/enquiries/ListEnquiries.tsx";
 import AboutUs from "./pages/AboutUs.tsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy.tsx";
 import RedirectHandler from "./router/RedirectHandler.tsx";
@@ -118,7 +118,7 @@ const App: React.FC = () => {
             <Route path="sites/:siteId" element={<SiteDetail />} />
             <Route path="stocks" element={<Stocks />} />
             <Route path="reports" element={<Reports />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="settings" element={<SettingsPage />} />
             <Route
               path="site-managers/:managerId/dashboard"
               element={<SiteManagerDashboard />}
@@ -135,6 +135,7 @@ const App: React.FC = () => {
             <Route path="sites" element={<Sites />} />
             <Route path="sites/:siteId" element={<SiteDetail />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route path="architect" element={<ArchitectProtected />}>

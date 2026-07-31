@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import {
-  createSupervisor,
+  createArchitect,
   regeneratePassword,
   toggleUserStatus,
-  updateSupervisor,
+  updateArchitect,
   assignSitesToClients,
   getUsersByRole,
 } from "@/services/userService";
@@ -25,10 +25,10 @@ import {
   Plus,
   Loader2,
 } from "lucide-react";
-import AddSupervisorModal from "./AddSupervisorModal";
-import EditSupervisorModal from "./EditSupervisorModal";
-import AssignSitesModal from "./AssignSitesModal";
-import ConfirmModal from "./ConfirmModal";
+import AddArchitectModal from "./AddArchitectModal";
+import EditArchitectModal from "./EditArchitectModal";
+import AssignSitesModal from "@/features/sites/AssignSitesModal";
+import ConfirmModal from "@/components/ui/ConfirmModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -36,7 +36,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 
-interface Supervisor {
+export interface Architect {
   id: string;
   name: string;
   email: string;
@@ -45,8 +45,8 @@ interface Supervisor {
   sites: Site[];
 }
 
-const Supervisors: React.FC = () => {
-  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+const Architects: React.FC = () => {
+  const [architects, setArchitects] = useState<Architect[]>([]);
   const [allSites, setAllSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -54,7 +54,7 @@ const Supervisors: React.FC = () => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [selectedSupervisor, setSelectedSupervisor] = useState<Supervisor | null>(null);
+  const [selectedArchitect, setSelectedArchitect] = useState<Architect | null>(null);
   const [isToggling, setIsToggling] = useState<{ [key: string]: boolean }>({});
   const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
@@ -80,12 +80,12 @@ const Supervisors: React.FC = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [supervisorsData, sitesData] = await Promise.all([
-          getUsersByRole("supervisor"),
+        const [architectsData, sitesData] = await Promise.all([
+          getUsersByRole("architect"),
           getSites(),
         ]);
-        setSupervisors(
-          supervisorsData.map((user) => ({
+        setArchitects(
+          architectsData.map((user) => ({
             id: user.id,
             name: user.name,
             sites: user.assignedSites || [],
@@ -104,26 +104,26 @@ const Supervisors: React.FC = () => {
     fetchData();
   }, []);
 
-  const filteredSupervisors = supervisors.filter((supervisor) => {
+  const filteredArchitects = architects.filter((architect) => {
     const matchesSearch =
-      supervisor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      supervisor.email.toLowerCase().includes(searchTerm.toLowerCase());
+      architect.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      architect.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSite =
-      !selectedSiteId || supervisor.sites.some((site) => site.id === selectedSiteId);
+      !selectedSiteId || architect.sites.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !supervisor.isBlocked) ||
-      (selectedStatus === "blocked" && supervisor.isBlocked);
+      (selectedStatus === "active" && !architect.isBlocked) ||
+      (selectedStatus === "blocked" && architect.isBlocked);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
-  const totalPages = Math.ceil(filteredSupervisors.length / itemsPerPage) || 1;
+  const totalPages = Math.ceil(filteredArchitects.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentSupervisors = filteredSupervisors.slice(indexOfFirstItem, indexOfLastItem);
+  const currentArchitects = filteredArchitects.slice(indexOfFirstItem, indexOfLastItem);
 
-  const activeSupervisors = supervisors.filter((a) => !a.isBlocked).length;
-  const blockedSupervisors = supervisors.filter((a) => a.isBlocked).length;
+  const activeArchitects = architects.filter((a) => !a.isBlocked).length;
+  const blockedArchitects = architects.filter((a) => a.isBlocked).length;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
@@ -136,81 +136,81 @@ const Supervisors: React.FC = () => {
       .catch(() => toast.error(`Failed to copy ${label}`));
   };
 
-  const handleToggleStatus = (supervisor: Supervisor) => {
-    const action = supervisor.isBlocked ? "unblock" : "block";
+  const handleToggleStatus = (architect: Architect) => {
+    const action = architect.isBlocked ? "unblock" : "block";
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: `Confirm ${action}`,
-      message: `Are you sure you want to ${action} ${supervisor.name}?`,
+      message: `Are you sure you want to ${action} ${architect.name}?`,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
-        setIsToggling((prev) => ({ ...prev, [supervisor.id]: true }));
+        setIsToggling((prev) => ({ ...prev, [architect.id]: true }));
         try {
-          const newIsBlocked = !supervisor.isBlocked;
-          await toggleUserStatus(supervisor.id, newIsBlocked);
-          setSupervisors((prev) =>
-            prev.map((a) => (a.id === supervisor.id ? { ...a, isBlocked: newIsBlocked } : a)),
+          const newIsBlocked = !architect.isBlocked;
+          await toggleUserStatus(architect.id, newIsBlocked);
+          setArchitects((prev) =>
+            prev.map((a) => (a.id === architect.id ? { ...a, isBlocked: newIsBlocked } : a)),
           );
-          toast.success(`Supervisor ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
+          toast.success(`Architect ${newIsBlocked ? "blocked" : "unblocked"} successfully!`);
         } catch (err) {
           toast.error("Failed to update status");
         } finally {
-          setIsToggling((prev) => ({ ...prev, [supervisor.id]: false }));
+          setIsToggling((prev) => ({ ...prev, [architect.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
   };
 
-  const handleRegeneratePassword = (supervisor: Supervisor) => {
+  const handleRegeneratePassword = (architect: Architect) => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${supervisor.name}?`,
+      message: `Are you sure you want to regenerate the password for ${architect.name}?`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
-        setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: true }));
+        setIsRegenerating((prev) => ({ ...prev, [architect.id]: true }));
         try {
-          const newPassword = await regeneratePassword(supervisor.id);
+          const newPassword = await regeneratePassword(architect.id);
           navigator.clipboard
             .writeText(newPassword)
             .then(() => toast.success("Password copied to clipboard!"))
             .catch(() => toast.error("Failed to copy password."));
-          setSupervisors((prev) =>
-            prev.map((a) => (a.id === supervisor.id ? { ...a, password: newPassword } : a)),
+          setArchitects((prev) =>
+            prev.map((a) => (a.id === architect.id ? { ...a, password: newPassword } : a)),
           );
           toast.success("Password regenerated successfully!");
         } catch (err) {
           toast.error("Failed to regenerate password.");
         } finally {
-          setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: false }));
+          setIsRegenerating((prev) => ({ ...prev, [architect.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
         }
       },
     });
   };
 
-  const handleRemoveSite = (supervisorId: string, siteId: string) => {
-    const supervisor = supervisors.find((a) => a.id === supervisorId);
+  const handleRemoveSite = (architectId: string, siteId: string) => {
+    const architect = architects.find((a) => a.id === architectId);
     const site = allSites.find((s) => s.id === siteId);
-    if (!supervisor || !site) return;
+    if (!architect || !site) return;
 
     setConfirmModal({
       isLoading: false,
       isOpen: true,
       title: "Confirm Site Removal",
-      message: `Are you sure you want to remove ${site.name} from ${supervisor.name}?`,
+      message: `Are you sure you want to remove ${site.name} from ${architect.name}?`,
       onConfirm: async () => {
         try {
-          const updatedSites = supervisor.sites.filter((s) => s.id !== siteId);
+          const updatedSites = architect.sites.filter((s) => s.id !== siteId);
           await assignSitesToClients(
-            supervisorId,
+            architectId,
             updatedSites.map((s) => s.id),
           );
-          setSupervisors((prev) =>
-            prev.map((a) => (a.id === supervisorId ? { ...a, sites: updatedSites } : a)),
+          setArchitects((prev) =>
+            prev.map((a) => (a.id === architectId ? { ...a, sites: updatedSites } : a)),
           );
           toast.success("Site removed successfully!");
         } catch (err) {
@@ -223,14 +223,14 @@ const Supervisors: React.FC = () => {
   };
 
   const handleAssignSites = async (selectedSiteIds: string[]) => {
-    if (!selectedSupervisor) return;
+    if (!selectedArchitect) return;
     try {
-      const currentSiteIds = selectedSupervisor.sites.map((site) => site.id);
+      const currentSiteIds = selectedArchitect.sites.map((site) => site.id);
       const newSiteIds = [...new Set([...currentSiteIds, ...selectedSiteIds])];
-      await assignSitesToClients(selectedSupervisor.id, newSiteIds);
+      await assignSitesToClients(selectedArchitect.id, newSiteIds);
       const updatedSites = allSites.filter((site) => newSiteIds.includes(site.id));
-      setSupervisors((prev) =>
-        prev.map((a) => (a.id === selectedSupervisor.id ? { ...a, sites: updatedSites } : a)),
+      setArchitects((prev) =>
+        prev.map((a) => (a.id === selectedArchitect.id ? { ...a, sites: updatedSites } : a)),
       );
       toast.success("Sites assigned successfully!");
     } catch (err) {
@@ -242,13 +242,13 @@ const Supervisors: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-console-text">Supervisors</h1>
+          <h1 className="text-xl font-semibold text-console-text">Architects</h1>
           <p className="mt-0.5 text-sm text-console-muted">
-            Manage and oversee supervisors across your organization
+            Manage and oversee architects across your organization
           </p>
         </div>
         <Button onClick={() => setIsAddModalOpen(true)}>
-          <Plus size={16} /> Add supervisor
+          <Plus size={16} /> Add architect
         </Button>
       </div>
 
@@ -260,9 +260,9 @@ const Supervisors: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total Supervisors" value={supervisors.length} icon={Users} />
-            <StatCard label="Active" value={activeSupervisors} icon={ShieldCheck} />
-            <StatCard label="Blocked" value={blockedSupervisors} icon={ShieldX} />
+            <StatCard label="Total Architects" value={architects.length} icon={Users} />
+            <StatCard label="Active" value={activeArchitects} icon={ShieldCheck} />
+            <StatCard label="Blocked" value={blockedArchitects} icon={ShieldX} />
             <StatCard label="Total Sites" value={allSites.length} icon={Building2} />
           </div>
 
@@ -320,10 +320,10 @@ const Supervisors: React.FC = () => {
           </Card>
 
           <Card className="p-0">
-            {currentSupervisors.length === 0 ? (
+            {currentArchitects.length === 0 ? (
               <EmptyState
                 icon={Users}
-                title="No supervisors found"
+                title="No architects found"
                 description="Try adjusting your search or filter criteria."
               />
             ) : (
@@ -331,7 +331,7 @@ const Supervisors: React.FC = () => {
                 <table className="min-w-full divide-y divide-console-border">
                   <thead className="bg-console-bg">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Supervisor</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Architect</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Assigned Sites</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Contact</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
@@ -339,13 +339,13 @@ const Supervisors: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-console-border">
-                    {currentSupervisors.map((supervisor) => (
-                      <tr key={supervisor.id} className="hover:bg-console-bg">
+                    {currentArchitects.map((architect) => (
+                      <tr key={architect.id} className="hover:bg-console-bg">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className="relative">
                               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                                {supervisor.name
+                                {architect.name
                                   .split(" ")
                                   .map((n) => n[0])
                                   .join("")
@@ -354,25 +354,25 @@ const Supervisors: React.FC = () => {
                               <div
                                 className={cn(
                                   "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",
-                                  supervisor.isBlocked ? "bg-danger-500" : "bg-success-500",
+                                  architect.isBlocked ? "bg-danger-500" : "bg-success-500",
                                 )}
                               />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-console-text">{supervisor.name}</div>
-                              <div className="text-xs text-console-muted">ID: {supervisor.id.slice(-8)}</div>
+                              <div className="text-sm font-medium text-console-text">{architect.name}</div>
+                              <div className="text-xs text-console-muted">ID: {architect.id.slice(-8)}</div>
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex max-w-xs flex-wrap items-center gap-1.5">
-                            {supervisor.sites.length === 0 ? (
+                            {architect.sites.length === 0 ? (
                               <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
                                 No sites assigned
                               </span>
                             ) : (
                               <>
-                                {supervisor.sites.slice(0, 2).map((site) => (
+                                {architect.sites.slice(0, 2).map((site) => (
                                   <span
                                     key={site.id}
                                     className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
@@ -380,7 +380,7 @@ const Supervisors: React.FC = () => {
                                     {site.name}
                                     <button
                                       type="button"
-                                      onClick={() => handleRemoveSite(supervisor.id, site.id)}
+                                      onClick={() => handleRemoveSite(architect.id, site.id)}
                                       className="text-brand-600 transition-colors hover:text-danger-600"
                                       aria-label={`Remove ${site.name}`}
                                     >
@@ -388,9 +388,9 @@ const Supervisors: React.FC = () => {
                                     </button>
                                   </span>
                                 ))}
-                                {supervisor.sites.length > 2 && (
+                                {architect.sites.length > 2 && (
                                   <span className="rounded-full bg-console-bg px-2 py-1 text-xs text-console-muted">
-                                    +{supervisor.sites.length - 2} more
+                                    +{architect.sites.length - 2} more
                                   </span>
                                 )}
                               </>
@@ -398,7 +398,7 @@ const Supervisors: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedSupervisor(supervisor);
+                                setSelectedArchitect(architect);
                                 setIsAssignModalOpen(true);
                               }}
                               aria-label="Assign site"
@@ -411,10 +411,10 @@ const Supervisors: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Mail size={13} className="text-console-muted" />
-                            <span className="text-sm text-console-text">{supervisor.email}</span>
+                            <span className="text-sm text-console-text">{architect.email}</span>
                             <button
                               type="button"
-                              onClick={() => copyToClipboard(supervisor.email, "Email")}
+                              onClick={() => copyToClipboard(architect.email, "Email")}
                               aria-label="Copy email"
                               className="text-console-muted transition-colors hover:text-brand-700"
                             >
@@ -426,12 +426,12 @@ const Supervisors: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              supervisor.isBlocked
+                              architect.isBlocked
                                 ? "bg-danger-50 text-danger-700"
                                 : "bg-success-50 text-success-700",
                             )}
                           >
-                            {supervisor.isBlocked ? (
+                            {architect.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -446,19 +446,19 @@ const Supervisors: React.FC = () => {
                           <div className="flex gap-1">
                             <button
                               type="button"
-                              onClick={() => handleToggleStatus(supervisor)}
-                              disabled={isToggling[supervisor.id]}
-                              aria-label={supervisor.isBlocked ? "Unblock supervisor" : "Block supervisor"}
+                              onClick={() => handleToggleStatus(architect)}
+                              disabled={isToggling[architect.id]}
+                              aria-label={architect.isBlocked ? "Unblock architect" : "Block architect"}
                               className={cn(
                                 "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                supervisor.isBlocked
+                                architect.isBlocked
                                   ? "bg-success-50 text-success-700 hover:bg-success-100"
                                   : "bg-console-bg text-console-text hover:bg-slate-200",
                               )}
                             >
-                              {isToggling[supervisor.id] ? (
+                              {isToggling[architect.id] ? (
                                 <Loader2 size={13} className="animate-spin" />
-                              ) : supervisor.isBlocked ? (
+                              ) : architect.isBlocked ? (
                                 "Unblock"
                               ) : (
                                 "Block"
@@ -467,22 +467,22 @@ const Supervisors: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                setSelectedSupervisor(supervisor);
+                                setSelectedArchitect(architect);
                                 setIsEditModalOpen(true);
                               }}
-                              aria-label="Edit supervisor"
+                              aria-label="Edit architect"
                               className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
                             >
                               <Pencil size={14} />
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleRegeneratePassword(supervisor)}
-                              disabled={isRegenerating[supervisor.id]}
+                              onClick={() => handleRegeneratePassword(architect)}
+                              disabled={isRegenerating[architect.id]}
                               aria-label="Regenerate password"
                               className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {isRegenerating[supervisor.id] ? (
+                              {isRegenerating[architect.id] ? (
                                 <Loader2 size={14} className="animate-spin" />
                               ) : (
                                 <RefreshCw size={14} />
@@ -504,9 +504,9 @@ const Supervisors: React.FC = () => {
                 Showing{" "}
                 <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
                 <span className="font-semibold text-console-text">
-                  {Math.min(indexOfLastItem, filteredSupervisors.length)}
+                  {Math.min(indexOfLastItem, filteredArchitects.length)}
                 </span>{" "}
-                of <span className="font-semibold text-console-text">{filteredSupervisors.length}</span> supervisors
+                of <span className="font-semibold text-console-text">{filteredArchitects.length}</span> architects
               </p>
               <div className="flex items-center gap-1">
                 <button
@@ -561,15 +561,15 @@ const Supervisors: React.FC = () => {
         </>
       )}
 
-      <AddSupervisorModal
+      <AddArchitectModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onSubmit={async (newSupervisor: { name: string; email: string }) => {
+        onSubmit={async (newArchitect: { name: string; email: string }) => {
           try {
-            await createSupervisor(newSupervisor);
-            const updatedSupervisors = await getUsersByRole("supervisor");
-            setSupervisors(
-              updatedSupervisors.map((user) => ({
+            await createArchitect(newArchitect);
+            const updatedArchitects = await getUsersByRole("architect");
+            setArchitects(
+              updatedArchitects.map((user) => ({
                 id: user.id,
                 name: user.name,
                 sites: user.assignedSites || [],
@@ -579,29 +579,29 @@ const Supervisors: React.FC = () => {
               })),
             );
             setIsAddModalOpen(false);
-            toast.success("Supervisor added successfully!");
+            toast.success("Architect added successfully!");
           } catch (err) {
-            toast.error("Failed to add supervisor.");
+            toast.error("Failed to add architect.");
           }
         }}
       />
 
-      {selectedSupervisor && (
+      {selectedArchitect && (
         <>
-          <EditSupervisorModal
+          <EditArchitectModal
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
-            supervisor={selectedSupervisor}
-            onSubmit={async (updatedSupervisor: { name: string; email: string }) => {
+            architect={selectedArchitect}
+            onSubmit={async (updatedArchitect: { name: string; email: string }) => {
               try {
-                await updateSupervisor(selectedSupervisor.id, updatedSupervisor);
-                setSupervisors((prev) =>
-                  prev.map((a) => (a.id === selectedSupervisor.id ? { ...a, ...updatedSupervisor } : a)),
+                await updateArchitect(selectedArchitect.id, updatedArchitect);
+                setArchitects((prev) =>
+                  prev.map((a) => (a.id === selectedArchitect.id ? { ...a, ...updatedArchitect } : a)),
                 );
                 setIsEditModalOpen(false);
-                toast.success("Supervisor updated successfully!");
+                toast.success("Architect updated successfully!");
               } catch (err) {
-                toast.error("Failed to update supervisor.");
+                toast.error("Failed to update architect.");
               }
             }}
           />
@@ -609,7 +609,7 @@ const Supervisors: React.FC = () => {
             isOpen={isAssignModalOpen}
             onClose={() => setIsAssignModalOpen(false)}
             allSites={allSites}
-            assignedSites={selectedSupervisor.sites}
+            assignedSites={selectedArchitect.sites}
             onAssign={handleAssignSites}
           />
         </>
@@ -626,4 +626,4 @@ const Supervisors: React.FC = () => {
   );
 };
 
-export default Supervisors;
+export default Architects;
