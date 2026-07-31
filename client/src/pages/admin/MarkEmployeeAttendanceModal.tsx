@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { X, Calendar, Clipboard, MapPin, Receipt } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Calendar, Clipboard, MapPin, Receipt } from "lucide-react";
 import { toast } from "sonner";
 import { getSites, getSiteDetails } from "@/services/siteService";
 import { markAttendance } from "@/services/attendanceService";
 import { addMiscellaneousExpense } from "@/services/miscellaneousExpenseService";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface MarkEmployeeAttendanceModalProps {
   employeeId: string;
@@ -15,7 +17,7 @@ interface MarkEmployeeAttendanceModalProps {
 const MISC_CATEGORIES = ["machinery", "rental", "service", "material"];
 
 const statusOptions = [
-  { label: "FullDay (100%)", value: 1 },
+  { label: "Full day (100%)", value: 1 },
   { label: "90%", value: 0.9 },
   { label: "80%", value: 0.8 },
   { label: "70%", value: 0.7 },
@@ -28,9 +30,12 @@ const statusOptions = [
   { label: "0% (Absent)", value: 0 },
 ];
 
-const MarkEmployeeAttendanceModal: React.FC<
-  MarkEmployeeAttendanceModalProps
-> = ({ employeeId, employeeName, onClose, onMarked }) => {
+const MarkEmployeeAttendanceModal: React.FC<MarkEmployeeAttendanceModalProps> = ({
+  employeeId,
+  employeeName,
+  onClose,
+  onMarked,
+}) => {
   const [sites, setSites] = useState<any[]>([]);
   const [selectedSiteId, setSelectedSiteId] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -43,9 +48,7 @@ const MarkEmployeeAttendanceModal: React.FC<
   const [miscName, setMiscName] = useState("");
   const [miscAmount, setMiscAmount] = useState("");
   const [miscNotes, setMiscNotes] = useState("");
-  const [sourceOfFunds, setSourceOfFunds] = useState<"company" | "siteManager">(
-    "company",
-  );
+  const [sourceOfFunds, setSourceOfFunds] = useState<"company" | "siteManager">("company");
   const [siteManagers, setSiteManagers] = useState<any[]>([]);
   const [selectedSiteManagerId, setSelectedSiteManagerId] = useState("");
 
@@ -53,9 +56,7 @@ const MarkEmployeeAttendanceModal: React.FC<
     const fetchActiveSites = async () => {
       try {
         const allSites = await getSites();
-        const activeSites = (allSites || []).filter(
-          (s: any) => s.status === "InProgress",
-        );
+        const activeSites = (allSites || []).filter((s: any) => s.status === "InProgress");
         setSites(activeSites);
       } catch (err) {
         setError("Failed to fetch active sites");
@@ -135,10 +136,7 @@ const MarkEmployeeAttendanceModal: React.FC<
           notes: miscNotes.trim(),
           amount: parseFloat(miscAmount),
           sourceOfFunds,
-          deductFromUserId:
-            sourceOfFunds === "siteManager"
-              ? selectedSiteManagerId
-              : undefined,
+          deductFromUserId: sourceOfFunds === "siteManager" ? selectedSiteManagerId : undefined,
           paymentMethod: "cash",
           vendorId: undefined,
           date,
@@ -168,250 +166,195 @@ const MarkEmployeeAttendanceModal: React.FC<
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-2xl max-h-[90vh] overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 to-emerald-600" />
-
-        <div className="relative px-8 pt-8 pb-6 border-b border-gray-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">
-                Mark Attendance
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                For{" "}
-                <span className="font-semibold text-gray-800">
-                  {employeeName}
-                </span>
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-colors duration-200"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
-        <div className="px-8 py-6 space-y-6 overflow-y-auto max-h-[calc(90vh-200px)]">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-              <p className="text-red-600 text-sm">{error}</p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-              <MapPin className="w-4 h-4" /> Site *
-            </label>
-            <select
-              value={selectedSiteId}
-              onChange={(e) => setSelectedSiteId(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-gray-50 focus:bg-white"
-            >
-              <option value="">Select an active site</option>
-              {sites.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.name}
-                </option>
-              ))}
-            </select>
-            {sites.length === 0 && (
-              <p className="text-xs text-gray-500">
-                No active (in-progress) sites found.
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                <Calendar className="w-4 h-4" /> Date
-              </label>
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-gray-50 focus:bg-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                <Clipboard className="w-4 h-4" /> Status
-              </label>
-              <select
-                value={status}
-                onChange={(e) => setStatus(Number(e.target.value))}
-                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 bg-gray-50 focus:bg-white"
-              >
-                {statusOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={addMiscExpense}
-                onChange={(e) => setAddMiscExpense(e.target.checked)}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-semibold text-gray-700 flex items-center gap-1">
-                <Receipt className="w-4 h-4" /> Also add a miscellaneous
-                expense for this site
-              </span>
-            </label>
-
-            {addMiscExpense && (
-              <div className="mt-4 space-y-4 bg-gray-50 rounded-xl p-4 border border-gray-200">
-                <p className="text-xs text-amber-600">
-                  This creates a pending miscellaneous expense for the
-                  selected site, exactly like the Miscellaneous tab on the
-                  site's detail page — an admin still needs to verify it
-                  before it affects the site's expenses and the funding
-                  source's balance.
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={miscCategory}
-                      onChange={(e) => setMiscCategory(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {MISC_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Name *
-                    </label>
-                    <input
-                      type="text"
-                      value={miscName}
-                      onChange={(e) => setMiscName(e.target.value)}
-                      placeholder="e.g. Crane rental"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount *
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={miscAmount}
-                      onChange={(e) => setMiscAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Source of Funds
-                    </label>
-                    <select
-                      value={sourceOfFunds}
-                      onChange={(e) =>
-                        setSourceOfFunds(
-                          e.target.value as "company" | "siteManager",
-                        )
-                      }
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="company">Company</option>
-                      <option value="siteManager">Site Manager</option>
-                    </select>
-                  </div>
-                </div>
-
-                {sourceOfFunds === "siteManager" && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Site Manager *
-                    </label>
-                    <select
-                      value={selectedSiteManagerId}
-                      onChange={(e) =>
-                        setSelectedSiteManagerId(e.target.value)
-                      }
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="">Select a site manager</option>
-                      {siteManagers.map((mgr: any) => (
-                        <option key={mgr.id} value={mgr.id}>
-                          {mgr.name}
-                        </option>
-                      ))}
-                    </select>
-                    {siteManagers.length === 0 && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        This site has no assigned site managers.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Notes <span className="text-gray-400 text-xs">(Optional)</span>
-                  </label>
-                  <textarea
-                    value={miscNotes}
-                    onChange={(e) => setMiscNotes(e.target.value)}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                    placeholder="Any additional notes..."
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="px-8 py-6 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium disabled:opacity-50"
-          >
+    <Modal
+      isOpen
+      onClose={onClose}
+      disableClose={isSubmitting}
+      closeOnOverlayClick={!isSubmitting}
+      size="lg"
+      title="Mark Attendance"
+      description={`For ${employeeName}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
             Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !selectedSiteId}
-            className="px-8 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl hover:shadow-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          </Button>
+          <Button onClick={handleSubmit} loading={isSubmitting} disabled={!selectedSiteId}>
+            Mark attendance
+          </Button>
+        </>
+      }
+    >
+      {error && (
+        <div className="mb-5 rounded-console border border-danger-100 bg-danger-50 p-4">
+          <p className="text-sm text-danger-600">{error}</p>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-console-text">
+          <MapPin size={15} /> Site *
+        </label>
+        <select
+          value={selectedSiteId}
+          onChange={(e) => setSelectedSiteId(e.target.value)}
+          className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        >
+          <option value="">Select an active site</option>
+          {sites.map((site) => (
+            <option key={site.id} value={site.id}>
+              {site.name}
+            </option>
+          ))}
+        </select>
+        {sites.length === 0 && (
+          <p className="mt-1.5 text-xs text-console-muted">No active (in-progress) sites found.</p>
+        )}
+      </div>
+
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-console-text">
+            <Calendar size={15} /> Date
+          </label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-console-text">
+            <Clipboard size={15} /> Status
+          </label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(Number(e.target.value))}
+            className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
           >
-            {isSubmitting ? "Saving..." : "Mark Attendance"}
-          </button>
+            {statusOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
-    </div>
+
+      <div className="border-t border-console-border pt-4">
+        <label className="flex cursor-pointer select-none items-center gap-2">
+          <input
+            type="checkbox"
+            checked={addMiscExpense}
+            onChange={(e) => setAddMiscExpense(e.target.checked)}
+            className="rounded border-console-border text-brand-600 focus:ring-brand-500"
+          />
+          <span className="flex items-center gap-1.5 text-sm font-medium text-console-text">
+            <Receipt size={15} /> Also add a miscellaneous expense for this site
+          </span>
+        </label>
+
+        {addMiscExpense && (
+          <div className="mt-4 space-y-4 rounded-console border border-console-border bg-console-bg p-4">
+            <p className="text-xs text-warning-700">
+              This creates a pending miscellaneous expense for the selected site, exactly like
+              the Miscellaneous tab on the site's detail page — an admin still needs to verify
+              it before it affects the site's expenses and the funding source's balance.
+            </p>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-console-text">Category</label>
+                <select
+                  value={miscCategory}
+                  onChange={(e) => setMiscCategory(e.target.value)}
+                  className="w-full rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                >
+                  {MISC_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-console-text">Name *</label>
+                <input
+                  type="text"
+                  value={miscName}
+                  onChange={(e) => setMiscName(e.target.value)}
+                  placeholder="e.g. Crane rental"
+                  className="w-full rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-console-text">Amount *</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={miscAmount}
+                  onChange={(e) => setMiscAmount(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-console-text">Source of funds</label>
+                <select
+                  value={sourceOfFunds}
+                  onChange={(e) => setSourceOfFunds(e.target.value as "company" | "siteManager")}
+                  className="w-full rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                >
+                  <option value="company">Company</option>
+                  <option value="siteManager">Site Manager</option>
+                </select>
+              </div>
+            </div>
+
+            {sourceOfFunds === "siteManager" && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-console-text">Site manager *</label>
+                <select
+                  value={selectedSiteManagerId}
+                  onChange={(e) => setSelectedSiteManagerId(e.target.value)}
+                  className="w-full rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                >
+                  <option value="">Select a site manager</option>
+                  {siteManagers.map((mgr: any) => (
+                    <option key={mgr.id} value={mgr.id}>
+                      {mgr.name}
+                    </option>
+                  ))}
+                </select>
+                {siteManagers.length === 0 && (
+                  <p className="mt-1 text-xs text-console-muted">
+                    This site has no assigned site managers.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div>
+              <label className="mb-1 block text-sm font-medium text-console-text">
+                Notes <span className="text-xs text-console-muted">(Optional)</span>
+              </label>
+              <textarea
+                value={miscNotes}
+                onChange={(e) => setMiscNotes(e.target.value)}
+                rows={2}
+                className="w-full resize-none rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                placeholder="Any additional notes..."
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 };
 
