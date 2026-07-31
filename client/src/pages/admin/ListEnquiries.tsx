@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getEnquiries, markEnquiryAsSeen } from "@/services/messageService";
 import {
   Search,
@@ -6,14 +6,20 @@ import {
   Calendar,
   Phone,
   MessageSquare,
-  X,
   SortAsc,
   SortDesc,
   Eye,
+  Inbox,
+  AlertCircle,
 } from "lucide-react";
 import { useDashboardContext } from "../../context/DashboardContext";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import Modal from "@/components/ui/Modal";
 
-// Define the Enquiry interface
 interface Enquiry {
   _id: string;
   name: string;
@@ -22,32 +28,31 @@ interface Enquiry {
   phone: string;
   createdAt: string;
   message: string;
-  status: string;
   isSeen: boolean;
 }
 
-const ListEnquiries = () => {
+type SeenFilter = "all" | "new" | "seen";
+
+const ListEnquiries: React.FC = () => {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<null | string>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedEnquiry, setSelectedEnquiry] = useState<Enquiry | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("date");
-  const [sortOrder, setSortOrder] = useState("desc");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [isGridView, setIsGridView] = useState(false);
-  const { setUnseenCount } = useDashboardContext();
+  const [sortBy, setSortBy] = useState<"date" | "name" | "subject">("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [filterSeen, setFilterSeen] = useState<SeenFilter>("all");
+  const { unseenCount, setUnseenCount } = useDashboardContext();
 
   useEffect(() => {
     const fetchEnquiries = async () => {
       try {
         const data = await getEnquiries();
-        setEnquiries(data);
-        setLoading(false);
+        setEnquiries(data as unknown as Enquiry[]);
       } catch (err) {
-        // setError("Failed to fetch enquiries");
+        setError("Failed to fetch enquiries");
+      } finally {
         setLoading(false);
       }
     };
@@ -57,43 +62,26 @@ const ListEnquiries = () => {
   const openModal = (enquiry: Enquiry) => {
     setSelectedEnquiry(enquiry);
     setIsModalOpen(true);
-    setTimeout(() => setIsAnimating(true), 50);
   };
 
   const closeModal = () => {
-    setIsAnimating(false);
-    setTimeout(() => {
-      setSelectedEnquiry(null);
-      setIsModalOpen(false);
-    }, 200);
+    setIsModalOpen(false);
+    setSelectedEnquiry(null);
   };
 
   const handleMarkAsSeen = async (id: string) => {
     try {
       const previousEnquiry = enquiries.find((enq) => enq._id === id);
       const updatedEnquiry = await markEnquiryAsSeen(id);
-      setEnquiries(
-        enquiries.map((enq) => (enq._id === id ? updatedEnquiry : enq))
+      setEnquiries((prev) =>
+        prev.map((enq) => (enq._id === id ? (updatedEnquiry as unknown as Enquiry) : enq)),
       );
-      setSelectedEnquiry(updatedEnquiry);
+      setSelectedEnquiry(updatedEnquiry as unknown as Enquiry);
       if (previousEnquiry && !previousEnquiry.isSeen) {
-        setUnseenCount((prev) => prev - 1);
+        setUnseenCount(unseenCount - 1);
       }
     } catch (error) {
       console.error("Failed to mark enquiry as seen", error);
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "new":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      case "responded":
-        return "bg-blue-100 text-blue-800 border-blue-200";
-      case "in-progress":
-        return "bg-gray-100 text-gray-800 border-gray-200";
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
@@ -104,342 +92,241 @@ const ListEnquiries = () => {
         enquiry.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         enquiry.subject.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesFilter =
-        filterStatus === "all" || enquiry.status === filterStatus;
+        filterSeen === "all" ||
+        (filterSeen === "new" && !enquiry.isSeen) ||
+        (filterSeen === "seen" && enquiry.isSeen);
       return matchesSearch && matchesFilter;
     })
     .sort((a, b) => {
-      let aVal, bVal;
-      switch (sortBy) {
-        case "name":
-          aVal = a.name.toLowerCase();
-          bVal = b.name.toLowerCase();
-          break;
-        case "date":
-          aVal = new Date(a.createdAt);
-          bVal = new Date(b.createdAt);
-          break;
-        default:
-          aVal = a[sortBy];
-          bVal = b[sortBy];
+      let aVal: string | number, bVal: string | number;
+      if (sortBy === "date") {
+        aVal = new Date(a.createdAt).getTime();
+        bVal = new Date(b.createdAt).getTime();
+      } else {
+        aVal = a[sortBy].toLowerCase();
+        bVal = b[sortBy].toLowerCase();
       }
-      return sortOrder === "asc"
-        ? aVal > bVal
-          ? 1
-          : -1
-        : aVal < bVal
-        ? 1
-        : -1;
+      return sortOrder === "asc" ? (aVal > bVal ? 1 : -1) : aVal < bVal ? 1 : -1;
     });
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-300 rounded-lg w-48 mb-8"></div>
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="flex space-x-4">
-                    <div className="h-4 bg-gray-300 rounded flex-1"></div>
-                    <div className="h-4 bg-gray-300 rounded w-32"></div>
-                    <div className="h-4 bg-gray-300 rounded w-24"></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Oops! Something went wrong
-          </h2>
-          <p className="text-gray-600 mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-          >
-            Try Again
-          </button>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <AlertCircle size={22} />
+          </div>
+          <h2 className="text-lg font-semibold text-console-text">Something went wrong</h2>
+          <p className="mt-1 text-sm text-console-muted">{error}</p>
+          <Button className="mt-5" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-            Enquiries Dashboard
-          </h1>
-          <p className="text-gray-600">
-            Manage and track all customer inquiries
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold text-console-text">Enquiries</h1>
+        <p className="mt-0.5 text-sm text-console-muted">Manage and track all customer inquiries</p>
+      </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 mb-6">
-          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search enquiries..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              />
+      {loading ? (
+        <SkeletonTable />
+      ) : (
+        <>
+          <Card>
+            <div className="flex flex-col items-center gap-4 lg:flex-row">
+              <div className="relative max-w-md flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search enquiries..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <select
+                  value={filterSeen}
+                  onChange={(e) => setFilterSeen(e.target.value as SeenFilter)}
+                  className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="all">All Enquiries</option>
+                  <option value="new">New</option>
+                  <option value="seen">Seen</option>
+                </select>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as "date" | "name" | "subject")}
+                  className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="date">Sort by Date</option>
+                  <option value="name">Sort by Name</option>
+                  <option value="subject">Sort by Subject</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                  aria-label="Toggle sort order"
+                  className="rounded-lg border border-console-border p-2.5 text-console-muted transition-colors hover:bg-console-bg"
+                >
+                  {sortOrder === "asc" ? <SortAsc size={17} /> : <SortDesc size={17} />}
+                </button>
+              </div>
             </div>
+          </Card>
 
-            <div className="flex items-center gap-3">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              >
-                <option value="date">Sort by Date</option>
-                <option value="name">Sort by Name</option>
-                <option value="subject">Sort by Subject</option>
-              </select>
-
-              <button
-                onClick={() =>
-                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+          {filteredAndSortedEnquiries.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={Inbox}
+                title="No enquiries found"
+                description={
+                  searchTerm || filterSeen !== "all"
+                    ? "Try adjusting your search or filter criteria."
+                    : "No enquiries have been submitted yet."
                 }
-                className="p-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200"
-              >
-                {sortOrder === "asc" ? (
-                  <SortAsc className="w-5 h-5" />
-                ) : (
-                  <SortDesc className="w-5 h-5" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {filteredAndSortedEnquiries.map((enquiry, index) => (
-            <div
-              key={enquiry._id}
-              onClick={() => openModal(enquiry)}
-              className="group bg-white rounded-2xl shadow-lg border border-gray-200 hover:shadow-2xl transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden"
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                action={
+                  (searchTerm || filterSeen !== "all") && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setFilterSeen("all");
+                      }}
+                    >
+                      Clear filters
+                    </Button>
+                  )
+                }
+              />
+            </Card>
+          ) : (
+            <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
+              {filteredAndSortedEnquiries.map((enquiry) => (
+                <button
+                  type="button"
+                  key={enquiry._id}
+                  onClick={() => openModal(enquiry)}
+                  className="relative rounded-console border border-console-border bg-white p-5 text-left transition-shadow hover:shadow-console-lg"
+                >
+                  {!enquiry.isSeen && (
+                    <span className="absolute right-4 top-4">
+                      <Badge variant="error">New</Badge>
+                    </span>
+                  )}
+                  <div className="mb-4 flex items-center gap-3">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-100 text-base font-semibold text-brand-800">
                       {enquiry.name.charAt(0).toUpperCase()}
                     </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-                        {enquiry.name}
-                      </h3>
-                      <p className="text-sm text-gray-500">{enquiry.email}</p>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-console-text">{enquiry.name}</h3>
+                      <p className="truncate text-xs text-console-muted">{enquiry.email}</p>
                     </div>
                   </div>
-                  {!enquiry.isSeen && (
-                    <div className="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full">
-                      New
-                    </div>
-                  )}
-                </div>
 
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MessageSquare className="w-4 h-4 text-blue-500" />
-                    <span className="font-medium">Subject:</span>
-                    <span className="truncate">{enquiry.subject}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Phone className="w-4 h-4 text-green-500" />
-                    <span>{enquiry.phone}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 text-purple-500" />
-                    <span>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-console-muted">
+                      <MessageSquare size={14} className="shrink-0 text-brand-500" />
+                      <span className="truncate">{enquiry.subject}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-console-muted">
+                      <Phone size={14} className="shrink-0 text-success-500" />
+                      {enquiry.phone}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-console-muted">
+                      <Calendar size={14} className="shrink-0 text-brand-400" />
                       {new Date(enquiry.createdAt).toLocaleDateString()}
+                    </div>
+                    <p className="line-clamp-2 pt-1 text-sm text-console-muted">{enquiry.message}</p>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between border-t border-console-border pt-4">
+                    <span className="text-xs text-console-muted">
+                      {new Date(enquiry.createdAt).toLocaleTimeString()}
+                    </span>
+                    <span className="flex items-center gap-1 text-sm font-medium text-brand-700">
+                      <Eye size={14} /> View details
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 line-clamp-2 mt-3">
-                    {enquiry.message}
-                  </p>
-                </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-                <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">
-                    {new Date(enquiry.createdAt).toLocaleTimeString()}
-                  </span>
-                  <div
-                    className={`px-2 py-1 rounded-full text-xs font-normal border ${getStatusColor(
-                      enquiry.status
-                    )}`}
-                  >
-                    {enquiry.status}
-                  </div>
-                  <button className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium group-hover:translate-x-1 transition-all duration-200">
-                    <Eye className="w-4 h-4" />
-                    View Details
-                  </button>
+      <Modal
+        isOpen={isModalOpen && !!selectedEnquiry}
+        onClose={closeModal}
+        size="lg"
+        title={selectedEnquiry?.name}
+        description={selectedEnquiry?.email}
+      >
+        {selectedEnquiry && (
+          <>
+            <div className="mb-6 grid gap-4 md:grid-cols-2">
+              <div className="rounded-console bg-console-bg p-4">
+                <div className="mb-1.5 flex items-center gap-2 text-console-muted">
+                  <Mail size={15} />
+                  <span className="text-sm font-medium text-console-text">Email</span>
                 </div>
+                <p className="text-sm text-console-muted">{selectedEnquiry.email}</p>
+              </div>
+              <div className="rounded-console bg-console-bg p-4">
+                <div className="mb-1.5 flex items-center gap-2 text-console-muted">
+                  <Phone size={15} />
+                  <span className="text-sm font-medium text-console-text">Phone</span>
+                </div>
+                <p className="text-sm text-console-muted">{selectedEnquiry.phone}</p>
+              </div>
+              <div className="rounded-console bg-console-bg p-4">
+                <div className="mb-1.5 flex items-center gap-2 text-console-muted">
+                  <MessageSquare size={15} />
+                  <span className="text-sm font-medium text-console-text">Subject</span>
+                </div>
+                <p className="text-sm text-console-muted">{selectedEnquiry.subject}</p>
+              </div>
+              <div className="rounded-console bg-console-bg p-4">
+                <div className="mb-1.5 flex items-center gap-2 text-console-muted">
+                  <Calendar size={15} />
+                  <span className="text-sm font-medium text-console-text">Date</span>
+                </div>
+                <p className="text-sm text-console-muted">
+                  {new Date(selectedEnquiry.createdAt).toLocaleString()}
+                </p>
               </div>
             </div>
-          ))}
-        </div>
 
-        {filteredAndSortedEnquiries.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-xl p-12 text-center">
-            <div className="text-6xl mb-4">📭</div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              No enquiries found
-            </h3>
-            <p className="text-gray-600 mb-6">
-              {searchTerm || filterStatus !== "all"
-                ? "Try adjusting your search or filter criteria"
-                : "No enquiries have been submitted yet"}
-            </p>
-            {(searchTerm || filterStatus !== "all") && (
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setFilterStatus("all");
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-        )}
-
-        {isModalOpen && selectedEnquiry && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-            <div
-              className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden max-w-2xl w-full max-h-[90vh] overflow-y-auto ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-              <button
-                onClick={closeModal}
-                className="absolute top-4 right-4 p-2 rounded-full bg-gray-100 hover:bg-gray-200 transition-colors duration-200 z-10"
-              >
-                <X className="w-5 h-5 text-gray-600" />
-              </button>
-
-              <div className="p-8 pt-12">
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-                    {selectedEnquiry.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-3xl font-bold text-gray-900">
-                      {selectedEnquiry.name}
-                    </h2>
-                    <p className="text-gray-600">{selectedEnquiry.email}</p>
-                  </div>
-                  <div
-                    className={`ml-auto px-3 py-1 rounded-full text-sm font-normal border ${getStatusColor(
-                      selectedEnquiry.status
-                    )}`}
-                  >
-                    {selectedEnquiry.status}
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-6 mb-6">
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Mail className="w-5 h-5 text-blue-500" />
-                        <span className="font-semibold text-gray-900">
-                          Email
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{selectedEnquiry.email}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Phone className="w-5 h-5 text-green-500" />
-                        <span className="font-semibold text-gray-900">
-                          Phone
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{selectedEnquiry.phone}</p>
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <MessageSquare className="w-5 h-5 text-purple-500" />
-                        <span className="font-semibold text-gray-900">
-                          Subject
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{selectedEnquiry.subject}</p>
-                    </div>
-                    <div className="bg-gray-50 rounded-xl p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Calendar className="w-5 h-5 text-orange-500" />
-                        <span className="font-semibold text-gray-900">
-                          Date
-                        </span>
-                      </div>
-                      <p className="text-gray-700">
-                        {new Date(selectedEnquiry.createdAt).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 mb-6">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <MessageSquare className="w-5 h-5 text-blue-500" />
-                    Message
-                  </h3>
-                  <p className="text-gray-700 leading-relaxed">
-                    {selectedEnquiry.message}
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    onClick={closeModal}
-                    className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium"
-                  >
-                    Close
-                  </button>
-                  {selectedEnquiry.isSeen ? (
-                    <span className="flex-1 px-6 py-3 bg-gray-200 text-gray-600 rounded-xl text-center font-medium">
-                      Seen
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => handleMarkAsSeen(selectedEnquiry._id)}
-                      className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 font-medium"
-                    >
-                      Mark as Seen
-                    </button>
-                  )}
-                </div>
-              </div>
+            <div className="mb-6 rounded-console border border-brand-100 bg-brand-50 p-5">
+              <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-console-text">
+                <MessageSquare size={15} className="text-brand-600" /> Message
+              </h3>
+              <p className="text-sm leading-relaxed text-console-muted">{selectedEnquiry.message}</p>
             </div>
-          </div>
+
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={closeModal}>
+                Close
+              </Button>
+              {selectedEnquiry.isSeen ? (
+                <span className="flex flex-1 items-center justify-center rounded-lg bg-console-bg text-sm font-medium text-console-muted">
+                  Seen
+                </span>
+              ) : (
+                <Button className="flex-1" onClick={() => handleMarkAsSeen(selectedEnquiry._id)}>
+                  Mark as seen
+                </Button>
+              )}
+            </div>
+          </>
         )}
-      </div>
+      </Modal>
     </div>
   );
 };
