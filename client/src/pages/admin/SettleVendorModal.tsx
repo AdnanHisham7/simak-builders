@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { X, DollarSign } from "lucide-react";
+import { useState, useEffect } from "react";
+import { DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { settleVendorPayments } from "@/services/vendorService";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface SettleVendorModalProps {
   isOpen: boolean;
@@ -33,8 +35,6 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleClose = () => {
     if (isSubmitting) return;
     onClose();
@@ -51,9 +51,7 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
     }
     if (numAmount > outstandingAmount) {
       setError(
-        `This exceeds the outstanding balance of $${outstandingAmount.toFixed(
-          2,
-        )}. Enter an amount at or below that.`,
+        `This exceeds the outstanding balance of ₹${outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}. Enter an amount at or below that.`,
       );
       return;
     }
@@ -65,121 +63,92 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
         notes: notes.trim(),
       });
       toast.success(
-        `Settled $${numAmount.toFixed(2)}. Remaining outstanding: $${result.remainingOutstanding.toFixed(2)}`,
+        `Settled ₹${numAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}. Remaining outstanding: ₹${result.remainingOutstanding.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`,
       );
       onSettled();
       onClose();
     } catch (err: any) {
-      setError(
-        err?.response?.data?.message || "Failed to settle payment",
-      );
+      setError(err?.response?.data?.message || "Failed to settle payment");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
-      onClick={handleClose}
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      disableClose={isSubmitting}
+      closeOnOverlayClick={!isSubmitting}
+      title="Settle Payment"
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} loading={isSubmitting}>
+            Settle payment
+          </Button>
+        </>
+      }
     >
-      <div
-        className="bg-white rounded-2xl shadow-2xl border border-gray-200 max-w-md w-full"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h2 className="text-xl font-bold text-gray-900">Settle Payment</h2>
-          <button
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="p-2 rounded-full hover:bg-gray-100 disabled:opacity-50"
-          >
-            <X size={20} />
-          </button>
+      <div className="space-y-4">
+        <p className="text-sm text-console-muted">
+          Vendor: <span className="font-semibold text-console-text">{vendorName}</span>
+        </p>
+        <div className="flex items-center justify-between rounded-console border border-info-100 bg-info-50 p-4">
+          <span className="text-sm text-info-700">Outstanding balance</span>
+          <span className="text-lg font-semibold text-info-700">
+            ₹{outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+          </span>
         </div>
 
-        <div className="p-6 space-y-4">
-          <p className="text-sm text-gray-500">
-            Vendor:{" "}
-            <span className="font-semibold text-gray-800">{vendorName}</span>
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center justify-between">
-            <span className="text-sm text-blue-700">
-              Outstanding balance
-            </span>
-            <span className="text-lg font-bold text-blue-900">
-              ${outstandingAmount.toFixed(2)}
-            </span>
+        {error && (
+          <div className="rounded-console border border-danger-100 bg-danger-50 p-3 text-sm text-danger-700">
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-              <p className="text-red-600 text-sm">{error}</p>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amount to Settle *
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="number"
-                min="0"
-                max={outstandingAmount}
-                step="0.01"
-                value={amount}
-                onChange={(e) =>
-                  setAmount(
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-                className="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="0.00"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={() => setAmount(outstandingAmount)}
-              className="mt-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
-            >
-              Settle full outstanding amount
-            </button>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-gray-400 text-xs">(Optional)</span>
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-              placeholder="Any additional notes about this settlement..."
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-console-text">
+            Amount to settle *
+          </label>
+          <div className="relative">
+            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
+            <input
+              type="number"
+              min="0"
+              max={outstandingAmount}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value === "" ? "" : Number(e.target.value))}
+              className="w-full rounded-lg border border-console-border py-2.5 pl-9 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="0.00"
             />
           </div>
+          <button
+            type="button"
+            onClick={() => setAmount(outstandingAmount)}
+            className="mt-1.5 text-xs font-medium text-brand-700 hover:text-brand-800"
+          >
+            Settle full outstanding amount
+          </button>
         </div>
 
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-100">
-          <button
-            onClick={handleClose}
-            disabled={isSubmitting}
-            className="px-5 py-2.5 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 disabled:opacity-50 font-medium"
-          >
-            {isSubmitting ? "Settling..." : "Settle Payment"}
-          </button>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-console-text">
+            Notes <span className="text-xs text-console-muted">(Optional)</span>
+          </label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="w-full resize-none rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            placeholder="Any additional notes about this settlement..."
+          />
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

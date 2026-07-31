@@ -47,7 +47,6 @@ export interface Purchase {
 
 export const getVendors = async (): Promise<Vendor[]> => {
   const response = await privateClient.get("/vendors");
-  console.log("vennddddddddddoooooooorrr",response)
   return response.data.map((vendor: any) => ({
     id: vendor._id,
     name: vendor.name,
