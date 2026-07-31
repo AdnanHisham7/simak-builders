@@ -286,7 +286,7 @@ export const createClient = async (userData: {
     name: response.data.user.name,
     email: response.data.user.email,
     isBlocked: response.data.user.isBlocked,
-    assignedSite: null,
+    assignedSites: [],
   };
 };
 

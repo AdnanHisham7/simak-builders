@@ -14,7 +14,7 @@ interface Client {
   name: string;
   email: string;
   isBlocked: boolean;
-  assignedSite: { id: string; name: string } | null;
+  assignedSites: { id: string; name: string }[];
 }
 
 interface EditClientModalProps {
