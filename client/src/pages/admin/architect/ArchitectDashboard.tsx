@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { getSites, uploadDocument } from "@/services/siteService";
 import { getCurrentUser, UserWithSalary } from "@/services/userService";
 import {
@@ -13,7 +13,13 @@ import {
   XCircle,
   Download,
   Activity,
+  LucideIcon,
 } from "lucide-react";
+import { Card, StatCard } from "@/components/ui/Card";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import PageLoader from "@/components/ui/PageLoader";
+import { cn } from "@/lib/cn";
 
 interface Document {
   id: string;
@@ -36,13 +42,19 @@ interface Site {
   documents: Document[];
 }
 
+const TABS = [
+  { id: "overview", name: "Overview", icon: Activity },
+  { id: "sites", name: "Sites", icon: Building2 },
+  { id: "documents", name: "Documents", icon: FileText },
+  { id: "salary", name: "Salary", icon: DollarSign },
+] as const;
+
 const ArchitectDashboard: React.FC = () => {
   const [sites, setSites] = useState<Site[]>([]);
   const [currentUser, setCurrentUser] = useState<UserWithSalary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]["id"]>("overview");
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchData = async () => {
@@ -57,7 +69,6 @@ const ArchitectDashboard: React.FC = () => {
         console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
-        setTimeout(() => setIsAnimating(true), 100);
       }
     };
     fetchData();
@@ -66,10 +77,10 @@ const ArchitectDashboard: React.FC = () => {
   const handleUpload = async (
     siteId: string,
     file: File,
-    category: "client" | "site"
+    category: "client" | "site",
   ) => {
-    const uploadId = `${siteId}-${file.name}-${category}`;
-    setUploadingFiles((prev) => new Set([...prev, uploadId]));
+    const uploadId = `${siteId}-${category}`;
+    setUploadingIds((prev) => new Set([...prev, uploadId]));
 
     const formData = new FormData();
     formData.append("file", file);
@@ -82,7 +93,7 @@ const ArchitectDashboard: React.FC = () => {
     } catch (error) {
       console.error("Error uploading document:", error);
     } finally {
-      setUploadingFiles((prev) => {
+      setUploadingIds((prev) => {
         const newSet = new Set(prev);
         newSet.delete(uploadId);
         return newSet;
@@ -91,30 +102,19 @@ const ArchitectDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 flex items-center space-x-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="text-lg font-medium text-gray-700">
-            Loading Dashboard...
-          </span>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading dashboard" />;
   }
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
-          <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            Error Loading Data
-          </h2>
-          <p className="text-gray-600">
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <XCircle className="mx-auto mb-4 h-10 w-10 text-danger-500" />
+          <h2 className="text-lg font-semibold text-console-text">Error loading data</h2>
+          <p className="mt-1 text-sm text-console-muted">
             Unable to load user information. Please try again.
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
@@ -122,601 +122,336 @@ const ArchitectDashboard: React.FC = () => {
   const myDocuments = sites
     .flatMap((site) => site.documents)
     .filter((doc) => doc.uploadedBy.id === currentUser._id)
-    .sort(
-      (a, b) =>
-        new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-    );
+    .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
-  const totalDocuments = sites.reduce(
-    (total, site) => total + site.documents.length,
-    0
-  );
+  const totalDocuments = sites.reduce((total, site) => total + site.documents.length, 0);
   const verifiedSalary =
     currentUser.salaryAssignments
       ?.filter((s) => s.isVerified)
       .reduce((sum, s) => sum + s.amount, 0) || 0;
 
-  const tabs = [
-    { id: "overview", name: "Overview", icon: Activity },
-    { id: "sites", name: "Sites", icon: Building2 },
-    { id: "documents", name: "Documents", icon: FileText },
-    { id: "salary", name: "Salary", icon: DollarSign },
-  ];
+  const DashStatCard = ({
+    title,
+    value,
+    icon,
+    subtitle,
+  }: {
+    title: string;
+    value: React.ReactNode;
+    icon: LucideIcon;
+    subtitle?: string;
+  }) => <StatCard label={title} value={value} icon={icon} trend={subtitle ? { direction: "neutral", value: subtitle } : undefined} />;
 
-  const StatCard = ({ title, value, icon: Icon, color, subtitle }: any) => (
-    <div
-      className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform hover:scale-105 hover:shadow-xl overflow-hidden ${
-        isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-      }`}
-    >
-      <div
-        className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${color} rounded-t-2xl`}
-      />
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
-            {subtitle && (
-              <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-            )}
-          </div>
-          <div
-            className={`p-3 rounded-full bg-gradient-to-r ${color} bg-opacity-10`}
-          >
-            <Icon className="h-6 w-6 text-gray-700" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const SiteCard = ({ site }: any) => {
-    const clientDocuments = site.documents
-      .filter((doc: Document) => doc.category === "client")
-      .sort(
-        (a: Document, b: Document) =>
-          new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-      );
-    const siteDocuments = site.documents
-      .filter((doc: Document) => doc.category === "site")
-      .sort(
-        (a: Document, b: Document) =>
-          new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime()
-      );
+  const SiteCard = ({ site }: { site: Site }) => {
+    const clientDocuments = [...site.documents]
+      .filter((doc) => doc.category === "client")
+      .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
+    const siteDocuments = [...site.documents]
+      .filter((doc) => doc.category === "site")
+      .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
     return (
-      <div
-        className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform hover:scale-102 hover:shadow-xl overflow-hidden ${
-          isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        }`}
-      >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-        <div className="p-6">
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Building2 className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {site.name}
-                </h3>
-                <div className="flex items-center text-sm text-gray-500 mt-1">
-                  <MapPin className="h-4 w-4 mr-1" />
-                  {site.address}, {site.city}, {site.state} {site.zip}
-                </div>
+      <Card>
+        <div className="mb-5 flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+              <Building2 size={18} />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-console-text">{site.name}</h3>
+              <div className="mt-0.5 flex items-center gap-1.5 text-xs text-console-muted">
+                <MapPin size={12} />
+                {site.address}, {site.city}, {site.state} {site.zip}
               </div>
             </div>
-            <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-              {site.documents.length} docs
-            </span>
           </div>
+          <Badge variant="success">{site.documents.length} docs</Badge>
+        </div>
 
-          <div className="space-y-6">
-            {/* Client Documentation */}
-            <div>
-              {/* Flex container for heading and upload button */}
+        <div className="space-y-5">
+          {[
+            { title: "Client Documentation", docs: clientDocuments, category: "client" as const },
+            { title: "Site Documentation", docs: siteDocuments, category: "site" as const },
+          ].map((group) => (
+            <div key={group.category}>
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-gray-700 flex items-center">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Client Documentation ({clientDocuments.length})
+                <h4 className="flex items-center text-sm font-medium text-console-text">
+                  <FileText size={14} className="mr-2" />
+                  {group.title} ({group.docs.length})
                 </h4>
                 <label className="relative cursor-pointer">
                   <input
                     type="file"
                     className="hidden"
+                    disabled={uploadingIds.has(`${site.id}-${group.category}`)}
                     onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleUpload(site.id, e.target.files[0], "client");
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleUpload(site.id, file, group.category);
                       }
                     }}
                   />
-                  <div className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                    <Upload className="h-4 w-4" />
-                    <span>Upload Client Document</span>
+                  <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800">
+                    <Upload size={14} />
+                    <span>
+                      {uploadingIds.has(`${site.id}-${group.category}`)
+                        ? "Uploading..."
+                        : `Upload ${group.category}`}
+                    </span>
                   </div>
                 </label>
               </div>
 
-              {/* Document list or message */}
-              {clientDocuments.length === 0 ? (
-                <p className="text-gray-500 text-sm mt-2">
-                  No client documents uploaded yet
-                </p>
+              {group.docs.length === 0 ? (
+                <p className="mt-2 text-sm text-console-muted">No documents uploaded yet</p>
               ) : (
-                <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
-                  {clientDocuments.map((doc: Document) => (
+                <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
+                  {group.docs.map((doc) => (
                     <div
                       key={doc.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      className="flex items-center justify-between rounded-lg bg-console-bg p-3 transition-colors hover:bg-slate-100"
                     >
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <FileText size={14} className="shrink-0 text-console-muted" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.name}
-                          </p>
-                          <div className="flex items-center space-x-2 text-xs text-gray-500">
+                          <p className="truncate text-sm font-medium text-console-text">{doc.name}</p>
+                          <div className="flex items-center gap-2 text-xs text-console-muted">
                             <span>{(doc.size / 1024).toFixed(1)} KB</span>
                             <span>•</span>
-                            <User className="h-3 w-3" />
+                            <User size={11} />
                             <span>{doc.uploadedBy.name}</span>
                             <span>•</span>
-                            <Calendar className="h-3 w-3" />
-                            <span>
-                              {new Date(doc.uploadDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <a
-                          href={`${doc.url}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 hover:bg-gray-200 rounded"
-                        >
-                          <Download className="h-4 w-4 text-gray-500" />
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Site Documentation */}
-            <div>
-              {/* Flex row: heading + upload button */}
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-medium text-gray-700 flex items-center">
-                  <FileText className="h-4 w-4 mr-2" />
-                  Site Documentation ({siteDocuments.length})
-                </h4>
-                <label className="relative cursor-pointer">
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        handleUpload(site.id, e.target.files[0], "site");
-                      }
-                    }}
-                  />
-                  <div className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                    <Upload className="h-4 w-4" />
-                    <span>Upload Site Document</span>
-                  </div>
-                </label>
-              </div>
-
-              {/* Site documents list or empty message */}
-              {siteDocuments.length === 0 ? (
-                <p className="text-gray-500 text-sm mt-2">
-                  No site documents uploaded yet
-                </p>
-              ) : (
-                <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
-                  {siteDocuments.map((doc: Document) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center space-x-3 flex-1 min-w-0">
-                        <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.name}
-                          </p>
-                          <div className="flex items-center space-x-2 text-xs text-gray-500">
-                            <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                            <span>•</span>
-                            <User className="h-3 w-3" />
-                            <span>{doc.uploadedBy.name}</span>
-                            <span>•</span>
-                            <Calendar className="h-3 w-3" />
-                            <span>
-                              {new Date(doc.uploadDate).toLocaleDateString()}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <a
-                          href={`${doc.url}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-1 hover:bg-gray-200 rounded"
-                        >
-                          <Download className="h-4 w-4 text-gray-500" />
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      {/* Header */}
-      <div
-        className={`bg-white shadow-sm border-b transition-all duration-500 ${
-          isAnimating ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
-                <Building2 className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  Architect Dashboard
-                </h1>
-                <p className="text-sm text-gray-500">
-                  Welcome back, {currentUser.name}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  ${currentUser.totalSalary?.toLocaleString() || "0"}
-                </p>
-                <p className="text-xs text-gray-500">Total Earnings</p>
-              </div>
-              <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <User className="h-5 w-5 text-white" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Navigation Tabs */}
-        <div
-          className={`mb-8 transition-all duration-700 delay-100 ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
-          }`}
-        >
-          <div className="bg-white rounded-2xl shadow-lg p-2 inline-flex space-x-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg"
-                      : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="font-medium">{tab.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Overview Tab */}
-        {activeTab === "overview" && (
-          <div className="space-y-8">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard
-                title="Total Sites"
-                value={sites.length}
-                icon={Building2}
-                color="from-blue-500 to-cyan-500"
-                subtitle="Active projects"
-              />
-              <StatCard
-                title="Total Documents"
-                value={totalDocuments}
-                icon={FileText}
-                color="from-purple-500 to-pink-500"
-                subtitle="Across all sites"
-              />
-              <StatCard
-                title="My Uploads"
-                value={myDocuments.length}
-                icon={Upload}
-                color="from-green-500 to-emerald-500"
-                subtitle="Documents uploaded"
-              />
-              <StatCard
-                title="Verified Salary"
-                value={`₹${verifiedSalary.toLocaleString()}`}
-                icon={CheckCircle}
-                color="from-yellow-500 to-orange-500"
-                subtitle="Confirmed payments"
-              />
-            </div>
-
-            {/* Recent Activity Preview */}
-            <div
-              className={`bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 delay-200 ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-            >
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 rounded-t-2xl" />
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Recent Activity
-                </h3>
-                <div className="space-y-3">
-                  {myDocuments.slice(0, 3).map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg"
-                    >
-                      <FileText className="h-5 w-5 text-blue-600" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900">
-                          {doc.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          Uploaded{" "}
-                          {new Date(doc.uploadDate).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                  {myDocuments.length === 0 && (
-                    <p className="text-gray-500 text-center py-8">
-                      No recent activity
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sites Tab */}
-        {activeTab === "sites" && (
-          <div className="space-y-6">
-            {sites.length === 0 ? (
-              <div className="text-center py-12">
-                <Building2 className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No Sites Assigned
-                </h3>
-                <p className="text-gray-500">
-                  You don't have any sites assigned yet.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {sites.map((site) => (
-                  <SiteCard key={site.id} site={site} />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Documents Tab */}
-        {activeTab === "documents" && (
-          <div
-            className={`bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-          >
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-t-2xl" />
-            <div className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                My Uploaded Documents
-              </h3>
-              {myDocuments.length === 0 ? (
-                <div className="text-center py-12">
-                  <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                  <h4 className="text-lg font-medium text-gray-900 mb-2">
-                    No Documents Yet
-                  </h4>
-                  <p className="text-gray-500">
-                    You haven't uploaded any documents yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {myDocuments.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex items-center space-x-4 flex-1 min-w-0">
-                        <FileText className="h-5 w-5 text-blue-600 flex-shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {doc.name}{" "}
-                            <span className="text-xs text-gray-500">
-                              ({doc.category})
-                            </span>
-                          </p>
-                          <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
-                            <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                            <span>
-                              Site:{" "}
-                              {
-                                sites.find((s) =>
-                                  s.documents.some((d) => d.id === doc.id)
-                                )?.name
-                              }
-                            </span>
-                            <span>
-                              Uploaded{" "}
-                              {new Date(doc.uploadDate).toLocaleDateString()}
-                            </span>
+                            <Calendar size={11} />
+                            <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
                       <a
-                        href={`${doc.url}`}
+                        href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                        className="rounded p-1.5 hover:bg-slate-200"
                       >
-                        <Download className="h-4 w-4" />
-                        <span>Download</span>
+                        <Download size={15} className="text-console-muted" />
                       </a>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      </Card>
+    );
+  };
 
-        {/* Salary Tab */}
-        {activeTab === "salary" && (
-          <div className="space-y-6">
-            {/* Salary Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <StatCard
-                title="Total Salary"
-                value={`₹${currentUser.totalSalary?.toLocaleString() || "0"}`}
-                icon={DollarSign}
-                color="from-green-500 to-emerald-500"
-                subtitle="All time earnings"
-              />
-              <StatCard
-                title="Verified Amount"
-                value={`₹${verifiedSalary.toLocaleString()}`}
-                icon={CheckCircle}
-                color="from-blue-500 to-cyan-500"
-                subtitle="Confirmed payments"
-              />
-              <StatCard
-                title="Pending Verification"
-                value={`₹${(
-                  (currentUser.totalSalary || 0) - verifiedSalary
-                ).toLocaleString()}`}
-                icon={XCircle}
-                color="from-yellow-500 to-orange-500"
-                subtitle="Awaiting confirmation"
-              />
-            </div>
-
-            {/* Salary Transactions */}
-            <div
-              className={`bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-            >
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 rounded-t-2xl" />
-              <div className="p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                  Salary Transactions
-                </h3>
-                {!currentUser.salaryAssignments ||
-                currentUser.salaryAssignments.length === 0 ? (
-                  <div className="text-center py-12">
-                    <DollarSign className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-                    <h4 className="text-lg font-medium text-gray-900 mb-2">
-                      No Transactions Yet
-                    </h4>
-                    <p className="text-gray-500">
-                      No salary transactions have been recorded.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {currentUser.salaryAssignments
-                      .slice()
-                      .sort(
-                        (a, b) =>
-                          new Date(b.date).getTime() -
-                          new Date(a.date).getTime()
-                      )
-                      .map((assignment) => (
-                        <div
-                          key={assignment._id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                        >
-                          <div className="flex items-center space-x-4">
-                            <div
-                              className={`p-2 rounded-full ${
-                                assignment.isVerified
-                                  ? "bg-green-100"
-                                  : "bg-yellow-100"
-                              }`}
-                            >
-                              {assignment.isVerified ? (
-                                <CheckCircle className="h-5 w-5 text-green-600" />
-                              ) : (
-                                <XCircle className="h-5 w-5 text-yellow-600" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">
-                                ${assignment.amount.toLocaleString()}
-                              </p>
-                              <div className="flex items-center space-x-4 text-xs text-gray-500 mt-1">
-                                <div className="flex items-center">
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {new Date(
-                                    assignment.date
-                                  ).toLocaleDateString()}
-                                </div>
-                                <div className="flex items-center">
-                                  <User className="h-3 w-3 mr-1" />
-                                  {assignment.givenBy?.name || "auto"}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              assignment.isVerified
-                                ? "bg-green-100 text-green-800"
-                                : "bg-yellow-100 text-yellow-800"
-                            }`}
-                          >
-                            {assignment.isVerified ? "Verified" : "Pending"}
-                          </span>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Architect Dashboard</h1>
+          <p className="mt-0.5 text-sm text-console-muted">Welcome back, {currentUser.name}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-sm font-semibold text-console-text">
+              ₹{currentUser.totalSalary?.toLocaleString() || "0"}
+            </p>
+            <p className="text-xs text-console-muted">Total earnings</p>
           </div>
-        )}
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-100 text-brand-800">
+            <User size={18} />
+          </div>
+        </div>
       </div>
+
+      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-white text-brand-700 shadow-console"
+                  : "text-console-muted hover:bg-white/60",
+              )}
+            >
+              <Icon size={15} />
+              <span>{tab.name}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "overview" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <DashStatCard title="Total Sites" value={sites.length} icon={Building2} subtitle="Active projects" />
+            <DashStatCard title="Total Documents" value={totalDocuments} icon={FileText} subtitle="Across all sites" />
+            <DashStatCard title="My Uploads" value={myDocuments.length} icon={Upload} subtitle="Documents uploaded" />
+            <DashStatCard
+              title="Verified Salary"
+              value={`₹${verifiedSalary.toLocaleString()}`}
+              icon={CheckCircle}
+              subtitle="Confirmed payments"
+            />
+          </div>
+
+          <Card title="Recent activity">
+            {myDocuments.length === 0 ? (
+              <p className="py-8 text-center text-sm text-console-muted">No recent activity</p>
+            ) : (
+              <div className="space-y-2.5">
+                {myDocuments.slice(0, 3).map((doc) => (
+                  <div key={doc.id} className="flex items-center gap-3 rounded-lg bg-console-bg p-3">
+                    <FileText size={18} className="text-brand-600" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-console-text">{doc.name}</p>
+                      <p className="text-xs text-console-muted">
+                        Uploaded {new Date(doc.uploadDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "sites" && (
+        <div className="space-y-6">
+          {sites.length === 0 ? (
+            <Card>
+              <EmptyState icon={Building2} title="No sites assigned" description="You don't have any sites assigned yet." />
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              {sites.map((site) => (
+                <SiteCard key={site.id} site={site} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "documents" && (
+        <Card title="My uploaded documents">
+          {myDocuments.length === 0 ? (
+            <EmptyState icon={FileText} title="No documents yet" description="You haven't uploaded any documents yet." />
+          ) : (
+            <div className="space-y-2.5">
+              {myDocuments.map((doc) => (
+                <div
+                  key={doc.id}
+                  className="flex items-center justify-between rounded-lg bg-console-bg p-4 transition-colors hover:bg-slate-100"
+                >
+                  <div className="flex min-w-0 flex-1 items-center gap-4">
+                    <FileText size={18} className="shrink-0 text-brand-600" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-console-text">
+                        {doc.name} <span className="text-xs text-console-muted">({doc.category})</span>
+                      </p>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-console-muted">
+                        <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                        <span>
+                          Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
+                        </span>
+                        <span>Uploaded {new Date(doc.uploadDate).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800"
+                  >
+                    <Download size={14} />
+                    <span>Download</span>
+                  </a>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {activeTab === "salary" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <DashStatCard
+              title="Total Salary"
+              value={`₹${currentUser.totalSalary?.toLocaleString() || "0"}`}
+              icon={DollarSign}
+              subtitle="All time earnings"
+            />
+            <DashStatCard
+              title="Verified Amount"
+              value={`₹${verifiedSalary.toLocaleString()}`}
+              icon={CheckCircle}
+              subtitle="Confirmed payments"
+            />
+            <DashStatCard
+              title="Pending Verification"
+              value={`₹${((currentUser.totalSalary || 0) - verifiedSalary).toLocaleString()}`}
+              icon={XCircle}
+              subtitle="Awaiting confirmation"
+            />
+          </div>
+
+          <Card title="Salary transactions">
+            {!currentUser.salaryAssignments || currentUser.salaryAssignments.length === 0 ? (
+              <EmptyState icon={DollarSign} title="No transactions yet" description="No salary transactions have been recorded." />
+            ) : (
+              <div className="space-y-2.5">
+                {currentUser.salaryAssignments
+                  .slice()
+                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .map((assignment) => (
+                    <div
+                      key={assignment._id}
+                      className="flex items-center justify-between rounded-lg bg-console-bg p-4"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={cn(
+                            "flex h-9 w-9 items-center justify-center rounded-full",
+                            assignment.isVerified ? "bg-success-100 text-success-700" : "bg-warning-100 text-warning-700",
+                          )}
+                        >
+                          {assignment.isVerified ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-console-text">
+                            ₹{assignment.amount.toLocaleString()}
+                          </p>
+                          <div className="mt-0.5 flex items-center gap-3 text-xs text-console-muted">
+                            <span className="flex items-center gap-1">
+                              <Calendar size={11} />
+                              {new Date(assignment.date).toLocaleDateString()}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User size={11} />
+                              {assignment.givenBy?.name || "auto"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <Badge variant={assignment.isVerified ? "success" : "warning"}>
+                        {assignment.isVerified ? "Verified" : "Pending"}
+                      </Badge>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

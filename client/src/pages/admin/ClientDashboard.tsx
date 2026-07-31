@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getClientDashboard,
   getClientSites,
@@ -12,14 +12,18 @@ import {
   DollarSign,
   Building,
   Wallet,
-  User,
   TrendingUp,
-  AlertTriangle,
   Send,
+  LucideIcon,
 } from "lucide-react";
 import SendMoneyCard from "./SendMoneyCard";
 import ConfirmationModal from "./ConfirmationModal";
 import { toast } from "sonner";
+import { Card, StatCard } from "@/components/ui/Card";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import PageLoader from "@/components/ui/PageLoader";
+import { cn } from "@/lib/cn";
 
 interface SectionState {
   data: any[];
@@ -28,40 +32,40 @@ interface SectionState {
   limit: number;
 }
 
+const TABS = [
+  { id: "overview", label: "Overview", icon: BarChart },
+  { id: "purchases", label: "Purchases", icon: ShoppingCart },
+  { id: "stocks", label: "Inventory", icon: PackageIcon },
+  { id: "miscellaneous", label: "Miscellaneous", icon: Construction },
+  { id: "transactions", label: "Transactions", icon: DollarSign },
+] as const;
+
+const emptySection = (): SectionState => ({ data: [], total: 0, page: 1, limit: 10 });
+
+const badgeVariant = (status: string | undefined): "success" | "warning" | "error" | "neutral" => {
+  switch (status) {
+    case "completed":
+      return "success";
+    case "pending":
+      return "warning";
+    case "failed":
+      return "error";
+    default:
+      return "neutral";
+  }
+};
+
 const ClientDashboard: React.FC = () => {
   const [site, setSite] = useState<any>(null);
   const [sites, setSites] = useState<any[]>([]);
   const [selectedSite, setSelectedSite] = useState<any>(null);
-  const [purchases, setPurchases] = useState<SectionState>({
-    data: [],
-    total: 0,
-    page: 1,
-    limit: 10,
-  });
-  const [stocks, setStocks] = useState<SectionState>({
-    data: [],
-    total: 0,
-    page: 1,
-    limit: 10,
-  });
-  const [miscellaneousExpenses, setMiscellaneousExpenses] =
-    useState<SectionState>({
-      data: [],
-      total: 0,
-      page: 1,
-      limit: 10,
-    });
-  const [transactions, setTransactions] = useState<SectionState>({
-    data: [],
-    total: 0,
-    page: 1,
-    limit: 10,
-  });
-  const [attendances, setAttendances] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<SectionState>(emptySection());
+  const [stocks, setStocks] = useState<SectionState>(emptySection());
+  const [miscellaneousExpenses, setMiscellaneousExpenses] = useState<SectionState>(emptySection());
+  const [transactions, setTransactions] = useState<SectionState>(emptySection());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<(typeof TABS)[number]["id"]>("overview");
   const [amountStr, setAmountStr] = useState<string>("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -107,12 +111,10 @@ const ClientDashboard: React.FC = () => {
         page: Number(params.transactionsPage),
         limit: Number(params.transactionsLimit),
       });
-      setAttendances(data.attendances);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
-      setTimeout(() => setIsAnimating(true), 100);
     }
   };
 
@@ -122,7 +124,7 @@ const ClientDashboard: React.FC = () => {
 
   useEffect(() => {
     if (selectedSite) {
-      const initialParams = {
+      fetchData({
         siteId: selectedSite._id,
         purchasesPage: 1,
         purchasesLimit: 10,
@@ -132,15 +134,10 @@ const ClientDashboard: React.FC = () => {
         miscellaneousLimit: 10,
         transactionsPage: 1,
         transactionsLimit: 10,
-      };
-      fetchData(initialParams);
+      });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSite]);
-
-  const refreshDashboard = async () => {
-    const params = getCurrentParams();
-    await fetchData(params);
-  };
 
   const getCurrentParams = () => ({
     siteId: selectedSite?._id,
@@ -154,24 +151,29 @@ const ClientDashboard: React.FC = () => {
     transactionsLimit: transactions.limit,
   });
 
+  const refreshDashboard = async () => {
+    await fetchData(getCurrentParams());
+  };
+
+  const sectionFor = (section: string): SectionState =>
+    section === "purchases"
+      ? purchases
+      : section === "stocks"
+        ? stocks
+        : section === "miscellaneous"
+          ? miscellaneousExpenses
+          : transactions;
+
   const handlePageChange = (section: string, newPage: number) => {
     const currentParams = getCurrentParams();
-    const totalPages = Math.ceil(
-      section === "purchases"
-        ? purchases.total
-        : section === "stocks"
-          ? stocks.total
-          : section === "miscellaneous"
-            ? miscellaneousExpenses.total
-            : transactions.total / 10,
-    );
+    const sectionData = sectionFor(section);
+    const totalPages = Math.ceil(sectionData.total / sectionData.limit);
     if (newPage < 1 || newPage > totalPages) return;
 
-    const newParams = {
+    fetchData({
       ...currentParams,
       [`${section}Page`]: newPage,
-    };
-    fetchData(newParams);
+    });
   };
 
   const handleSendMoneyRequest = () => {
@@ -200,76 +202,29 @@ const ClientDashboard: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h- bg-gradient-to-br from-yellow-50 via-white to-yellow-100 flex items-center justify-center">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
-          <div
-            className="absolute inset-0 w-16 h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"
-            style={{ animationDelay: "0.15s", animationDuration: "1.2s" }}
-          ></div>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Loading dashboard" />;
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-pink-50 flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-2xl shadow-2xl border border-red-200 p-8 max-w-md w-full text-center transform scale-100 opacity-100 transition-all duration-200">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-500 via-pink-500 to-orange-500 rounded-t-2xl" />
-          <AlertTriangle size={60} className="text-red-600 mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Error</h2>
-          <p className="text-gray-600">{error}</p>
-        </div>
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <h2 className="text-lg font-semibold text-console-text">Something went wrong</h2>
+          <p className="mt-1 text-sm text-danger-600">{error}</p>
+        </Card>
       </div>
     );
   }
 
-  const tabs = [
-    { id: "overview", label: "Overview", icon: <BarChart size={20} /> },
-    { id: "purchases", label: "Purchases", icon: <ShoppingCart size={20} /> },
-    { id: "stocks", label: "Inventory", icon: <PackageIcon size={20} /> },
-    {
-      id: "miscellaneous",
-      label: "Miscellaneous",
-      icon: <Construction size={20} />,
-    },
-    {
-      id: "transactions",
-      label: "Transactions",
-      icon: <DollarSign size={20} />,
-    },
-  ];
-
-  const StatCard = ({
+  const DashStatCard = ({
     title,
     value,
     icon,
-    color,
   }: {
     title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    color: string;
-  }) => (
-    <div
-      className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 p-6 transition-all duration-300 hover:shadow-xl hover:scale-105 group cursor-pointer overflow-hidden`}
-    >
-      <div
-        className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${color} rounded-t-2xl`}
-      />
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-          <p className="text-2xl font-bold text-gray-900">{value}</p>
-        </div>
-        <div className="opacity-70 group-hover:scale-110 transition-transform duration-200">
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
+    value: React.ReactNode;
+    icon: LucideIcon;
+  }) => <StatCard label={title} value={value} icon={icon} />;
 
   const TableCard = ({
     title,
@@ -279,434 +234,282 @@ const ClientDashboard: React.FC = () => {
   }: {
     title: string;
     children: React.ReactNode;
-    icon: React.ReactNode;
+    icon: LucideIcon;
     section: string;
   }) => {
-    const sectionData =
-      section === "purchases"
-        ? purchases
-        : section === "stocks"
-          ? stocks
-          : section === "miscellaneous"
-            ? miscellaneousExpenses
-            : transactions;
-    const totalPages = Math.ceil(sectionData.total / sectionData.limit);
+    const Icon = icon;
+    const sectionData = sectionFor(section);
+    const totalPages = Math.ceil(sectionData.total / sectionData.limit) || 1;
 
     return (
-      <div
-        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden ${
-          isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        }`}
-      >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-amber-800 to-amber-900 rounded-t-2xl" />
-        <div className="p-6">
-          <div className="flex items-center gap-3 mb-6">
-            {icon}
-            <h3 className="text-xl font-bold text-gray-800">{title}</h3>
+      <Card>
+        <div className="mb-5 flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Icon size={16} />
           </div>
-          {children}
-          {section !== "overview" && (
-            <div className="flex justify-between items-center mt-4 px-6 pb-4">
-              <button
-                onClick={() => handlePageChange(section, sectionData.page - 1)}
-                disabled={sectionData.page <= 1}
-                className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <span>
-                Page {sectionData.page} of {totalPages}
-              </span>
-              <button
-                onClick={() => handlePageChange(section, sectionData.page + 1)}
-                disabled={sectionData.page >= totalPages}
-                className="px-4 py-2 bg-gray-200 rounded-lg disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          )}
+          <h3 className="text-base font-semibold text-console-text">{title}</h3>
         </div>
-      </div>
+        {children}
+        {section !== "overview" && (
+          <div className="mt-4 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => handlePageChange(section, sectionData.page - 1)}
+              disabled={sectionData.page <= 1}
+              className="rounded-lg bg-console-bg px-4 py-2 text-sm font-medium text-console-text transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <span className="text-sm text-console-muted">
+              Page {sectionData.page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => handlePageChange(section, sectionData.page + 1)}
+              disabled={sectionData.page >= totalPages}
+              className="rounded-lg bg-console-bg px-4 py-2 text-sm font-medium text-console-text transition-colors hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </Card>
     );
   };
 
   return (
-    <div className="rounded-xl bg-gradient-to-br from-yellow-50 via-white to-yellow-50">
-      <div
-        className={`border-b border-gray-200 transition-all duration-200 transform ${
-          isAnimating ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0"
-        }`}
-      >
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                Client Dashboard
-              </h1>
-              <p className="text-gray-600">
-                Welcome back! Here's your project overview.
-              </p>
-            </div>
-            <User size={60} />
-          </div>
-          <div className="mt-4">
-            <label htmlFor="site-select" className="text-gray-700 font-medium">
-              Select Site:
-            </label>
-            <select
-              id="site-select"
-              value={selectedSite?._id || ""}
-              onChange={(e) => {
-                const site = sites.find((s) => s._id === e.target.value);
-                setSelectedSite(site);
-              }}
-              className="ml-2 p-2 border border-gray-300 rounded-lg"
-            >
-              {sites.map((site) => (
-                <option key={site._id} value={site._id}>
-                  {site.name}
-                </option>
-              ))}
-            </select>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Client Dashboard</h1>
+          <p className="mt-0.5 text-sm text-console-muted">Welcome back! Here's your project overview.</p>
+        </div>
+        <div>
+          <label htmlFor="site-select" className="mb-1 block text-xs font-medium text-console-muted">
+            Select site
+          </label>
+          <select
+            id="site-select"
+            value={selectedSite?._id || ""}
+            onChange={(e) => {
+              const nextSite = sites.find((s) => s._id === e.target.value);
+              setSelectedSite(nextSite);
+            }}
+            className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          >
+            {sites.map((s) => (
+              <option key={s._id} value={s._id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div
-          className={`grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 transition-all duration-300 delay-100 transform ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
-          }`}
-        >
-          <StatCard
-            title="Site Name"
-            value={site?.name || "N/A"}
-            icon={<Building size={30} />}
-            color="from-amber-800 to-amber-900"
-          />
-          <StatCard
-            title="Budget"
-            value={`₹${site?.budget?.toLocaleString() || 0}`}
-            icon={<Wallet size={30} />}
-            color="from-amber-800 to-amber-900"
-          />
-          <StatCard
-            title="Expenses"
-            value={`₹${site?.expenses?.toLocaleString() || 0}`}
-            icon={<BarChart size={30} />}
-            color="from-amber-800 to-amber-900"
-          />
-        </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <DashStatCard title="Site Name" value={site?.name || "N/A"} icon={Building} />
+        <DashStatCard title="Budget" value={`₹${site?.budget?.toLocaleString() || 0}`} icon={Wallet} />
+        <DashStatCard title="Expenses" value={`₹${site?.expenses?.toLocaleString() || 0}`} icon={BarChart} />
+      </div>
 
-        <div
-          className={`mb-8 transition-all duration-300 delay-200 transform ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
-          }`}
-        >
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-2">
-            <div className="flex flex-wrap gap-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all duration-200 ${
-                    activeTab === tab.id
-                      ? "bg-gradient-to-r from-amber-800 to-amber-900 text-white shadow-lg transform scale-105"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }`}
-                >
-                  {tab.icon}
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                activeTab === tab.id
+                  ? "bg-white text-brand-700 shadow-console"
+                  : "text-console-muted hover:bg-white/60",
+              )}
+            >
+              <Icon size={15} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-        <div
-          className={`transition-all duration-300 delay-300 transform ${
-            isAnimating
-              ? "translate-y-0 opacity-100"
-              : "translate-y-4 opacity-0"
-          }`}
-        >
-          {activeTab === "overview" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <SendMoneyCard
-                amountStr={amountStr}
-                setAmountStr={setAmountStr}
-                onSendMoneyRequest={handleSendMoneyRequest}
-              />
-              <TableCard
-                title="Quick Statistics"
-                icon={<TrendingUp size={24} />}
-                section="overview"
-              >
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
-                    <div className="text-2xl font-bold text-amber-600">
-                      {purchases.total || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Total Purchases</div>
-                  </div>
-                  <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
-                    <div className="text-2xl font-bold text-amber-600">
-                      {stocks.total || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Stock Items</div>
-                  </div>
-                  <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
-                    <div className="text-2xl font-bold text-amber-600">
-                      {miscellaneousExpenses.total || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      Miscellaneous Expenses
-                    </div>
-                  </div>
-                  <div className="text-center p-4 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl">
-                    <div className="text-2xl font-bold text-amber-600">
-                      {transactions.total || 0}
-                    </div>
-                    <div className="text-sm text-gray-600">Transactions</div>
-                  </div>
+      {activeTab === "overview" && (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <SendMoneyCard
+            amountStr={amountStr}
+            setAmountStr={setAmountStr}
+            onSendMoneyRequest={handleSendMoneyRequest}
+          />
+          <TableCard title="Quick Statistics" icon={TrendingUp} section="overview">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-console bg-console-bg p-4 text-center">
+                <div className="text-2xl font-semibold text-brand-700">{purchases.total || 0}</div>
+                <div className="text-sm text-console-muted">Total purchases</div>
+              </div>
+              <div className="rounded-console bg-console-bg p-4 text-center">
+                <div className="text-2xl font-semibold text-brand-700">{stocks.total || 0}</div>
+                <div className="text-sm text-console-muted">Stock items</div>
+              </div>
+              <div className="rounded-console bg-console-bg p-4 text-center">
+                <div className="text-2xl font-semibold text-brand-700">
+                  {miscellaneousExpenses.total || 0}
                 </div>
-              </TableCard>
+                <div className="text-sm text-console-muted">Miscellaneous expenses</div>
+              </div>
+              <div className="rounded-console bg-console-bg p-4 text-center">
+                <div className="text-2xl font-semibold text-brand-700">{transactions.total || 0}</div>
+                <div className="text-sm text-console-muted">Transactions</div>
+              </div>
+            </div>
+          </TableCard>
+        </div>
+      )}
+
+      {activeTab === "purchases" && (
+        <TableCard title="Purchase Orders" icon={ShoppingCart} section="purchases">
+          {purchases.data?.length === 0 ? (
+            <EmptyState icon={ShoppingCart} title="No purchases found" />
+          ) : (
+            <div className="overflow-x-auto rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {purchases.data?.map((pur: any) => (
+                    <tr key={pur._id}>
+                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                        {pur.vendor?.name || "N/A"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                        ₹{pur.totalAmount?.toLocaleString() || 0}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
+        </TableCard>
+      )}
 
-          {activeTab === "purchases" && (
-            <TableCard
-              title="Purchase Orders"
-              icon={<ShoppingCart size={24} />}
-              section="purchases"
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-amber-100 to-amber-200">
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-l-xl">
-                        Vendor
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                        Total Amount
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-r-xl">
-                        Status
-                      </th>
+      {activeTab === "stocks" && (
+        <TableCard title="Inventory Management" icon={PackageIcon} section="stocks">
+          {stocks.data?.length === 0 ? (
+            <EmptyState icon={PackageIcon} title="No stock items found" />
+          ) : (
+            <div className="overflow-x-auto rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Unit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {stocks.data?.map((stock: any) => (
+                    <tr key={stock._id}>
+                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">{stock.name || "N/A"}</td>
+                      <td className="px-4 py-3.5 text-sm text-info-700">{stock.quantity || 0}</td>
+                      <td className="px-4 py-3.5 text-sm text-console-muted">{stock.unit || "N/A"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {purchases.data?.map((pur: any, index: number) => (
-                      <tr
-                        key={pur._id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
-                          index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                        }`}
-                      >
-                        <td className="py-4 px-6 font-medium text-gray-900">
-                          {pur.vendor?.name || "N/A"}
-                        </td>
-                        <td className="py-4 px-6 text-green-600 font-semibold">
-                          ₹{pur.totalAmount?.toLocaleString() || 0}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              pur.status === "completed"
-                                ? "bg-green-100 text-green-800"
-                                : pur.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {pur.status || "Unknown"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TableCard>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+        </TableCard>
+      )}
 
-          {activeTab === "stocks" && (
-            <TableCard
-              title="Inventory Management"
-              icon={<PackageIcon size={24} />}
-              section="stocks"
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-amber-100 to-amber-200">
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-l-xl">
-                        Item Name
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                        Quantity
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-r-xl">
-                        Unit
-                      </th>
+      {activeTab === "miscellaneous" && (
+        <TableCard title="Miscellaneous Expenses" icon={Construction} section="miscellaneous">
+          {miscellaneousExpenses.data?.length === 0 ? (
+            <EmptyState icon={Construction} title="No miscellaneous expenses found" />
+          ) : (
+            <div className="overflow-x-auto rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {miscellaneousExpenses.data?.map((expense: any) => (
+                    <tr key={expense._id}>
+                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                        {expense.description || "N/A"}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                        ₹{expense.amount?.toLocaleString() || 0}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-console-muted">
+                        {expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {stocks.data?.map((stock: any, index: number) => (
-                      <tr
-                        key={stock._id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
-                          index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                        }`}
-                      >
-                        <td className="py-4 px-6 font-medium text-gray-900">
-                          {stock.name || "N/A"}
-                        </td>
-                        <td className="py-4 px-6 text-blue-600 font-semibold">
-                          {stock.quantity || 0}
-                        </td>
-                        <td className="py-4 px-6 text-gray-600">
-                          {stock.unit || "N/A"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TableCard>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+        </TableCard>
+      )}
 
-          {activeTab === "miscellaneous" && (
-            <TableCard
-              title="Miscellaneous Expenses"
-              icon={<Construction size={24} />}
-              section="miscellaneous"
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-amber-100 to-amber-200">
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-l-xl">
-                        Description
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                        Amount
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-r-xl">
-                        Date
-                      </th>
+      {activeTab === "transactions" && (
+        <TableCard title="Transaction History" icon={DollarSign} section="transactions">
+          {transactions.data?.length === 0 ? (
+            <EmptyState icon={DollarSign} title="No transactions found" />
+          ) : (
+            <div className="overflow-x-auto rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {transactions.data?.map((trans: any) => (
+                    <tr key={trans._id}>
+                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                        ₹{trans.amount?.toLocaleString() || 0}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
+                      </td>
+                      <td className="px-4 py-3.5 text-sm text-console-muted">
+                        {trans.createdAt ? new Date(trans.createdAt).toLocaleDateString() : "N/A"}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {miscellaneousExpenses.data?.map(
-                      (miscellaneous: any, index: number) => (
-                        <tr
-                          key={miscellaneous._id}
-                          className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
-                            index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                          }`}
-                        >
-                          <td className="py-4 px-6 font-medium text-gray-900">
-                            {miscellaneous.description || "N/A"}
-                          </td>
-                          <td className="py-4 px-6 text-green-600 font-semibold">
-                            ₹{miscellaneous.amount?.toLocaleString() || 0}
-                          </td>
-                          <td className="py-4 px-6 text-gray-600">
-                            {miscellaneous.date
-                              ? new Date(
-                                  miscellaneous.date,
-                                ).toLocaleDateString()
-                              : "N/A"}
-                          </td>
-                        </tr>
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </TableCard>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-
-          {activeTab === "transactions" && (
-            <TableCard
-              title="Transaction History"
-              icon={<DollarSign size={24} />}
-              section="transactions"
-            >
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-amber-100 to-amber-200">
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-l-xl">
-                        Amount
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700">
-                        Status
-                      </th>
-                      <th className="text-left py-4 px-6 font-semibold text-gray-700 rounded-r-xl">
-                        Date
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transactions.data?.map((trans: any, index: number) => (
-                      <tr
-                        key={trans._id}
-                        className={`border-b border-gray-100 hover:bg-gray-50 transition-colors duration-200 ${
-                          index % 2 === 0 ? "bg-white" : "bg-gray-50/30"
-                        }`}
-                      >
-                        <td className="py-4 px-6 text-green-600 font-semibold">
-                          ₹{trans.amount?.toLocaleString() || 0}
-                        </td>
-                        <td className="py-4 px-6">
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              trans.status === "completed"
-                                ? "bg-green-100 text-green-800"
-                                : trans.status === "pending"
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : trans.status === "failed"
-                                    ? "bg-red-100 text-red-800"
-                                    : "bg-gray-100 text-gray-800"
-                            }`}
-                          >
-                            {trans.status || "Unknown"}
-                          </span>
-                        </td>
-                        <td className="py-4 px-6 text-gray-600">
-                          {trans.createdAt
-                            ? new Date(trans.createdAt).toLocaleDateString()
-                            : "N/A"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TableCard>
-          )}
-        </div>
-      </div>
+        </TableCard>
+      )}
 
       <ConfirmationModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirmSendMoney}
         title="Confirm Send Money"
-        description={`Are you sure you want to send ₹${parseFloat(
-          amountStr,
-        ).toLocaleString()} to the admin for ${selectedSite?.name}?`}
+        description={`Are you sure you want to send ₹${parseFloat(amountStr || "0").toLocaleString()} to the admin for ${selectedSite?.name}?`}
         confirmText="Send"
         cancelText="Cancel"
         isLoading={isSending}
-        icon={<Send className="w-6 h-6 text-green-600" />}
+        icon={<Send className="h-5 w-5 text-success-600" />}
         theme="success"
       />
     </div>
