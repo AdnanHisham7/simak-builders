@@ -4,7 +4,13 @@ import { X } from "lucide-react";
 interface Transaction {
   date: string;
   amount: number;
-  type: "purchase" | "miscellaneous" | "attendance" | "stockTransfer";
+  type:
+    | "purchase"
+    | "miscellaneous"
+    | "attendance"
+    | "stockTransfer"
+    | "client_payment"
+    | "contractor_payment";
   description: string;
   relatedId: string;
   user: { id: string; name: string };

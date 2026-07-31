@@ -57,12 +57,11 @@ import {
 } from "@/services/purchaseService";
 import { searchItems, ItemSuggestion } from "@/services/itemService";
 import { PURCHASE_CATEGORIES } from "@/constants/purchaseOptions";
-// import { User } from "@/services/userService";
 import {
   getStocksBySite,
-  getStockTransfers,
   logStockUsage,
   requestStockTransfer,
+  Stock,
 } from "@/services/stockService";
 import LogUsageModal from "./LogUsageModal";
 import {
@@ -84,8 +83,16 @@ import { privateClient } from "@/api";
 import CompleteSiteModal from "./CompleteSiteModal";
 import ClientPaymentsModal from "./ClientPaymentsModal";
 import SiteContractorsManager from "./SiteContractorsManager";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import PageLoader from "@/components/ui/PageLoader";
+import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { cn } from "@/lib/cn";
 
-interface Transaction {
+interface SiteTransaction {
   date: string;
   amount: number;
   type:
@@ -100,24 +107,36 @@ interface Transaction {
   user: { id: string; name: string };
 }
 
-interface ClientTransaction {
-  _id: string;
-  createdAt: string;
-  amount: number;
-  status: "pending" | "verified";
-  verifiedBy?: { name: string; _id: string };
+interface ExtendedSite extends Omit<Site, "transactions"> {
+  transactions: SiteTransaction[];
 }
 
-interface ExtendedSite extends Site {
-  transactions: Transaction[];
-}
+const TAB_CONFIG = [
+  { id: "overview", label: "Overview", icon: Eye },
+  { id: "team", label: "Team", icon: Users },
+  { id: "contractors", label: "Contractors", icon: Users },
+  { id: "attendance", label: "Attendance", icon: Calendar },
+  { id: "purchases", label: "Purchases", icon: ShoppingCart },
+  { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
+  { id: "stocks", label: "Stocks", icon: Package },
+  { id: "documents", label: "Documents", icon: FileText },
+] as const;
+
+const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className,
+}) => (
+  <div className={cn("rounded-console border border-console-border bg-white p-6", className)}>
+    {children}
+  </div>
+);
 
 const SiteDetail: React.FC = () => {
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
   const { user, userType } = useSelector((state: RootState) => state.auth);
   const [site, setSite] = useState<ExtendedSite | null>(null);
-  const [sites, setSites] = useState<{ _id: string; name: string }[]>([]);
+  const [sites, setSites] = useState<{ id: string; name: string }[]>([]);
   const [purchases, setPurchases] = useState<any[]>([]);
   const [miscellaneousExpenses, setMiscellaneousExpenses] = useState<any[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
@@ -126,28 +145,19 @@ const SiteDetail: React.FC = () => {
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
   const [isAddMiscellaneousModalOpen, setIsAddMiscellaneousModalOpen] =
     useState(false);
-  const [isLogUsageModalOpen, setIsLogUsageModalOpen] = React.useState(false);
+  const [isLogUsageModalOpen, setIsLogUsageModalOpen] = useState(false);
   const [isRequestTransferModalOpen, setIsRequestTransferModalOpen] =
     useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [attendanceData, setAttendanceData] = useState<
     { date: string; count: number; level: number }[]
   >([]);
   const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
-  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedDayAttendance, setSelectedDayAttendance] = useState<
     any[] | null
   >(null);
   const [selectedTab, setSelectedTab] = useState<
-    | "overview"
-    | "team"
-    | "contractors"
-    | "attendance"
-    | "purchases"
-    | "stocks"
-    | "miscellaneous"
-    | "documents"
+    (typeof TAB_CONFIG)[number]["id"]
   >("overview");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
@@ -161,10 +171,8 @@ const SiteDetail: React.FC = () => {
   const [supervisionInput, setSupervisionInput] = useState("0");
   const [isSavingSupervision, setIsSavingSupervision] = useState(false);
 
-  // Client payments related state
   const [isClientPaymentsModalOpen, setIsClientPaymentsModalOpen] =
     useState(false);
-  const [clientPayments, setClientPayments] = useState<ClientTransaction[]>([]);
   const [isManualPaymentModalOpen, setIsManualPaymentModalOpen] =
     useState(false);
   const [manualAmount, setManualAmount] = useState("");
@@ -190,9 +198,22 @@ const SiteDetail: React.FC = () => {
     null,
   );
 
-  // Search states
   const [purchaseSearchQuery, setPurchaseSearchQuery] = useState("");
   const [miscSearchQuery, setMiscSearchQuery] = useState("");
+
+  const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
+  const [editMiscName, setEditMiscName] = useState("");
+  const [editMiscCategory, setEditMiscCategory] = useState("");
+  const [savingMiscEdit, setSavingMiscEdit] = useState(false);
+
+  const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<any | null>(
+    null,
+  );
+  const [deletingPurchase, setDeletingPurchase] = useState(false);
+  const [deleteMiscTarget, setDeleteMiscTarget] = useState<any | null>(null);
+  const [deletingMisc, setDeletingMisc] = useState(false);
+  const [resetPhasesConfirmOpen, setResetPhasesConfirmOpen] = useState(false);
+  const [resettingPhases, setResettingPhases] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -200,20 +221,13 @@ const SiteDetail: React.FC = () => {
     const fetchSite = async () => {
       try {
         const siteData = await getSiteDetails(siteId!);
-        setSite(siteData);
-
-        // Fetch client payment records (inflows from client)
-        const clientPaymentsRes = await privateClient.get(
-          `/client/${siteId}/client-transactions`,
-        );
-        setClientPayments(clientPaymentsRes.data);
+        setSite(siteData as ExtendedSite);
 
         const stocksData = await getStocksBySite(siteId!);
         setStocks(stocksData);
         const sitesData = await getSites();
         setSites(sitesData);
         setLoading(false);
-        setTimeout(() => setIsAnimating(true), 100);
       } catch (err) {
         console.error("Error fetching site details:", err);
         setError("Failed to fetch site details.");
@@ -222,17 +236,6 @@ const SiteDetail: React.FC = () => {
     };
     fetchSite();
   }, [siteId]);
-
-  const fetchClientPayments = async () => {
-    try {
-      const { data } = await privateClient.get(
-        `/client/${siteId}/client-transactions`,
-      );
-      setClientPayments(data);
-    } catch (err) {
-      console.error("Error fetching client payments:", err);
-    }
-  };
 
   const handleStartEditingSupervision = () => {
     setSupervisionInput(String(site?.supervisionPercentage ?? 0));
@@ -277,7 +280,6 @@ const SiteDetail: React.FC = () => {
         notes: manualNotes,
         date: manualDate,
       });
-      await fetchClientPayments(); // refresh list
       toast.success("Manual client payment recorded (pending verification)");
       setIsManualPaymentModalOpen(false);
       setManualAmount("");
@@ -289,27 +291,11 @@ const SiteDetail: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (selectedTab === "purchases") {
-      fetchPurchases();
-    } else if (selectedTab === "attendance") {
-      fetchAttendance();
-    } else if (selectedTab === "miscellaneous") {
-      fetchMiscellaneousExpenses();
-    }
-  }, [selectedTab, siteId]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
-    }
-  }, [attendanceData]);
-
   const fetchPurchases = async () => {
     try {
       const data = await getPurchasesBySite(siteId!);
       const sortedData = data.sort(
-        (a, b) =>
+        (a: any, b: any) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       setPurchases(sortedData);
@@ -330,6 +316,7 @@ const SiteDetail: React.FC = () => {
       console.error("Error fetching miscellaneous expenses:", err);
     }
   };
+
   const fetchAttendance = async () => {
     setIsAttendanceLoading(true);
     try {
@@ -355,8 +342,8 @@ const SiteDetail: React.FC = () => {
         if (percentage <= 75) return 3;
         return 4;
       };
-      const attendanceData = dateRange.map((date) => {
-        const record = attendanceMap.get(date);
+      const computedAttendanceData = dateRange.map((date) => {
+        const record: any = attendanceMap.get(date);
         if (record) {
           const percentage = record.percentage;
           return {
@@ -367,28 +354,41 @@ const SiteDetail: React.FC = () => {
         }
         return { date, count: 0, level: 0 };
       });
-      setAttendanceData(attendanceData);
+      setAttendanceData(computedAttendanceData);
     } catch (err) {
       console.error("Error fetching attendance:", err);
-      setError("Failed to fetch attendance data.");
+      toast.error("Failed to fetch attendance data.");
     } finally {
       setIsAttendanceLoading(false);
     }
   };
 
+  useEffect(() => {
+    if (selectedTab === "purchases") {
+      fetchPurchases();
+    } else if (selectedTab === "attendance") {
+      fetchAttendance();
+    } else if (selectedTab === "miscellaneous") {
+      fetchMiscellaneousExpenses();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTab, siteId]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [attendanceData]);
+
   const handleVerifyMiscellaneous = async (expenseId: string) => {
     try {
-      await verifyMiscellaneousExpense(expenseId); // update service
+      await verifyMiscellaneousExpense(expenseId);
+      toast.success("Expense verified");
       fetchMiscellaneousExpenses();
     } catch (err) {
-      console.error(err);
+      toast.error("Failed to verify expense");
     }
   };
-
-  const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
-  const [editMiscName, setEditMiscName] = useState("");
-  const [editMiscCategory, setEditMiscCategory] = useState("");
-  const [savingMiscEdit, setSavingMiscEdit] = useState(false);
 
   const startEditMiscExpense = (exp: any) => {
     setEditingMiscId(exp._id);
@@ -418,30 +418,23 @@ const SiteDetail: React.FC = () => {
       cancelEditMiscExpense();
       fetchMiscellaneousExpenses();
     } catch (err: any) {
-      console.error(err);
-      toast.error(
-        err.response?.data?.message || "Failed to update expense.",
-      );
+      toast.error(err.response?.data?.message || "Failed to update expense.");
     } finally {
       setSavingMiscEdit(false);
     }
   };
 
-  const MISC_EXPENSE_CATEGORIES = [
-    "machinery",
-    "rental",
-    "service",
-    "material",
-  ];
+  const MISC_EXPENSE_CATEGORIES = ["machinery", "rental", "service", "material"];
 
-  const handleLogUsage = async (usageData) => {
+  const handleLogUsage = async (usageData: any) => {
     try {
       await logStockUsage(usageData);
       const updatedStocks = await getStocksBySite(siteId!);
       setStocks(updatedStocks);
       setIsLogUsageModalOpen(false);
+      toast.success("Usage logged");
     } catch (err) {
-      setError("Failed to log usage");
+      toast.error("Failed to log usage");
     }
   };
 
@@ -454,9 +447,10 @@ const SiteDetail: React.FC = () => {
   const handleVerify = async (purchaseId: string) => {
     try {
       await verifyPurchase(purchaseId);
+      toast.success("Purchase verified");
       fetchPurchases();
     } catch (err) {
-      console.error("Error verifying purchase:", err);
+      toast.error("Failed to verify purchase");
     }
   };
 
@@ -515,7 +509,6 @@ const SiteDetail: React.FC = () => {
       cancelEditPurchaseItem();
       fetchPurchases();
     } catch (err: any) {
-      console.error("Error updating item:", err);
       toast.error(err.response?.data?.message || "Failed to update item.");
     } finally {
       setSavingItemEdit(false);
@@ -526,9 +519,7 @@ const SiteDetail: React.FC = () => {
     try {
       const response = await privateClient.get(
         `/sites/${siteId}/documents/zip`,
-        {
-          responseType: "blob",
-        },
+        { responseType: "blob" },
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -547,9 +538,7 @@ const SiteDetail: React.FC = () => {
     try {
       const response = await privateClient.get(
         `/sites/${siteId}/purchases/bills/zip`,
-        {
-          responseType: "blob",
-        },
+        { responseType: "blob" },
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -569,13 +558,9 @@ const SiteDetail: React.FC = () => {
     deletePurchaseBills: boolean,
   ) => {
     try {
-      await markSiteAsCompleted(
-        siteId!,
-        deleteSiteDocuments,
-        deletePurchaseBills,
-      );
+      await markSiteAsCompleted(siteId!, deleteSiteDocuments, deletePurchaseBills);
       const updatedSite = await getSiteDetails(siteId!);
-      setSite(updatedSite);
+      setSite(updatedSite as ExtendedSite);
       toast.success("Site marked as completed successfully.");
     } catch (error) {
       console.error("Error marking site as completed:", error);
@@ -583,39 +568,33 @@ const SiteDetail: React.FC = () => {
     }
   };
 
-  const handleDeletePurchase = async (purchaseId: string) => {
-    const purchase = purchases.find((p) => p._id === purchaseId);
-    const isVerified = purchase?.status === "verified";
-    const confirmMsg = isVerified
-      ? "This is a verified purchase. Deleting will reverse all accounting entries (stock, expenses, source funds). Are you sure?"
-      : "Are you sure you want to delete this unverified purchase?";
-    if (!window.confirm(confirmMsg)) return;
-
+  const handleDeletePurchase = async () => {
+    if (!deletePurchaseTarget) return;
+    setDeletingPurchase(true);
     try {
-      await deletePurchase(purchaseId);
+      await deletePurchase(deletePurchaseTarget._id);
       fetchPurchases();
       toast.success("Purchase deleted successfully");
+      setDeletePurchaseTarget(null);
     } catch (err: any) {
-      console.error("Error deleting purchase:", err);
       toast.error(err.response?.data?.message || "Failed to delete purchase.");
+    } finally {
+      setDeletingPurchase(false);
     }
   };
 
-  const handleDeleteMiscellaneous = async (expenseId: string) => {
-    const expense = miscellaneousExpenses.find((e) => e._id === expenseId);
-    const isVerified = expense?.status === "verified";
-    const confirmMsg = isVerified
-      ? "This expense is verified. Deleting will reverse the accounting entries. Continue?"
-      : "Are you sure you want to delete this unverified miscellaneous expense?";
-
-    if (!window.confirm(confirmMsg)) return;
-
+  const handleDeleteMiscellaneous = async () => {
+    if (!deleteMiscTarget) return;
+    setDeletingMisc(true);
     try {
-      await deleteMiscellaneousExpense(expenseId);
+      await deleteMiscellaneousExpense(deleteMiscTarget._id);
       fetchMiscellaneousExpenses();
       toast.success("Miscellaneous expense deleted successfully");
+      setDeleteMiscTarget(null);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to delete expense");
+    } finally {
+      setDeletingMisc(false);
     }
   };
 
@@ -624,41 +603,21 @@ const SiteDetail: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleRequestTransfer = async (transferData) => {
+  const handleRequestTransfer = async (transferData: any) => {
     try {
       await requestStockTransfer(transferData);
       const updatedStocks = await getStocksBySite(siteId!);
       setStocks(updatedStocks);
       setIsRequestTransferModalOpen(false);
+      toast.success("Transfer requested");
     } catch (err) {
-      setError("Failed to request transfer");
-    }
-  };
-
-  const handlePhaseToggle = async (phaseId: string) => {
-    if (userType !== "admin") return;
-    const updatedPhases = site!.phases.map((phase) =>
-      phase.id === phaseId
-        ? { ...phase, isCompleted: !phase.isCompleted }
-        : phase,
-    );
-    try {
-      await updateSite(site!.id, { phases: updatedPhases });
-      setSite({ ...site!, phases: updatedPhases });
-    } catch (err) {
-      console.error("Error updating phase:", err);
-      setError("Failed to update phase.");
+      toast.error("Failed to request transfer");
     }
   };
 
   const handleResetPhases = async () => {
     if (userType !== "admin") return;
-    if (
-      !window.confirm(
-        "Are you sure you want to reset all phases to 'not started'?",
-      )
-    )
-      return;
+    setResettingPhases(true);
     const resetPhases = site!.phases.map((phase) => ({
       _id: phase.id,
       name: phase.name,
@@ -669,19 +628,23 @@ const SiteDetail: React.FC = () => {
       await updateSite(site!.id, { phases: resetPhases });
       const updatedPhases = site!.phases.map((phase) => ({
         ...phase,
-        status: "not started",
+        status: "not started" as const,
         completionDate: undefined,
       }));
       setSite({ ...site!, phases: updatedPhases });
+      toast.success("Phases reset");
+      setResetPhasesConfirmOpen(false);
     } catch (err) {
       console.error("Error resetting phases:", err);
-      setError("Failed to reset phases.");
+      toast.error("Failed to reset phases.");
+    } finally {
+      setResettingPhases(false);
     }
   };
 
   const handlePhaseStatusChange = async (
     phaseId: string,
-    newStatus: string,
+    newStatus: "not started" | "pending" | "completed",
   ) => {
     try {
       await updatePhaseStatus(site!.id, phaseId, newStatus);
@@ -691,33 +654,34 @@ const SiteDetail: React.FC = () => {
       setSite({ ...site!, phases: updatedPhases });
     } catch (err) {
       console.error("Error updating phase status:", err);
-      setError("Failed to update phase status.");
+      toast.error("Failed to update phase status.");
     }
   };
 
   const handleAddTeamMember = async (
-    user: User,
+    teamUser: any,
     role: "siteManager" | "architect" | "supervisor",
   ) => {
     try {
       let updatedIds: string[];
       let field: string;
       if (role === "siteManager") {
-        updatedIds = [...site!.siteManagers.map((m) => m.id), user.id];
+        updatedIds = [...site!.siteManagers.map((m) => m.id), teamUser.id];
         field = "siteManagerIds";
       } else if (role === "architect") {
-        updatedIds = [...site!.architects.map((a) => a.id), user.id];
+        updatedIds = [...site!.architects.map((a) => a.id), teamUser.id];
         field = "architectIds";
       } else {
-        updatedIds = [...site!.supervisors.map((s) => s.id), user.id];
+        updatedIds = [...site!.supervisors.map((s) => s.id), teamUser.id];
         field = "supervisorIds";
       }
       await updateSite(site!.id, { [field]: updatedIds });
       const updatedSite = await getSiteDetails(site!.id);
-      setSite(updatedSite);
+      setSite(updatedSite as ExtendedSite);
       setIsModalOpen(false);
+      toast.success("Team member added");
     } catch (err) {
-      setError("Failed to add team member.");
+      toast.error("Failed to add team member.");
     }
   };
 
@@ -732,8 +696,8 @@ const SiteDetail: React.FC = () => {
         : role === "architect"
           ? "architects"
           : "supervisors";
-    const updatedMembers = site![field].filter(
-      (member) => member.id !== memberId,
+    const updatedMembers = (site as any)[field].filter(
+      (member: any) => member.id !== memberId,
     );
     const updateField =
       role === "siteManager"
@@ -743,28 +707,27 @@ const SiteDetail: React.FC = () => {
           : "supervisorIds";
     try {
       await updateSite(site!.id, {
-        [updateField]: updatedMembers.map((m) => m.id),
+        [updateField]: updatedMembers.map((m: any) => m.id),
       });
-      setSite({ ...site!, [field]: updatedMembers });
+      setSite({ ...site!, [field]: updatedMembers } as ExtendedSite);
+      toast.success("Team member removed");
     } catch (err) {
-      setError("Failed to remove team member.");
+      toast.error("Failed to remove team member.");
     }
   };
 
   const handleDeleteBillUpload = async (purchaseId: string) => {
-    if (window.confirm("Are you sure you want to delete the bill upload?")) {
-      try {
-        await deleteBillUpload(purchaseId);
-        setPurchases(
-          purchases.map((p) =>
-            p._id === purchaseId ? { ...p, billUpload: null } : p,
-          ),
-        );
-        toast.success("Bill successfully deleted");
-      } catch (err) {
-        console.error("Error deleting bill upload:", err);
-        setError("Failed to delete bill upload.");
-      }
+    try {
+      await deleteBillUpload(purchaseId);
+      setPurchases(
+        purchases.map((p) =>
+          p._id === purchaseId ? { ...p, billUpload: null } : p,
+        ),
+      );
+      toast.success("Bill successfully deleted");
+    } catch (err) {
+      console.error("Error deleting bill upload:", err);
+      toast.error("Failed to delete bill upload.");
     }
   };
 
@@ -781,7 +744,7 @@ const SiteDetail: React.FC = () => {
   };
 
   const handleUpload = async (
-    siteId: string,
+    targetSiteId: string,
     file: File,
     category: "client" | "site",
   ) => {
@@ -789,33 +752,23 @@ const SiteDetail: React.FC = () => {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("category", category);
-      await uploadDocument(siteId, formData);
-      const updatedSite = await getSiteDetails(siteId);
-      setSite(updatedSite);
+      await uploadDocument(targetSiteId, formData);
+      const updatedSite = await getSiteDetails(targetSiteId);
+      setSite(updatedSite as ExtendedSite);
+      toast.success("Document uploaded");
     } catch (error) {
       console.error("Error uploading document:", error);
-      setError("Failed to upload document.");
+      toast.error("Failed to upload document.");
     }
   };
 
   const getAttendanceColor = (level: number) => {
     const colors = [
-      "bg-gray-100",
-      "bg-green-200",
-      "bg-green-300",
-      "bg-green-500",
-      "bg-green-700",
-    ];
-    return colors[level] || colors[0];
-  };
-
-  const getAttendanceHoverColor = (level: number) => {
-    const colors = [
-      "hover:bg-gray-200",
-      "hover:bg-green-300",
-      "hover:bg-green-400",
-      "hover:bg-green-600",
-      "hover:bg-green-800",
+      "bg-slate-100",
+      "bg-success-200",
+      "bg-success-300",
+      "bg-success-500",
+      "bg-success-700",
     ];
     return colors[level] || colors[0];
   };
@@ -829,38 +782,9 @@ const SiteDetail: React.FC = () => {
     });
   };
 
-  const getMonthLabels = () => {
-    const months = [];
-    const today = new Date();
-    for (let i = 11; i >= 0; i--) {
-      const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      months.push(date.toLocaleDateString("en-US", { month: "short" }));
-    }
-    return months;
-  };
-
-  const getDayLabels = () => ["Mon", "Wed", "Fri"];
-
-  const getMonthLabelsPositions = () => {
-    const labels = [];
-    let lastMonth = null;
-    renderAttendanceGrid().forEach((week, index) => {
-      const firstDay = week.find((d) => d !== null);
-      if (!firstDay) return;
-      const month = new Date(firstDay.date).toLocaleString("default", {
-        month: "short",
-      });
-      if (month !== lastMonth) {
-        labels.push({ label: month, index });
-        lastMonth = month;
-      }
-    });
-    return labels;
-  };
-
   const renderAttendanceGrid = () => {
-    const weeks = [];
-    let currentWeek = [];
+    const weeks: any[] = [];
+    let currentWeek: any[] = [];
     attendanceData.forEach((day, index) => {
       const date = new Date(day.date);
       const dayOfWeek = date.getDay();
@@ -881,6 +805,23 @@ const SiteDetail: React.FC = () => {
     return weeks;
   };
 
+  const getMonthLabelsPositions = () => {
+    const labels: { label: string; index: number }[] = [];
+    let lastMonth: string | null = null;
+    renderAttendanceGrid().forEach((week, index) => {
+      const firstDay = week.find((d: any) => d !== null);
+      if (!firstDay) return;
+      const month = new Date(firstDay.date).toLocaleString("default", {
+        month: "short",
+      });
+      if (month !== lastMonth) {
+        labels.push({ label: month, index });
+        lastMonth = month;
+      }
+    });
+    return labels;
+  };
+
   const togglePurchaseExpand = (purchaseId: string) => {
     setExpandedPurchases((prev) => {
       const newSet = new Set(prev);
@@ -891,47 +832,35 @@ const SiteDetail: React.FC = () => {
   };
 
   const canAddPurchase =
-    userType === "admin" ||
-    userType === "siteManager" ||
-    userType === "supervisor";
+    userType === "admin" || userType === "siteManager" || userType === "supervisor";
   const canManageStocks = userType === "siteManager" || userType === "admin";
   const canAddMiscellaneous = canAddPurchase;
   const canUploadDocuments = userType === "admin" || userType === "siteManager";
 
-  // ---- SEARCH LOGIC FOR PURCHASES ----
   const filteredPurchases = useMemo(() => {
     const query = purchaseSearchQuery.trim().toLowerCase();
     if (!query) return purchases;
-
     return purchases.filter((purchase) =>
-      purchase.items.some((item: any) =>
-        item.name.toLowerCase().includes(query),
-      ),
+      purchase.items.some((item: any) => item.name.toLowerCase().includes(query)),
     );
   }, [purchases, purchaseSearchQuery]);
 
-  // Get matching items for each purchase when search is active
   const getMatchingItems = useMemo(() => {
     const query = purchaseSearchQuery.trim().toLowerCase();
     if (!query) return null;
-
     const map = new Map<string, any[]>();
     purchases.forEach((purchase) => {
       const matched = purchase.items.filter((item: any) =>
         item.name.toLowerCase().includes(query),
       );
-      if (matched.length > 0) {
-        map.set(purchase._id, matched);
-      }
+      if (matched.length > 0) map.set(purchase._id, matched);
     });
     return map;
   }, [purchases, purchaseSearchQuery]);
 
-  // Aggregated totals for searched items
   const purchaseSearchAggregates = useMemo(() => {
     const query = purchaseSearchQuery.trim().toLowerCase();
     if (!query) return null;
-
     let totalQty = 0;
     let totalAmount = 0;
     purchases.forEach((purchase) => {
@@ -945,1877 +874,1355 @@ const SiteDetail: React.FC = () => {
     return { totalQty, totalAmount };
   }, [purchases, purchaseSearchQuery]);
 
-  // ---- SEARCH LOGIC FOR MISCELLANEOUS ----
   const filteredMiscExpenses = useMemo(() => {
     const query = miscSearchQuery.trim().toLowerCase();
     if (!query) return miscellaneousExpenses;
-
-    return miscellaneousExpenses.filter((exp) =>
-      exp.name.toLowerCase().includes(query) ||
-      exp.category.toLowerCase().includes(query),
+    return miscellaneousExpenses.filter(
+      (exp) =>
+        exp.name.toLowerCase().includes(query) ||
+        exp.category.toLowerCase().includes(query),
     );
   }, [miscellaneousExpenses, miscSearchQuery]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        Loading site details...
-      </div>
-    );
+    return <PageLoader label="Loading site details" />;
   }
 
   if (error || !site) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Building className="w-8 h-8 text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Site Not Found
-          </h2>
-          <p className="text-gray-600 mb-6">
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <Building size={22} />
+          </div>
+          <h2 className="text-lg font-semibold text-console-text">Site not found</h2>
+          <p className="mt-1 text-sm text-console-muted">
             {error || "The requested site could not be found."}
           </p>
-          <button
-            onClick={() => navigate(`/${userType}/sites`)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Back to Sites
-          </button>
-        </div>
+          <Button className="mt-5" onClick={() => navigate(`/${userType}/sites`)}>
+            Back to sites
+          </Button>
+        </Card>
       </div>
     );
   }
 
-  const completedPhases = site.phases.filter(
-    (phase) => phase.status === "completed",
-  ).length;
+  const completedPhases = site.phases.filter((p) => p.status === "completed").length;
   const totalPhases = site.phases.length;
-  const progressPercentage =
-    totalPhases > 0 ? (completedPhases / totalPhases) * 100 : 0;
-  const clientDocuments = site.documents.filter(
-    (doc) => doc.category === "client",
-  );
+  const progressPercentage = totalPhases > 0 ? (completedPhases / totalPhases) * 100 : 0;
+  const clientDocuments = site.documents.filter((doc) => doc.category === "client");
   const siteDocuments = site.documents.filter((doc) => doc.category === "site");
 
-  const tabs = [
-    { id: "overview", label: "Overview", icon: Eye },
-    { id: "team", label: "Team", icon: Users },
-    { id: "contractors", label: "Contractors", icon: Users },
-    { id: "attendance", label: "Attendance", icon: Calendar },
-    { id: "purchases", label: "Purchases", icon: ShoppingCart },
-    { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
-    { id: "stocks", label: "Stocks", icon: Package },
-    { id: "documents", label: "Documents", icon: FileText },
-  ];
-
   return (
-    <div className="bg-gray-50">
-      <div className="bg-white/10 backdrop-blur-xl bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => navigate(`/${userType}/sites`)}
-                className="flex items-center space-x-2 text-gray-600 hover:text-gray-900 transition-colors duration-200"
-              >
-                <ChevronLeft className="w-5 h-5" />
-                <span className="font-medium">Back to Sites</span>
-              </button>
-              <div className="h-6 w-px bg-gray-300" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  {site.name}
-                </h1>
-                <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
-                  <MapPin className="w-4 h-4" />
-                  <span>
-                    {site.address}, {site.city}, {site.state} {site.zip}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <div
-                className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  site.status === "InProgress"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : "bg-green-100 text-green-800"
-                }`}
-              >
-                {site.status}
-              </div>
-              <div className="flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-50 text-indigo-800 border border-indigo-100">
-                <Percent className="w-3.5 h-3.5" />
-                {isEditingSupervision ? (
-                  <>
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.01"
-                      autoFocus
-                      value={supervisionInput}
-                      onChange={(e) => setSupervisionInput(e.target.value)}
-                      className="w-16 px-1 py-0.5 rounded border border-indigo-200 text-indigo-900 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    />
-                    <button
-                      onClick={handleSaveSupervision}
-                      disabled={isSavingSupervision}
-                      className="text-green-600 hover:text-green-800 disabled:opacity-50"
-                      title="Save"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={handleCancelEditingSupervision}
-                      disabled={isSavingSupervision}
-                      className="text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                      title="Cancel"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span>Supervision: {site.supervisionPercentage ?? 0}%</span>
-                    {userType === "admin" && (
-                      <button
-                        onClick={handleStartEditingSupervision}
-                        className="text-indigo-600 hover:text-indigo-900"
-                        title="Edit supervision percentage"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </>
-                )}
-              </div>
-              {userType === "admin" && site.status === "InProgress" && (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <button
+            type="button"
+            onClick={() => navigate(`/${userType}/sites`)}
+            className="mb-2 flex items-center gap-1.5 text-sm font-medium text-console-muted transition-colors hover:text-console-text"
+          >
+            <ChevronLeft size={16} /> Back to sites
+          </button>
+          <h1 className="text-xl font-semibold text-console-text">{site.name}</h1>
+          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-console-muted">
+            <MapPin size={13} />
+            {site.address}, {site.city}, {site.state} {site.zip}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant={site.status === "InProgress" ? "warning" : "success"}>
+            {site.status}
+          </Badge>
+          <div className="flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-sm font-medium text-brand-800">
+            <Percent size={13} />
+            {isEditingSupervision ? (
+              <>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.01"
+                  autoFocus
+                  value={supervisionInput}
+                  onChange={(e) => setSupervisionInput(e.target.value)}
+                  className="w-16 rounded border border-brand-200 px-1 py-0.5 text-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                />
                 <button
-                  onClick={() => setIsCompleteModalOpen(true)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200 flex items-center space-x-2"
+                  type="button"
+                  onClick={handleSaveSupervision}
+                  disabled={isSavingSupervision}
+                  className="text-success-600 hover:text-success-800 disabled:opacity-50"
+                  title="Save"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Mark as Completed</span>
+                  <Check size={15} />
                 </button>
+                <button
+                  type="button"
+                  onClick={handleCancelEditingSupervision}
+                  disabled={isSavingSupervision}
+                  className="text-console-muted hover:text-console-text disabled:opacity-50"
+                  title="Cancel"
+                >
+                  <X size={15} />
+                </button>
+              </>
+            ) : (
+              <>
+                <span>Supervision: {site.supervisionPercentage ?? 0}%</span>
+                {userType === "admin" && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditingSupervision}
+                    className="text-brand-600 hover:text-brand-800"
+                    title="Edit supervision percentage"
+                  >
+                    <Edit2 size={13} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+          {userType === "admin" && site.status === "InProgress" && (
+            <Button size="sm" onClick={() => setIsCompleteModalOpen(true)}>
+              <CheckCircle2 size={15} /> Mark as completed
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => setIsClientPaymentsModalOpen(true)}
+          className="rounded-console border border-console-border bg-white p-5 text-left transition-shadow hover:shadow-console-lg"
+        >
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">
+                Received from client
+              </p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
+                ₹{site.budget.toLocaleString("en-IN")}
+              </p>
+              <p className="mt-1 text-xs font-medium text-success-700">
+                Balance: ₹{(site.budget - (site.expenses || 0)).toLocaleString("en-IN")}
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
+                <DollarSign size={18} />
+              </div>
+              {(userType === "admin" || userType === "siteManager") && (
+                <span
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsManualPaymentModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md bg-success-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-success-700"
+                >
+                  <Plus size={12} /> Add
+                </span>
               )}
+            </div>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsTransactionsModalOpen(true)}
+          className="rounded-console border border-console-border bg-white p-5 text-left transition-shadow hover:shadow-console-lg"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Expenses</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
+                ₹{site.expenses.toLocaleString()}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-danger-50 text-danger-600">
+              <TrendingUp size={18} />
+            </div>
+          </div>
+        </button>
+
+        <div className="rounded-console border border-console-border bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Progress</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
+                {Math.round(progressPercentage)}%
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+              <Activity size={18} />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-console border border-console-border bg-white p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Team size</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
+                {site.siteManagers.length + site.architects.length}
+              </p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info-50 text-info-700">
+              <Users size={18} />
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {/* UPDATED: First card - "Received from Client" with balance + clickable + manual add option */}
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            } hover:shadow-xl hover:scale-105 cursor-pointer`}
-            onClick={() => setIsClientPaymentsModalOpen(true)}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-t-2xl" />
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">
-                    Received from Client
-                  </p>
-                  <p className="text-3xl font-bold text-gray-900">
-                    ₹{site.budget.toLocaleString("en-IN")}
-                  </p>
-                  <p className="text-sm font-medium text-emerald-600 mt-1 flex items-center gap-1">
-                    Balance:{" "}
-                    <span className="font-semibold">
-                      ₹
-                      {(site.budget - (site.expenses || 0)).toLocaleString(
-                        "en-IN",
-                      )}
-                    </span>
-                  </p>
-                </div>
-                <div className="flex flex-col items-end gap-3">
-                  <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
-                    <DollarSign className="w-6 h-6 text-emerald-600" />
-                  </div>
-                  {/* Manual add button (visible to siteManager & admin) */}
-                  {(userType === "admin" || userType === "siteManager") && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setIsManualPaymentModalOpen(true);
-                      }}
-                      className="px-3 py-1 text-xs font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center gap-1 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Expenses card (unchanged) */}
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            } hover:shadow-xl hover:scale-105 cursor-pointer`}
-            style={{ transitionDelay: "100ms" }}
-            onClick={() => setIsTransactionsModalOpen(true)}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-500 rounded-t-2xl" />
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Expenses</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    ₹{site.expenses.toLocaleString()}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="w-6 h-6 text-red-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Progress card (unchanged) */}
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            } hover:shadow-xl hover:scale-105`}
-            style={{ transitionDelay: "200ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-teal-500 rounded-t-2xl" />
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Progress</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {Math.round(progressPercentage)}%
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                  <Activity className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Team Size card (unchanged) */}
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-300 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            } hover:shadow-xl hover:scale-105`}
-            style={{ transitionDelay: "300ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-t-2xl" />
-            <div className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Team Size</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {site.siteManagers.length + site.architects.length}
-                  </p>
-                </div>
-                <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                  <Users className="w-6 h-6 text-purple-600" />
-                </div>
-              </div>
-            </div>
-          </div>
+      <SectionCard>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-console-text">Project progress</h3>
+          <span className="text-sm text-console-muted">
+            {completedPhases} of {totalPhases} phases completed
+          </span>
         </div>
-
-        <div
-          className={`bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-8 transition-all duration-500 transform ${
-            isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
-          style={{ transitionDelay: "400ms" }}
-        >
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">
-              Project Progress
-            </h3>
-            <span className="text-sm text-gray-600">
-              {completedPhases} of {totalPhases} phases completed
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-1000 ease-out"
-              style={{ width: `${progressPercentage}%` }}
-            />
-          </div>
+        <div className="h-2.5 w-full rounded-full bg-console-bg">
+          <div
+            className="h-2.5 rounded-full bg-brand-600 transition-all duration-700"
+            style={{ width: `${progressPercentage}%` }}
+          />
         </div>
+      </SectionCard>
 
-        <div className="mb-8">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
+      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+        {TAB_CONFIG.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setSelectedTab(tab.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                selectedTab === tab.id
+                  ? "bg-white text-brand-700 shadow-console"
+                  : "text-console-muted hover:bg-white/60",
+              )}
+            >
+              <Icon size={15} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {selectedTab === "overview" && (
+        <SectionCard>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+              <CheckCircle2 size={20} className="text-brand-600" />
+              Phase checklist
+            </h2>
+            {userType === "admin" && (
+              <Button size="sm" variant="danger" onClick={() => setResetPhasesConfirmOpen(true)}>
+                Reset phases
+              </Button>
+            )}
+          </div>
+          <div className="grid gap-3">
+            {site.phases.map((phase) => (
+              <div
+                key={phase.id}
+                className={cn(
+                  "flex items-center rounded-xl border p-4 transition-colors",
+                  phase.status === "completed"
+                    ? "border-success-200 bg-success-50"
+                    : phase.status === "pending"
+                      ? "border-warning-200 bg-warning-50"
+                      : "border-console-border bg-console-bg",
+                )}
+              >
+                {phase.status === "not started" && <Circle size={18} className="mr-3.5 text-slate-400" />}
+                {phase.status === "pending" && <Clock size={18} className="mr-3.5 text-warning-500" />}
+                {phase.status === "completed" && (
+                  <CheckCircle2 size={18} className="mr-3.5 text-success-600" />
+                )}
+                {userType === "siteManager" && phase.status === "not started" && (
                   <button
-                    key={tab.id}
-                    onClick={() => setSelectedTab(tab.id as any)}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-all duration-200 ${
-                      selectedTab === tab.id
-                        ? "border-blue-500 text-blue-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
+                    type="button"
+                    onClick={() => handlePhaseStatusChange(phase.id, "pending")}
+                    className="mr-3.5 rounded-md bg-brand-700 px-3 py-1 text-sm text-white hover:bg-brand-800"
                   >
-                    <Icon className="w-4 h-4" />
-                    <span>{tab.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-        </div>
-
-        {/* All tab contents (exactly as in old file) */}
-        {selectedTab === "overview" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ transitionDelay: "500ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
-                  <CheckCircle2 className="w-7 h-7 text-blue-600" />
-                  <span>Phase Checklist</span>
-                </h2>
-                {userType === "admin" && (
-                  <button
-                    onClick={handleResetPhases}
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-                  >
-                    Reset Phases
+                    Request completion
                   </button>
                 )}
-              </div>
-              <div className="grid gap-4">
-                {site.phases.map((phase, index) => (
-                  <div
-                    key={phase.id}
-                    className={`flex items-center p-4 rounded-xl border-2 transition-all duration-200 ${
-                      phase.status === "completed"
-                        ? "bg-green-50 border-green-200 hover:border-green-300"
-                        : phase.status === "pending"
-                          ? "bg-yellow-50 border-yellow-200 hover:border-yellow-300"
-                          : "bg-gray-50 border-gray-200 hover:border-gray-300"
-                    }`}
-                    style={{ transitionDelay: `${index * 50}ms` }}
+                {userType === "siteManager" && phase.status === "pending" && (
+                  <span className="mr-3.5 text-sm text-warning-700">Pending verification</span>
+                )}
+                {userType === "admin" && phase.status === "pending" && (
+                  <button
+                    type="button"
+                    onClick={() => handlePhaseStatusChange(phase.id, "completed")}
+                    className="mr-3.5 rounded-md bg-success-600 px-3 py-1 text-sm text-white hover:bg-success-700"
                   >
-                    {phase.status === "not started" && (
-                      <Circle className="w-5 h-5 text-gray-400 mr-4" />
-                    )}
-                    {phase.status === "pending" && (
-                      <Clock className="w-5 h-5 text-yellow-500 mr-4" />
-                    )}
-                    {phase.status === "completed" && (
-                      <CheckCircle2 className="w-5 h-5 text-green-500 mr-4" />
-                    )}
-                    {userType === "siteManager" &&
-                      phase.status === "not started" && (
-                        <button
-                          onClick={() =>
-                            handlePhaseStatusChange(phase.id, "pending")
-                          }
-                          className="mr-4 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all duration-200"
-                        >
-                          Request Completion
-                        </button>
-                      )}
-                    {userType === "siteManager" &&
-                      phase.status === "pending" && (
-                        <span className="mr-4 text-yellow-600">
-                          Pending Verification
-                        </span>
-                      )}
-                    {userType === "admin" && phase.status === "pending" && (
-                      <button
-                        onClick={() =>
-                          handlePhaseStatusChange(phase.id, "completed")
-                        }
-                        className="mr-4 px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 transition-all duration-200"
-                      >
-                        Verify Completion
-                      </button>
-                    )}
-                    {userType === "admin" && phase.status === "not started" && (
-                      <button
-                        onClick={() =>
-                          handlePhaseStatusChange(phase.id, "completed")
-                        }
-                        className="mr-4 px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all duration-200"
-                      >
-                        Mark as Completed
-                      </button>
-                    )}
-                    <span
-                      className={`font-medium ${
-                        phase.status === "completed"
-                          ? "text-green-800"
-                          : phase.status === "pending"
-                            ? "text-yellow-800"
-                            : "text-gray-700"
-                      }`}
-                    >
-                      {phase.name}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {selectedTab === "team" && (
-          <div className="grid gap-6">
-            {/* Team sections (exactly as in old file) */}
-            <div
-              className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-              style={{ transitionDelay: "500ms" }}
-            >
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                    <Users className="w-6 h-6 text-blue-600" />
-                    <span>Site Managers</span>
-                  </h3>
-                  {userType === "admin" && (
-                    <button
-                      onClick={() => openAddModal("siteManager")}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      <span>Add Manager</span>
-                    </button>
+                    Verify completion
+                  </button>
+                )}
+                {userType === "admin" && phase.status === "not started" && (
+                  <button
+                    type="button"
+                    onClick={() => handlePhaseStatusChange(phase.id, "completed")}
+                    className="mr-3.5 rounded-md bg-brand-700 px-3 py-1 text-sm text-white hover:bg-brand-800"
+                  >
+                    Mark as completed
+                  </button>
+                )}
+                <span
+                  className={cn(
+                    "text-sm font-medium",
+                    phase.status === "completed"
+                      ? "text-success-800"
+                      : phase.status === "pending"
+                        ? "text-warning-800"
+                        : "text-console-text",
                   )}
-                </div>
-                <div className="grid gap-3">
-                  {site.siteManagers.map((manager, index) => (
+                >
+                  {phase.name}
+                </span>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {selectedTab === "team" && (
+        <div className="grid gap-6">
+          {[
+            { role: "siteManager" as const, title: "Site Managers", members: site.siteManagers, icon: Users, tone: "info" },
+            { role: "architect" as const, title: "Architects", members: site.architects, icon: Building, tone: "brand" },
+            { role: "supervisor" as const, title: "Supervisors", members: site.supervisors, icon: Users, tone: "success" },
+          ].map((group) => (
+            <SectionCard key={group.role}>
+              <div className="mb-5 flex items-center justify-between">
+                <h3 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+                  <group.icon size={18} className="text-brand-600" />
+                  {group.title}
+                </h3>
+                {userType === "admin" && (
+                  <Button size="sm" variant="secondary" onClick={() => openAddModal(group.role)}>
+                    <UserPlus size={14} /> Add
+                  </Button>
+                )}
+              </div>
+              {group.members.length === 0 ? (
+                <p className="py-4 text-center text-sm text-console-muted">
+                  No {group.title.toLowerCase()} assigned to this site yet.
+                </p>
+              ) : (
+                <div className="grid gap-2.5">
+                  {group.members.map((member) => (
                     <div
-                      key={manager.id}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
+                      key={member.id}
+                      className="flex items-center justify-between rounded-xl bg-console-bg p-3.5"
                     >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                          <span className="text-blue-600 font-semibold text-sm">
-                            {manager.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")}
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+                          {member.name.split(" ").map((n) => n[0]).join("")}
                         </div>
-                        <span className="font-medium text-gray-900">
-                          {manager.name}
-                        </span>
+                        <span className="text-sm font-medium text-console-text">{member.name}</span>
                       </div>
                       {userType === "admin" && (
                         <button
-                          onClick={() =>
-                            handleRemoveTeamMember(manager.id, "siteManager")
-                          }
-                          className="text-red-600 hover:text-red-800 p-2 rounded-lg"
+                          type="button"
+                          onClick={() => handleRemoveTeamMember(member.id, group.role)}
+                          aria-label="Remove member"
+                          className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
                         >
-                          <UserX className="w-4 h-4" />
+                          <UserX size={16} />
                         </button>
                       )}
                     </div>
                   ))}
                 </div>
+              )}
+            </SectionCard>
+          ))}
+        </div>
+      )}
+
+      {selectedTab === "contractors" && (
+        <SiteContractorsManager siteId={siteId!} siteName={site.name} userType={userType as any} />
+      )}
+
+      {selectedTab === "attendance" && (
+        <SectionCard>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+                <Calendar size={20} className="text-brand-600" />
+                Employee attendance
+              </h2>
+              <p className="mt-1 text-sm text-console-muted">
+                Track daily employee attendance with visual insights
+              </p>
+            </div>
+            <div className="flex items-center gap-4">
+              {canMarkAttendance && (
+                <Button size="sm" onClick={() => setIsMarkAttendanceModalOpen(true)}>
+                  <Plus size={15} /> Mark attendance
+                </Button>
+              )}
+              <div className="flex items-center gap-2 text-xs text-console-muted">
+                <span>Less</span>
+                <div className="flex gap-1">
+                  {[0, 1, 2, 3, 4].map((level) => (
+                    <div key={level} className={cn("h-3 w-3 rounded-sm", getAttendanceColor(level))} />
+                  ))}
+                </div>
+                <span>More</span>
               </div>
             </div>
-
-            <div
-                className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
-                  isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-                }`}
-                style={{ transitionDelay: "600ms" }}
-              >
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-t-2xl" />
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                      <Building className="w-6 h-6 text-purple-600" />
-                      <span>Architects</span>
-                    </h3>
-                    {userType === "admin" && (
-                      <button
-                        onClick={() => openAddModal("architect")}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center space-x-2"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        <span>Add Architect</span>
-                      </button>
-                    )}
-                  </div>
-                  {site.architects.length === 0 ? (
-                    <p className="text-sm text-gray-500 py-4 text-center">
-                      No architect assigned to this site yet.
-                    </p>
-                  ) : (
-                    <div className="grid gap-3">
-                      {site.architects.map((architect, index) => (
-                        <div
-                          key={architect.id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                              <span className="text-purple-600 font-semibold text-sm">
-                                {architect.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </span>
-                            </div>
-                            <span className="font-medium text-gray-900">
-                              {architect.name}
-                            </span>
-                          </div>
-                          {userType === "admin" && (
-                            <button
-                              onClick={() =>
-                                handleRemoveTeamMember(
-                                  architect.id,
-                                  "architect",
-                                )
-                              }
-                              className="text-red-600 hover:text-red-800 p-2 rounded-lg"
-                            >
-                              <UserX className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            <div
-                className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform ${
-                  isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-                }`}
-                style={{ transitionDelay: "700ms" }}
-              >
-                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-teal-500 rounded-t-2xl" />
-                <div className="p-6">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-xl font-bold text-gray-900 flex items-center space-x-2">
-                      <Users className="w-6 h-6 text-green-600" />
-                      <span>Supervisors</span>
-                    </h3>
-                    {userType === "admin" && (
-                      <button
-                        onClick={() => openAddModal("supervisor")}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        <span>Add Supervisor</span>
-                      </button>
-                    )}
-                  </div>
-                  {site.supervisors.length === 0 ? (
-                    <p className="text-sm text-gray-500 py-4 text-center">
-                      No supervisor assigned to this site yet.
-                    </p>
-                  ) : (
-                    <div className="grid gap-3">
-                      {site.supervisors.map((supervisor, index) => (
-                        <div
-                          key={supervisor.id}
-                          className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100"
-                        >
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                              <span className="text-green-600 font-semibold text-sm">
-                                {supervisor.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")}
-                              </span>
-                            </div>
-                            <span className="font-medium text-gray-900">
-                              {supervisor.name}
-                            </span>
-                          </div>
-                          {userType === "admin" && (
-                            <button
-                              onClick={() =>
-                                handleRemoveTeamMember(
-                                  supervisor.id,
-                                  "supervisor",
-                                )
-                              }
-                              className="text-red-600 hover:text-red-800 p-2 rounded-lg"
-                            >
-                              <UserX className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
           </div>
-        )}
-
-        {selectedTab === "contractors" && (
-          <SiteContractorsManager
-            siteId={siteId!}
-            siteName={site.name}
-            userType={userType}
-          />
-        )}
-
-        {selectedTab === "attendance" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ transitionDelay: "500ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-teal-500 rounded-t-2xl" />
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
-                    <Calendar className="w-7 h-7 text-green-600" />
-                    <span>Employee Attendance</span>
-                  </h2>
-                  <p className="text-gray-600 mt-2">
-                    Track daily employee attendance with visual insights
-                  </p>
+          {isAttendanceLoading ? (
+            <PageLoader label="Loading attendance data" fullHeight={false} />
+          ) : (
+            <div className="overflow-x-auto" ref={scrollRef}>
+              <div className="inline-block min-w-full">
+                <div className="ml-[40px] mb-1 flex">
+                  {renderAttendanceGrid().map((_, index) => {
+                    const labelObj = getMonthLabelsPositions().find((l) => l.index === index);
+                    return (
+                      <div key={index} className="mr-1 w-3 text-xs text-console-muted">
+                        {labelObj ? labelObj.label : ""}
+                      </div>
+                    );
+                  })}
                 </div>
-                <div className="flex items-center space-x-4">
-                  {canMarkAttendance && (
-                    <button
-                      onClick={() => setIsMarkAttendanceModalOpen(true)}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Mark Attendance</span>
-                    </button>
-                  )}
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <span>Less</span>
-                    <div className="flex space-x-1">
-                      {[0, 1, 2, 3, 4].map((level) => (
-                        <div
-                          key={level}
-                          className={`w-3 h-3 rounded-sm ${getAttendanceColor(
-                            level,
-                          )}`}
-                        />
-                      ))}
-                    </div>
-                    <span>More</span>
+                <div className="flex">
+                  <div className="mr-2 flex flex-col">
+                    {["Mon", "Wed", "Fri"].map((dayLabel, i) => (
+                      <div
+                        key={i}
+                        className="mb-1 h-3 text-xs text-console-muted"
+                        style={{ marginTop: i === 0 ? "12px" : "18px" }}
+                      >
+                        {dayLabel}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex">
+                    {renderAttendanceGrid().map((week, weekIndex) => (
+                      <div key={weekIndex} className="mr-1 flex flex-col">
+                        {week.map((day: any, dayIndex: number) => (
+                          <div
+                            key={`${weekIndex}-${dayIndex}`}
+                            className={cn(
+                              "mb-1 h-3 w-3 cursor-pointer rounded-sm transition-transform hover:scale-110",
+                              day ? getAttendanceColor(day.level) : "bg-slate-100",
+                            )}
+                            onClick={() => day && handleDayClick(day.date)}
+                            title={
+                              day
+                                ? `${formatDate(day.date)}: ${day.count?.toFixed(1)} effective attendance`
+                                : ""
+                            }
+                          />
+                        ))}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-              {isAttendanceLoading ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
-                  <span className="ml-2 text-gray-600">
-                    Loading attendance data...
+            </div>
+          )}
+        </SectionCard>
+      )}
+
+      {selectedTab === "purchases" && (
+        <SectionCard>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+              <ShoppingCart size={20} className="text-brand-600" />
+              Purchases
+            </h2>
+            {canAddPurchase && (
+              <Button size="sm" onClick={() => setIsAddPurchaseModalOpen(true)}>
+                <Plus size={15} /> Add purchase
+              </Button>
+            )}
+          </div>
+
+          <div className="mb-5">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+              <input
+                type="text"
+                placeholder="Search items in purchases..."
+                value={purchaseSearchQuery}
+                onChange={(e) => setPurchaseSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+            {purchaseSearchQuery.trim() && purchaseSearchAggregates && (
+              <div className="mt-3 flex flex-wrap items-center gap-6 rounded-lg border border-info-100 bg-info-50 p-4">
+                <div>
+                  <span className="text-sm text-console-muted">Total quantity of matching items:</span>
+                  <span className="ml-2 font-semibold text-info-800">
+                    {purchaseSearchAggregates.totalQty}
                   </span>
                 </div>
-              ) : (
-                <div className="overflow-x-auto" ref={scrollRef}>
-                  <div className="inline-block min-w-full">
-                    <div className="flex mb-1 ml-[40px]">
-                      {renderAttendanceGrid().map((_, index) => {
-                        const labelObj = getMonthLabelsPositions().find(
-                          (l) => l.index === index,
-                        );
-                        return (
-                          <div
-                            key={index}
-                            className="w-3 mr-1 text-xs text-gray-600"
-                          >
-                            {labelObj ? labelObj.label : ""}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div className="flex">
-                      <div className="flex flex-col mr-2">
-                        {["Mon", "Wed", "Fri"].map((dayLabel, i) => (
-                          <div
-                            key={i}
-                            className="text-xs text-gray-600 h-3 mb-1"
-                            style={{ marginTop: i === 0 ? "12px" : "18px" }}
-                          >
-                            {dayLabel}
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex">
-                        {renderAttendanceGrid().map((week, weekIndex) => (
-                          <div key={weekIndex} className="flex flex-col mr-1">
-                            {week.map((day, dayIndex) => (
-                              <div
-                                key={`${weekIndex}-${dayIndex}`}
-                                className={`w-3 h-3 mb-1 rounded-sm cursor-pointer transition-all duration-200 ${
-                                  day
-                                    ? `${getAttendanceColor(
-                                        day.level,
-                                      )} ${getAttendanceHoverColor(
-                                        day.level,
-                                      )} hover:scale-110`
-                                    : "bg-gray-100"
-                                }`}
-                                onClick={() => day && handleDayClick(day.date)}
-                                onMouseEnter={() =>
-                                  day && setHoveredDate(day.date)
-                                }
-                                onMouseLeave={() => setHoveredDate(null)}
-                                title={
-                                  day
-                                    ? `${formatDate(
-                                        day.date,
-                                      )}: ${day.count?.toFixed(
-                                        1,
-                                      )} effective attendance`
-                                    : ""
-                                }
-                              ></div>
-                            ))}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                <div>
+                  <span className="text-sm text-console-muted">Total amount of matching items:</span>
+                  <span className="ml-2 font-semibold text-info-800">
+                    ₹{purchaseSearchAggregates.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {selectedTab === "purchases" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ transitionDelay: "500ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
-            <div className="p-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900 flex items-center space-x-3">
-                  <ShoppingCart className="w-7 h-7 text-blue-600" />
-                  <span>Purchases</span>
-                </h2>
-                {canAddPurchase && (
-                  <button
-                    onClick={() => setIsAddPurchaseModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Purchase</span>
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setPurchaseSearchQuery("")}
+                  className="ml-auto text-sm font-medium text-info-700 hover:text-info-800"
+                >
+                  Clear
+                </button>
               </div>
-
-              {/* Search Input */}
-              <div className="mb-6">
-                <div className="relative max-w-sm">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search items in purchases..."
-                    value={purchaseSearchQuery}
-                    onChange={(e) => setPurchaseSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {purchaseSearchQuery.trim() && purchaseSearchAggregates && (
-                  <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-6">
-                    <div>
-                      <span className="text-sm text-gray-600">Total Quantity of matching items:</span>
-                      <span className="ml-2 font-bold text-blue-800">
-                        {purchaseSearchAggregates.totalQty}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-sm text-gray-600">Total Amount of matching items:</span>
-                      <span className="ml-2 font-bold text-blue-800">
-                        ₹{purchaseSearchAggregates.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setPurchaseSearchQuery("")}
-                      className="ml-auto text-sm text-blue-600 hover:text-blue-800 font-medium"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {filteredPurchases.length > 0 ? (
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 w-10"></th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Date
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Amount
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Vendor
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPurchases.map((purchase: any) => {
-                      const isExpanded = expandedPurchases.has(purchase._id);
-                      // Determine which items to display in expanded row
-                      const itemsToShow = purchaseSearchQuery.trim()
-                        ? getMatchingItems?.get(purchase._id) || []
-                        : purchase.items;
-
-                      return (
-                        <React.Fragment key={purchase._id}>
-                          <tr
-                            className={`cursor-pointer hover:bg-gray-50 ${isExpanded ? "bg-blue-50" : ""}`}
-                            onClick={() => togglePurchaseExpand(purchase._id)}
-                          >
-                            <td className="px-6 py-4">
-                              {isExpanded ? (
-                                <ChevronDown className="w-4 h-4 text-gray-400" />
-                              ) : (
-                                <ChevronRight className="w-4 h-4 text-gray-400" />
-                              )}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {new Date(
-                                purchase.date || purchase.createdAt,
-                              ).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap font-semibold">
-                              ₹{purchase.totalAmount.toLocaleString("en-IN")}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {purchase.vendor?.name || purchase.vendor}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span
-                                className={`px-2 py-1 text-xs font-medium rounded-full ${purchase.status === "verified" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"}`}
-                              >
-                                {purchase.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center space-x-2">
-                                {canVerifyPurchase &&
-                                  purchase.status === "pending" && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleVerify(purchase._id);
-                                      }}
-                                      className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                                    >
-                                      Verify
-                                    </button>
-                                  )}
-                                {purchase.billUpload &&
-                                  purchase.billUpload.url && (
-                                    <a
-                                      href={`${purchase.billUpload.url}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-600 hover:text-blue-800"
-                                      title="View Bill"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                    </a>
-                                  )}
-                                {userType === "admin" &&
-                                  purchase.billUpload && (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDeleteBillUpload(purchase._id);
-                                      }}
-                                      className="text-red-600 hover:text-red-800"
-                                      title="Delete Bill Upload"
-                                    >
-                                      <FileX className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                {/* Delete button - always for admin, for non-admin only if pending and added by them */}
-                                {(userType === "admin" ||
-                                  purchase.status === "pending") && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDeletePurchase(purchase._id);
-                                    }}
-                                    className="text-red-600 hover:text-red-800"
-                                    title={
-                                      purchase.status === "verified"
-                                        ? "Delete verified purchase (reversal)"
-                                        : "Delete unverified purchase"
-                                    }
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                          {/* EXPANDED ROW WITH ITEMS */}
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={6} className="bg-gray-50 p-6">
-                                <h4 className="font-semibold text-gray-700 mb-4 flex items-center">
-                                  <Package className="w-5 h-5 mr-2" />
-                                  Purchased Items
-                                  {purchaseSearchQuery.trim() && (
-                                    <span className="ml-3 text-sm font-normal text-gray-500">
-                                      (showing matching items only)
-                                    </span>
-                                  )}
-                                </h4>
-                                <div className="space-y-4">
-                                  {itemsToShow.map((item: any, idx: number) => {
-                                    // We need the original index for editing; if we filtered, the index in original items array might differ.
-                                    // We can pass the original index, but we need to find it. We'll just use the item's position in the original array.
-                                    // To avoid complex logic, we'll use the item's index in the original purchase.items array.
-                                    // We can find it by comparing _id or name+category? We'll use the original index from purchase.items.indexOf(item) but that's not reliable if items have same name.
-                                    // Better: we'll store the original index in a map when we filter? Since we have getMatchingItems that returns matched items, we could also store original indices.
-                                    // For simplicity, we'll compute original index by scanning purchase.items.
-                                    const originalIndex = purchase.items.findIndex(
-                                      (origItem: any) => origItem === item
-                                    );
-                                    // If not found, fallback to idx (but we should have it)
-                                    const itemIndex = originalIndex !== -1 ? originalIndex : idx;
-                                    const isEditingThisItem =
-                                      editingItem?.purchaseId === purchase._id &&
-                                      editingItem?.index === itemIndex;
-                                    const canEditItem =
-                                      userType === "admin" ||
-                                      purchase.addedBy?._id === user?.id ||
-                                      purchase.addedBy === user?.id;
-
-                                    return (
-                                      <div
-                                        key={itemIndex}
-                                        className="flex items-center justify-between bg-white p-4 rounded-2xl border border-gray-100"
-                                      >
-                                        {isEditingThisItem ? (
-                                          <div
-                                            className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3"
-                                            onClick={(e) =>
-                                              e.stopPropagation()
-                                            }
-                                          >
-                                            <div className="relative">
-                                              <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                Item Name
-                                              </label>
-                                              <input
-                                                type="text"
-                                                value={editItemName}
-                                                autoComplete="off"
-                                                onChange={(e) =>
-                                                  handleEditItemNameChange(
-                                                    e.target.value,
-                                                  )
-                                                }
-                                                onFocus={() =>
-                                                  setShowEditSuggestions(
-                                                    true,
-                                                  )
-                                                }
-                                                onBlur={() =>
-                                                  setTimeout(
-                                                    () =>
-                                                      setShowEditSuggestions(
-                                                        false,
-                                                      ),
-                                                    150,
-                                                  )
-                                                }
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                              />
-                                              {showEditSuggestions &&
-                                                editItemSuggestions.length >
-                                                  0 && (
-                                                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                                    {editItemSuggestions.map(
-                                                      (s) => (
-                                                        <button
-                                                          type="button"
-                                                          key={s._id}
-                                                          onMouseDown={() => {
-                                                            setEditItemName(
-                                                              s.name,
-                                                            );
-                                                            if (s.category)
-                                                              setEditItemCategory(
-                                                                s.category,
-                                                              );
-                                                            setShowEditSuggestions(
-                                                              false,
-                                                            );
-                                                          }}
-                                                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between"
-                                                        >
-                                                          <span>
-                                                            {s.name}
-                                                          </span>
-                                                          {s.category && (
-                                                            <span className="text-xs text-gray-400">
-                                                              {s.category}
-                                                            </span>
-                                                          )}
-                                                        </button>
-                                                      ),
-                                                    )}
-                                                  </div>
-                                                )}
-                                            </div>
-                                            <div>
-                                              <label className="block text-xs font-medium text-gray-600 mb-1">
-                                                Category
-                                              </label>
-                                              <select
-                                                value={
-                                                  PURCHASE_CATEGORIES.includes(
-                                                    editItemCategory,
-                                                  )
-                                                    ? editItemCategory
-                                                    : editItemCategory
-                                                      ? "Other"
-                                                      : ""
-                                                }
-                                                onChange={(e) =>
-                                                  setEditItemCategory(
-                                                    e.target.value,
-                                                  )
-                                                }
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                              >
-                                                <option value="">
-                                                  Select Category
-                                                </option>
-                                                {PURCHASE_CATEGORIES.filter(
-                                                  (c) => c !== "Other",
-                                                ).map((c) => (
-                                                  <option key={c} value={c}>
-                                                    {c}
-                                                  </option>
-                                                ))}
-                                                <option value="Other">
-                                                  Other
-                                                </option>
-                                              </select>
-                                              {(editItemCategory ===
-                                                "Other" ||
-                                                (editItemCategory &&
-                                                  !PURCHASE_CATEGORIES.includes(
-                                                    editItemCategory,
-                                                  ))) && (
-                                                <input
-                                                  type="text"
-                                                  placeholder="Enter custom category..."
-                                                  value={
-                                                    editItemCategory ===
-                                                    "Other"
-                                                      ? ""
-                                                      : editItemCategory
-                                                  }
-                                                  onChange={(e) =>
-                                                    setEditItemCategory(
-                                                      e.target.value,
-                                                    )
-                                                  }
-                                                  className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                                                />
-                                              )}
-                                            </div>
-                                            <div className="md:col-span-2 flex items-center justify-end gap-2 mt-1">
-                                              <button
-                                                onClick={
-                                                  cancelEditPurchaseItem
-                                                }
-                                                disabled={savingItemEdit}
-                                                className="px-3 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50"
-                                              >
-                                                Cancel
-                                              </button>
-                                              <button
-                                                onClick={saveEditPurchaseItem}
-                                                disabled={savingItemEdit}
-                                                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                                              >
-                                                {savingItemEdit
-                                                  ? "Saving..."
-                                                  : "Save"}
-                                              </button>
-                                            </div>
-                                          </div>
-                                        ) : (
-                                          <div className="flex-1 flex items-center gap-2">
-                                            <div>
-                                              <div className="font-medium">
-                                                {item.name}
-                                              </div>
-                                              <div className="text-xs text-gray-500">
-                                                {item.category} •{" "}
-                                                {item.unit}
-                                              </div>
-                                            </div>
-                                            {canEditItem && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  startEditPurchaseItem(
-                                                    purchase._id,
-                                                    itemIndex,
-                                                    item.name,
-                                                    item.category,
-                                                  );
-                                                }}
-                                                className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
-                                                title="Edit item name/category"
-                                              >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                              </button>
-                                            )}
-                                          </div>
-                                        )}
-                                        {!isEditingThisItem && (
-                                          <div className="flex items-center gap-8 text-right">
-                                            <div>
-                                              <div className="text-xs text-gray-500">
-                                                Qty
-                                              </div>
-                                              <div className="font-semibold">
-                                                {item.quantity} {item.unit}
-                                              </div>
-                                            </div>
-                                            <div>
-                                              <div className="text-xs text-gray-500">
-                                                Unit Price
-                                              </div>
-                                              <div className="font-medium">
-                                                ₹
-                                                {parseFloat(
-                                                  item.price,
-                                                ).toFixed(2)}
-                                              </div>
-                                            </div>
-                                            <div className="text-emerald-600 font-bold text-lg">
-                                              ₹
-                                              {parseFloat(
-                                                item.totalAmount,
-                                              ).toFixed(2)}
-                                            </div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                  {itemsToShow.length === 0 && (
-                                    <p className="text-gray-500 text-sm">No matching items found in this purchase.</p>
-                                  )}
-                                </div>
-
-                                {parseFloat(purchase.transportationFee || 0) >
-                                  0 && (
-                                  <div className="mt-6 flex justify-between items-center bg-amber-50 border border-amber-200 p-4 rounded-2xl">
-                                    <div className="flex items-center">
-                                      <DollarSign className="w-5 h-5 text-amber-600 mr-3" />
-                                      <span className="font-medium text-amber-700">
-                                        Transportation Fee (recorded as
-                                        miscellaneous service)
-                                      </span>
-                                    </div>
-                                    <span className="font-semibold text-amber-700 text-xl">
-                                      ₹
-                                      {parseFloat(
-                                        purchase.transportationFee || 0,
-                                      ).toLocaleString("en-IN", {
-                                        minimumFractionDigits: 2,
-                                      })}
-                                    </span>
-                                  </div>
-                                )}
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <p className="text-gray-600">
-                  {purchaseSearchQuery.trim()
-                    ? "No purchases match the search."
-                    : "No purchases found for this site."}
-                </p>
-              )}
-            </div>
+            )}
           </div>
-        )}
 
-        {selectedTab === "stocks" && (
-          <div className="bg-white rounded-2xl shadow-lg p-8">
-            <div className="flex justify-between mb-6">
-              <h2 className="text-2xl font-bold flex items-center space-x-3">
-                <Package className="w-7 h-7 text-blue-600" />
-                <span>Stocks</span>
-              </h2>
-              {canManageStocks && (
-                <div className="space-x-4">
-                  <button
-                    onClick={() => setIsRequestTransferModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-                  >
-                    Request Transfer
-                  </button>
-                  <button
-                    onClick={() => setIsLogUsageModalOpen(true)}
-                    className="px-4 py-2 bg-green-600 text-white rounded-lg"
-                  >
-                    Log Usage
-                  </button>
-                </div>
-              )}
-            </div>
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Item
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Quantity
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {stocks.map((stock) => (
-                  <tr key={stock._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {stock.name}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {stock.quantity} {stock.unit}
-                    </td>
+          {filteredPurchases.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="w-10 px-4 py-3" />
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-console-border">
+                  {filteredPurchases.map((purchase: any) => {
+                    const isExpanded = expandedPurchases.has(purchase._id);
+                    const itemsToShow = purchaseSearchQuery.trim()
+                      ? getMatchingItems?.get(purchase._id) || []
+                      : purchase.items;
 
-        {selectedTab === "miscellaneous" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ transitionDelay: "500ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
-            <div className="p-8">
-              <div className="flex justify-between mb-6">
-                <h2 className="text-2xl font-bold flex items-center space-x-3">
-                  <Wrench className="w-7 h-7 text-blue-600" />
-                  <span>Miscellaneous Expenses</span>
-                </h2>
-                {canAddMiscellaneous && (
-                  <button
-                    onClick={() => setIsAddMiscellaneousModalOpen(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Add Expense</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Search Input */}
-              <div className="mb-6">
-                <div className="relative max-w-sm">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    placeholder="Search expenses..."
-                    value={miscSearchQuery}
-                    onChange={(e) => setMiscSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                {miscSearchQuery.trim() && (
-                  <div className="mt-2 text-sm text-gray-500">
-                    Found {filteredMiscExpenses.length} matching expenses.
-                  </div>
-                )}
-              </div>
-
-              {/* Table */}
-              {filteredMiscExpenses.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Date
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Category
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Name
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Amount
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Tip
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Total
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Status
-                        </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {filteredMiscExpenses.map((exp: any) => (
-                        <tr key={exp._id}>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {new Date(exp.date).toLocaleDateString()}
-                          </td>
-                          <td className="px-4 py-4 capitalize">
-                            {editingMiscId === exp._id ? (
-                              <select
-                                value={editMiscCategory}
-                                onChange={(e) =>
-                                  setEditMiscCategory(e.target.value)
-                                }
-                                className="px-2 py-1 border border-gray-200 rounded-md text-sm capitalize focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                              >
-                                {MISC_EXPENSE_CATEGORIES.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c}
-                                  </option>
-                                ))}
-                              </select>
+                    return (
+                      <React.Fragment key={purchase._id}>
+                        <tr
+                          className={cn("cursor-pointer hover:bg-console-bg", isExpanded && "bg-brand-50/50")}
+                          onClick={() => togglePurchaseExpand(purchase._id)}
+                        >
+                          <td className="px-4 py-3.5">
+                            {isExpanded ? (
+                              <ChevronDown size={15} className="text-console-muted" />
                             ) : (
-                              exp.category
+                              <ChevronRight size={15} className="text-console-muted" />
                             )}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            {editingMiscId === exp._id ? (
-                              <input
-                                type="text"
-                                value={editMiscName}
-                                onChange={(e) =>
-                                  setEditMiscName(e.target.value)
-                                }
-                                className="px-2 py-1 border border-gray-200 rounded-md text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                              />
-                            ) : (
-                              exp.name
-                            )}
+                          <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                            {new Date(purchase.date || purchase.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            ₹{exp.amount.toLocaleString()}
+                          <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-console-text">
+                            ₹{purchase.totalAmount.toLocaleString("en-IN")}
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            ₹{(exp.tip || 0).toLocaleString()}
+                          <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                            {purchase.vendor?.name || purchase.vendor}
                           </td>
-                          <td className="px-4 py-4 font-medium">
-                            ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
+                          <td className="whitespace-nowrap px-4 py-3.5">
+                            <Badge variant={purchase.status === "verified" ? "success" : "warning"}>
+                              {purchase.status}
+                            </Badge>
                           </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <span
-                              className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                exp.status === "verified"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
-                              }`}
-                            >
-                              {exp.status}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 whitespace-nowrap">
-                            <div className="flex items-center space-x-2">
-                              {editingMiscId === exp._id ? (
-                                <>
-                                  <button
-                                    onClick={saveEditMiscExpense}
-                                    disabled={savingMiscEdit}
-                                    className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm disabled:opacity-50"
-                                  >
-                                    {savingMiscEdit ? "Saving..." : "Save"}
-                                  </button>
-                                  <button
-                                    onClick={cancelEditMiscExpense}
-                                    disabled={savingMiscEdit}
-                                    className="px-3 py-1 border border-gray-200 text-gray-600 rounded-md hover:bg-gray-50 text-sm disabled:opacity-50"
-                                  >
-                                    Cancel
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  {(userType === "admin" ||
-                                    exp.addedBy?._id === user?.id ||
-                                    exp.addedBy === user?.id) && (
-                                    <button
-                                      onClick={() => startEditMiscExpense(exp)}
-                                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors duration-200"
-                                      title="Edit name/category"
-                                    >
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                  {userType === "admin" &&
-                                    exp.status === "pending" && (
-                                      <button
-                                        onClick={() =>
-                                          handleVerifyMiscellaneous(exp._id)
-                                        }
-                                        className="px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
-                                      >
-                                        Verify
-                                      </button>
-                                    )}
-                                  {/* Delete button – admin can delete any, non-admin only pending (own) */}
-                                  {(userType === "admin" ||
-                                    exp.status === "pending") && (
-                                    <button
-                                      onClick={() =>
-                                        handleDeleteMiscellaneous(exp._id)
-                                      }
-                                      className="text-red-600 hover:text-red-800 p-1"
-                                      title={
-                                        exp.status === "verified"
-                                          ? "Delete verified expense (reversal)"
-                                          : "Delete unverified expense"
-                                      }
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  )}
-                                </>
+                          <td className="whitespace-nowrap px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
+                              {canVerifyPurchase && purchase.status === "pending" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerify(purchase._id)}
+                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800"
+                                >
+                                  Verify
+                                </button>
+                              )}
+                              {purchase.billUpload && purchase.billUpload.url && (
+                                <a
+                                  href={purchase.billUpload.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-lg p-1.5 text-console-muted hover:bg-info-50 hover:text-info-700"
+                                  title="View bill"
+                                >
+                                  <Eye size={15} />
+                                </a>
+                              )}
+                              {userType === "admin" && purchase.billUpload && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBillUpload(purchase._id)}
+                                  className="rounded-lg p-1.5 text-console-muted hover:bg-danger-50 hover:text-danger-700"
+                                  title="Delete bill upload"
+                                >
+                                  <FileX size={15} />
+                                </button>
+                              )}
+                              {(userType === "admin" || purchase.status === "pending") && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletePurchaseTarget(purchase)}
+                                  className="rounded-lg p-1.5 text-console-muted hover:bg-danger-50 hover:text-danger-700"
+                                  title={
+                                    purchase.status === "verified"
+                                      ? "Delete verified purchase (reversal)"
+                                      : "Delete unverified purchase"
+                                  }
+                                >
+                                  <Trash2 size={15} />
+                                </button>
                               )}
                             </div>
-                            {/* Notes with purchase link tooltip */}
-                            {exp.notes && (
-                              <p className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                                Notes:{" "}
-                                {exp.notes === "from purchase" &&
-                                exp.purchaseId ? (
-                                  <span
-                                    className="inline-flex items-center gap-1 cursor-help hover:text-blue-600 transition-colors underline decoration-dotted"
-                                    title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
-                                  >
-                                    from purchase
-                                    <span className="text-[10px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">
-                                      ID
-                                    </span>
-                                  </span>
-                                ) : (
-                                  exp.notes
-                                )}
-                              </p>
-                            )}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p className="text-gray-600">
-                  {miscSearchQuery.trim()
-                    ? "No expenses match the search."
-                    : "No miscellaneous expenses found for this site."}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={6} className="bg-console-bg p-6">
+                              <h4 className="mb-4 flex items-center text-sm font-semibold text-console-text">
+                                <Package size={16} className="mr-2" />
+                                Purchased items
+                                {purchaseSearchQuery.trim() && (
+                                  <span className="ml-3 text-xs font-normal text-console-muted">
+                                    (showing matching items only)
+                                  </span>
+                                )}
+                              </h4>
+                              <div className="space-y-3">
+                                {itemsToShow.map((item: any, idx: number) => {
+                                  const originalIndex = purchase.items.findIndex(
+                                    (origItem: any) => origItem === item,
+                                  );
+                                  const itemIndex = originalIndex !== -1 ? originalIndex : idx;
+                                  const isEditingThisItem =
+                                    editingItem?.purchaseId === purchase._id &&
+                                    editingItem?.index === itemIndex;
+                                  const canEditItem =
+                                    userType === "admin" ||
+                                    purchase.addedBy?._id === user?.id ||
+                                    purchase.addedBy === user?.id;
 
-        {selectedTab === "documents" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-lg border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ transitionDelay: "500ms" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-purple-500 rounded-t-2xl" />
-            <div className="p-8">
-              <div className="space-y-6">
-                {/* Client Documentation */}
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-700 flex items-center">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Client Documentation ({clientDocuments.length})
-                    </h4>
-                    {canUploadDocuments && (
-                      <label className="relative cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleUpload(
-                                site.id,
-                                e.target.files[0],
-                                "client",
-                              );
-                            }
-                          }}
-                        />
-                        <div className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                          <Upload className="h-4 w-4" />
-                          <span>Upload Client Document</span>
-                        </div>
-                      </label>
-                    )}
-                  </div>
-                  {clientDocuments.length === 0 ? (
-                    <p className="text-gray-500 text-sm mt-2">
-                      No client documents uploaded yet
-                    </p>
-                  ) : (
-                    <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
-                      {clientDocuments.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center space-x-3 flex-1 min-w-0">
-                            <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {doc.name}
-                              </p>
-                              <div className="flex items-center space-x-2 text-xs text-gray-500">
-                                <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                                <span>•</span>
-                                <User className="h-3 w-3" />
-                                <span>{doc.uploadedBy.name}</span>
-                                <span>•</span>
-                                <Calendar className="h-3 w-3" />
-                                <span>
-                                  {new Date(
-                                    doc.uploadDate,
-                                  ).toLocaleDateString()}
-                                </span>
+                                  return (
+                                    <div
+                                      key={itemIndex}
+                                      className="flex items-center justify-between rounded-xl border border-console-border bg-white p-4"
+                                    >
+                                      {isEditingThisItem ? (
+                                        <div
+                                          className="grid flex-1 grid-cols-1 gap-3 md:grid-cols-2"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <div className="relative">
+                                            <label className="mb-1 block text-xs font-medium text-console-muted">
+                                              Item name
+                                            </label>
+                                            <input
+                                              type="text"
+                                              value={editItemName}
+                                              autoComplete="off"
+                                              onChange={(e) => handleEditItemNameChange(e.target.value)}
+                                              onFocus={() => setShowEditSuggestions(true)}
+                                              onBlur={() =>
+                                                setTimeout(() => setShowEditSuggestions(false), 150)
+                                              }
+                                              className="w-full rounded-lg border border-console-border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                            />
+                                            {showEditSuggestions && editItemSuggestions.length > 0 && (
+                                              <div className="absolute z-20 mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-console-border bg-white shadow-console-lg">
+                                                {editItemSuggestions.map((s) => (
+                                                  <button
+                                                    type="button"
+                                                    key={s._id}
+                                                    onMouseDown={() => {
+                                                      setEditItemName(s.name);
+                                                      if (s.category) setEditItemCategory(s.category);
+                                                      setShowEditSuggestions(false);
+                                                    }}
+                                                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-50"
+                                                  >
+                                                    <span>{s.name}</span>
+                                                    {s.category && (
+                                                      <span className="text-xs text-console-muted">
+                                                        {s.category}
+                                                      </span>
+                                                    )}
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                          <div>
+                                            <label className="mb-1 block text-xs font-medium text-console-muted">
+                                              Category
+                                            </label>
+                                            <select
+                                              value={
+                                                PURCHASE_CATEGORIES.includes(editItemCategory)
+                                                  ? editItemCategory
+                                                  : editItemCategory
+                                                    ? "Other"
+                                                    : ""
+                                              }
+                                              onChange={(e) => setEditItemCategory(e.target.value)}
+                                              className="w-full rounded-lg border border-console-border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                            >
+                                              <option value="">Select category</option>
+                                              {PURCHASE_CATEGORIES.filter((c) => c !== "Other").map((c) => (
+                                                <option key={c} value={c}>
+                                                  {c}
+                                                </option>
+                                              ))}
+                                              <option value="Other">Other</option>
+                                            </select>
+                                            {(editItemCategory === "Other" ||
+                                              (editItemCategory &&
+                                                !PURCHASE_CATEGORIES.includes(editItemCategory))) && (
+                                              <input
+                                                type="text"
+                                                placeholder="Enter custom category..."
+                                                value={editItemCategory === "Other" ? "" : editItemCategory}
+                                                onChange={(e) => setEditItemCategory(e.target.value)}
+                                                className="mt-2 w-full rounded-lg border border-console-border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                              />
+                                            )}
+                                          </div>
+                                          <div className="mt-1 flex items-center justify-end gap-2 md:col-span-2">
+                                            <button
+                                              type="button"
+                                              onClick={cancelEditPurchaseItem}
+                                              disabled={savingItemEdit}
+                                              className="rounded-lg border border-console-border px-3 py-1.5 text-sm text-console-muted hover:bg-console-bg disabled:opacity-50"
+                                            >
+                                              Cancel
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={saveEditPurchaseItem}
+                                              disabled={savingItemEdit}
+                                              className="rounded-lg bg-brand-700 px-3 py-1.5 text-sm text-white hover:bg-brand-800 disabled:opacity-50"
+                                            >
+                                              {savingItemEdit ? "Saving..." : "Save"}
+                                            </button>
+                                          </div>
+                                        </div>
+                                      ) : (
+                                        <div className="flex flex-1 items-center gap-2">
+                                          <div>
+                                            <div className="text-sm font-medium text-console-text">{item.name}</div>
+                                            <div className="text-xs text-console-muted">
+                                              {item.category} • {item.unit}
+                                            </div>
+                                          </div>
+                                          {canEditItem && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                startEditPurchaseItem(
+                                                  purchase._id,
+                                                  itemIndex,
+                                                  item.name,
+                                                  item.category,
+                                                )
+                                              }
+                                              className="rounded p-1 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                              title="Edit item name/category"
+                                            >
+                                              <Edit2 size={14} />
+                                            </button>
+                                          )}
+                                        </div>
+                                      )}
+                                      {!isEditingThisItem && (
+                                        <div className="flex items-center gap-6 text-right">
+                                          <div>
+                                            <div className="text-xs text-console-muted">Qty</div>
+                                            <div className="text-sm font-semibold text-console-text">
+                                              {item.quantity} {item.unit}
+                                            </div>
+                                          </div>
+                                          <div>
+                                            <div className="text-xs text-console-muted">Unit price</div>
+                                            <div className="text-sm font-medium text-console-text">
+                                              ₹{parseFloat(item.price).toFixed(2)}
+                                            </div>
+                                          </div>
+                                          <div className="text-base font-bold text-success-700">
+                                            ₹{parseFloat(item.totalAmount).toFixed(2)}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {itemsToShow.length === 0 && (
+                                  <p className="text-sm text-console-muted">
+                                    No matching items found in this purchase.
+                                  </p>
+                                )}
                               </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <a
-                              href={`${doc.url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 hover:bg-gray-200 rounded"
-                            >
-                              <Download className="h-4 w-4 text-gray-500" />
-                            </a>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* Site Documentation */}
-                <div>
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-700 flex items-center">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Site Documentation ({siteDocuments.length})
-                    </h4>
-                    {canUploadDocuments && (
-                      <label className="relative cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleUpload(site.id, e.target.files[0], "site");
-                            }
-                          }}
-                        />
-                        <div className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                          <Upload className="h-4 w-4" />
-                          <span>Upload Site Document</span>
-                        </div>
-                      </label>
-                    )}
-                  </div>
-                  {siteDocuments.length === 0 ? (
-                    <p className="text-gray-500 text-sm mt-2">
-                      No site documents uploaded yet
-                    </p>
-                  ) : (
-                    <div className="space-y-2 mt-2 max-h-48 overflow-y-auto">
-                      {siteDocuments.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          <div className="flex items-center space-x-3 flex-1 min-w-0">
-                            <FileText className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {doc.name}
-                              </p>
-                              <div className="flex items-center space-x-2 text-xs text-gray-500">
-                                <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                                <span>•</span>
-                                <User className="h-3 w-3" />
-                                <span>{doc.uploadedBy.name}</span>
-                                <span>•</span>
-                                <Calendar className="h-3 w-3" />
-                                <span>
-                                  {new Date(
-                                    doc.uploadDate,
-                                  ).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <a
-                              href={`${doc.url}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="p-1 hover:bg-gray-200 rounded"
-                            >
-                              <Download className="h-4 w-4 text-gray-500" />
-                            </a>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+
+                              {parseFloat(purchase.transportationFee || 0) > 0 && (
+                                <div className="mt-5 flex items-center justify-between rounded-xl border border-warning-200 bg-warning-50 p-4">
+                                  <div className="flex items-center gap-3">
+                                    <DollarSign size={18} className="text-warning-600" />
+                                    <span className="text-sm font-medium text-warning-800">
+                                      Transportation fee (recorded as miscellaneous service)
+                                    </span>
+                                  </div>
+                                  <span className="text-lg font-semibold text-warning-800">
+                                    ₹
+                                    {parseFloat(purchase.transportationFee || 0).toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                    })}
+                                  </span>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              icon={ShoppingCart}
+              title={purchaseSearchQuery.trim() ? "No purchases match the search" : "No purchases found"}
+              description={
+                purchaseSearchQuery.trim()
+                  ? "Try a different search term."
+                  : "Purchases recorded for this site will appear here."
+              }
+            />
+          )}
+        </SectionCard>
+      )}
+
+      {selectedTab === "stocks" && (
+        <SectionCard>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+              <Package size={20} className="text-brand-600" />
+              Stocks
+            </h2>
+            {canManageStocks && (
+              <div className="flex gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setIsRequestTransferModalOpen(true)}>
+                  Request transfer
+                </Button>
+                <Button size="sm" onClick={() => setIsLogUsageModalOpen(true)}>
+                  Log usage
+                </Button>
               </div>
-            </div>
+            )}
           </div>
-        )}
+          {stocks.length === 0 ? (
+            <EmptyState icon={Package} title="No stock recorded for this site" />
+          ) : (
+            <div className="overflow-hidden rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {stocks.map((stock: any) => (
+                    <tr key={stock._id}>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">{stock.name}</td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                        {stock.quantity} {stock.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </SectionCard>
+      )}
 
-        {/* Existing modals (unchanged) */}
-        {isAddPurchaseModalOpen && (
-          <AddPurchaseModal
-            siteId={siteId!}
-            isAdmin={userType === "admin"}
-            onClose={() => {
-              setIsAddPurchaseModalOpen(false);
-              if (selectedTab === "purchases") fetchPurchases();
-            }}
-          />
-        )}
+      {selectedTab === "miscellaneous" && (
+        <SectionCard>
+          <div className="mb-5 flex items-center justify-between">
+            <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+              <Wrench size={20} className="text-brand-600" />
+              Miscellaneous expenses
+            </h2>
+            {canAddMiscellaneous && (
+              <Button size="sm" onClick={() => setIsAddMiscellaneousModalOpen(true)}>
+                <Plus size={15} /> Add expense
+              </Button>
+            )}
+          </div>
 
-        {isRequestTransferModalOpen && (
-          <RequestTransferModal
-            isOpen={isRequestTransferModalOpen}
-            onClose={() => setIsRequestTransferModalOpen(false)}
-            onSubmit={handleRequestTransfer}
-            sites={sites}
-            stocks={stocks}
-            allowedToSites={sites.map((s) => s.id)}
-          />
-        )}
-
-        {isLogUsageModalOpen && (
-          <LogUsageModal
-            isOpen={isLogUsageModalOpen}
-            onClose={() => setIsLogUsageModalOpen(false)}
-            onSubmit={handleLogUsage}
-            sites={sites}
-            stocks={stocks}
-          />
-        )}
-
-        {isModalOpen && currentRole && (
-          <SelectUserModal
-            role={currentRole}
-            excludedIds={
-              currentRole === "siteManager"
-                ? site.siteManagers.map((m) => m.id)
-                : currentRole === "architect"
-                  ? site.architects.map((a) => a.id)
-                  : site.supervisors.map((s) => s.id)
-            }
-            onSelect={(user) => handleAddTeamMember(user, currentRole)}
-            onClose={() => setIsModalOpen(false)}
-          />
-        )}
-
-        {isMarkAttendanceModalOpen && (
-          <MarkAttendanceModal
-            siteId={siteId!}
-            onClose={() => setIsMarkAttendanceModalOpen(false)}
-            onAttendanceMarked={fetchAttendance}
-          />
-        )}
-
-        {selectedDate && (
-          <AttendanceByDay
-            selectedDate={selectedDate}
-            selectedDayAttendance={selectedDayAttendance}
-            formatDate={formatDate}
-            onClose={() => setSelectedDate(null)}
-          />
-        )}
-
-        {isAddMiscellaneousModalOpen && (
-          <AddMiscellaneousExpenseModal
-            siteId={siteId!}
-            isAdmin={userType === "admin"}
-            onClose={() => {
-              setIsAddMiscellaneousModalOpen(false);
-              if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();
-            }}
-          />
-        )}
-
-        {isTransactionsModalOpen && site.transactions && (
-          <TransactionsModal
-            transactions={site.transactions}
-            onClose={() => setIsTransactionsModalOpen(false)}
-          />
-        )}
-
-        {isCompleteModalOpen && (
-          <CompleteSiteModal
-            isOpen={isCompleteModalOpen}
-            onClose={() => setIsCompleteModalOpen(false)}
-            onConfirm={handleMarkAsCompleted}
-            downloadSiteDocuments={downloadSiteDocumentsZip}
-            downloadPurchaseBills={downloadPurchaseBillsZip}
-          />
-        )}
-
-        {/* Client Payments Modal */}
-        {isClientPaymentsModalOpen && (
-          <ClientPaymentsModal
-            siteId={siteId!}
-            onClose={() => setIsClientPaymentsModalOpen(false)}
-            onPaymentChanged={() => {
-              // Refresh site data and client payments list
-              getSiteDetails(siteId!).then(setSite);
-              fetchClientPayments();
-            }}
-          />
-        )}
-
-        {/* Manual Payment Modal (simple inline form) */}
-        {isManualPaymentModalOpen && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[60]">
-            <div className="bg-white rounded-3xl p-8 w-full max-w-md mx-4">
-              <h3 className="text-2xl font-semibold text-gray-900 mb-2">
-                Record Direct Client Payment
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Use this when client paid offline. Payment will be unverified
-                until approved.
+          <div className="mb-5">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+              <input
+                type="text"
+                placeholder="Search expenses..."
+                value={miscSearchQuery}
+                onChange={(e) => setMiscSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+            {miscSearchQuery.trim() && (
+              <p className="mt-2 text-sm text-console-muted">
+                Found {filteredMiscExpenses.length} matching expenses.
               </p>
-              <form onSubmit={handleManualPaymentSubmit}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Amount (₹)
-                    </label>
-                    <input
-                      type="number"
-                      value={manualAmount}
-                      onChange={(e) => setManualAmount(e.target.value)}
-                      placeholder="Enter amount"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500 text-3xl font-semibold"
-                      step="0.01"
-                      autoFocus
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Date
-                    </label>
-                    <input
-                      type="date"
-                      value={manualDate}
-                      onChange={(e) => setManualDate(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes (optional)
-                    </label>
-                    <textarea
-                      value={manualNotes}
-                      onChange={(e) => setManualNotes(e.target.value)}
-                      placeholder="Any remarks..."
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsManualPaymentModalOpen(false);
-                        setManualAmount("");
-                        setManualNotes("");
-                        setManualDate(new Date().toISOString().split("T")[0]);
-                      }}
-                      className="flex-1 py-4 text-gray-700 font-medium border border-gray-300 rounded-2xl hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-4 bg-emerald-600 hover:bg-emerald-700 text-white font-medium rounded-2xl transition-colors"
-                    >
-                      Record Payment
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
+            )}
           </div>
-        )}
-      </div>
+
+          {filteredMiscExpenses.length > 0 ? (
+            <div className="overflow-x-auto rounded-console border border-console-border">
+              <table className="min-w-full divide-y divide-console-border">
+                <thead className="bg-console-bg">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Category</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Tip</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-console-border bg-white">
+                  {filteredMiscExpenses.map((exp: any) => (
+                    <tr key={exp._id}>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                        {new Date(exp.date).toLocaleDateString()}
+                      </td>
+                      <td className="px-4 py-3.5 text-sm capitalize text-console-text">
+                        {editingMiscId === exp._id ? (
+                          <select
+                            value={editMiscCategory}
+                            onChange={(e) => setEditMiscCategory(e.target.value)}
+                            className="rounded-md border border-console-border px-2 py-1 text-sm capitalize focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          >
+                            {MISC_EXPENSE_CATEGORIES.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          exp.category
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                        {editingMiscId === exp._id ? (
+                          <input
+                            type="text"
+                            value={editMiscName}
+                            onChange={(e) => setEditMiscName(e.target.value)}
+                            className="rounded-md border border-console-border px-2 py-1 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          />
+                        ) : (
+                          exp.name
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                        ₹{exp.amount.toLocaleString()}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                        ₹{(exp.tip || 0).toLocaleString()}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5 text-sm font-medium text-console-text">
+                        ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3.5">
+                        <Badge variant={exp.status === "verified" ? "success" : "warning"}>
+                          {exp.status}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-1.5">
+                          {editingMiscId === exp._id ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={saveEditMiscExpense}
+                                disabled={savingMiscEdit}
+                                className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800 disabled:opacity-50"
+                              >
+                                {savingMiscEdit ? "Saving..." : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditMiscExpense}
+                                disabled={savingMiscEdit}
+                                className="rounded-md border border-console-border px-2.5 py-1 text-xs text-console-muted hover:bg-console-bg disabled:opacity-50"
+                              >
+                                Cancel
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {(userType === "admin" ||
+                                exp.addedBy?._id === user?.id ||
+                                exp.addedBy === user?.id) && (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditMiscExpense(exp)}
+                                  className="rounded p-1 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                  title="Edit name/category"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                              )}
+                              {userType === "admin" && exp.status === "pending" && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleVerifyMiscellaneous(exp._id)}
+                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800"
+                                >
+                                  Verify
+                                </button>
+                              )}
+                              {(userType === "admin" || exp.status === "pending") && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteMiscTarget(exp)}
+                                  className="rounded p-1 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                                  title={
+                                    exp.status === "verified"
+                                      ? "Delete verified expense (reversal)"
+                                      : "Delete unverified expense"
+                                  }
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {exp.notes && (
+                          <p className="mt-1 flex items-center gap-2 text-xs text-console-muted">
+                            Notes:{" "}
+                            {exp.notes === "from purchase" && exp.purchaseId ? (
+                              <span
+                                className="inline-flex cursor-help items-center gap-1 underline decoration-dotted transition-colors hover:text-brand-700"
+                                title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
+                              >
+                                from purchase
+                                <span className="rounded-full bg-info-100 px-1.5 py-0.5 font-mono text-[10px] text-info-700">
+                                  ID
+                                </span>
+                              </span>
+                            ) : (
+                              exp.notes
+                            )}
+                          </p>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              icon={Wrench}
+              title={
+                miscSearchQuery.trim()
+                  ? "No expenses match the search"
+                  : "No miscellaneous expenses found"
+              }
+            />
+          )}
+        </SectionCard>
+      )}
+
+      {selectedTab === "documents" && (
+        <SectionCard>
+          <div className="space-y-6">
+            {[
+              { title: "Client Documentation", docs: clientDocuments, category: "client" as const },
+              { title: "Site Documentation", docs: siteDocuments, category: "site" as const },
+            ].map((group) => (
+              <div key={group.category}>
+                <div className="flex items-center justify-between">
+                  <h4 className="flex items-center text-sm font-medium text-console-text">
+                    <FileText size={15} className="mr-2" />
+                    {group.title} ({group.docs.length})
+                  </h4>
+                  {canUploadDocuments && (
+                    <label className="relative cursor-pointer">
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleUpload(site.id, e.target.files[0], group.category);
+                          }
+                        }}
+                      />
+                      <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800">
+                        <Upload size={15} />
+                        <span>Upload {group.category === "client" ? "client" : "site"} document</span>
+                      </div>
+                    </label>
+                  )}
+                </div>
+                {group.docs.length === 0 ? (
+                  <p className="mt-2 text-sm text-console-muted">No documents uploaded yet</p>
+                ) : (
+                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
+                    {group.docs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between rounded-lg bg-console-bg p-3 transition-colors hover:bg-slate-100"
+                      >
+                        <div className="flex min-w-0 flex-1 items-center gap-3">
+                          <FileText size={15} className="shrink-0 text-console-muted" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-medium text-console-text">{doc.name}</p>
+                            <div className="flex items-center gap-2 text-xs text-console-muted">
+                              <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                              <span>•</span>
+                              <User size={11} />
+                              <span>{doc.uploadedBy.name}</span>
+                              <span>•</span>
+                              <Calendar size={11} />
+                              <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded p-1.5 hover:bg-slate-200"
+                        >
+                          <Download size={15} className="text-console-muted" />
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      {isAddPurchaseModalOpen && (
+        <AddPurchaseModal
+          siteId={siteId!}
+          isAdmin={userType === "admin"}
+          onClose={() => {
+            setIsAddPurchaseModalOpen(false);
+            if (selectedTab === "purchases") fetchPurchases();
+          }}
+        />
+      )}
+
+      {isRequestTransferModalOpen && (
+        <RequestTransferModal
+          isOpen={isRequestTransferModalOpen}
+          onClose={() => setIsRequestTransferModalOpen(false)}
+          onSubmit={handleRequestTransfer}
+          sites={sites}
+          stocks={stocks}
+          allowedToSites={sites.map((s) => s.id)}
+        />
+      )}
+
+      {isLogUsageModalOpen && (
+        <LogUsageModal
+          isOpen={isLogUsageModalOpen}
+          onClose={() => setIsLogUsageModalOpen(false)}
+          onSubmit={handleLogUsage}
+          sites={sites}
+          stocks={stocks}
+        />
+      )}
+
+      {isModalOpen && currentRole && (
+        <SelectUserModal
+          role={currentRole}
+          excludedIds={
+            currentRole === "siteManager"
+              ? site.siteManagers.map((m) => m.id)
+              : currentRole === "architect"
+                ? site.architects.map((a) => a.id)
+                : site.supervisors.map((s) => s.id)
+          }
+          onSelect={(selectedUser: any) => handleAddTeamMember(selectedUser, currentRole)}
+          onClose={() => setIsModalOpen(false)}
+        />
+      )}
+
+      {isMarkAttendanceModalOpen && (
+        <MarkAttendanceModal
+          siteId={siteId!}
+          onClose={() => setIsMarkAttendanceModalOpen(false)}
+          onAttendanceMarked={fetchAttendance}
+        />
+      )}
+
+      {selectedDate && (
+        <AttendanceByDay
+          selectedDate={selectedDate}
+          selectedDayAttendance={selectedDayAttendance}
+          formatDate={formatDate}
+          onClose={() => setSelectedDate(null)}
+        />
+      )}
+
+      {isAddMiscellaneousModalOpen && (
+        <AddMiscellaneousExpenseModal
+          siteId={siteId!}
+          isAdmin={userType === "admin"}
+          onClose={() => {
+            setIsAddMiscellaneousModalOpen(false);
+            if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();
+          }}
+        />
+      )}
+
+      {isTransactionsModalOpen && site.transactions && (
+        <TransactionsModal
+          transactions={site.transactions}
+          onClose={() => setIsTransactionsModalOpen(false)}
+        />
+      )}
+
+      {isCompleteModalOpen && (
+        <CompleteSiteModal
+          isOpen={isCompleteModalOpen}
+          onClose={() => setIsCompleteModalOpen(false)}
+          onConfirm={handleMarkAsCompleted}
+          downloadSiteDocuments={downloadSiteDocumentsZip}
+          downloadPurchaseBills={downloadPurchaseBillsZip}
+        />
+      )}
+
+      {isClientPaymentsModalOpen && (
+        <ClientPaymentsModal
+          siteId={siteId!}
+          onClose={() => setIsClientPaymentsModalOpen(false)}
+          onPaymentChanged={() => {
+            getSiteDetails(siteId!).then((updated) => setSite(updated as ExtendedSite));
+          }}
+        />
+      )}
+
+      <Modal
+        isOpen={isManualPaymentModalOpen}
+        onClose={() => {
+          setIsManualPaymentModalOpen(false);
+          setManualAmount("");
+          setManualNotes("");
+          setManualDate(new Date().toISOString().split("T")[0]);
+        }}
+        title="Record Direct Client Payment"
+        description="Use this when the client paid offline. The payment stays unverified until approved."
+      >
+        <form onSubmit={handleManualPaymentSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Amount (₹)</label>
+            <input
+              type="number"
+              value={manualAmount}
+              onChange={(e) => setManualAmount(e.target.value)}
+              placeholder="Enter amount"
+              step="0.01"
+              autoFocus
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-lg font-semibold focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Date</label>
+            <input
+              type="date"
+              value={manualDate}
+              onChange={(e) => setManualDate(e.target.value)}
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">
+              Notes <span className="text-xs text-console-muted">(Optional)</span>
+            </label>
+            <textarea
+              value={manualNotes}
+              onChange={(e) => setManualNotes(e.target.value)}
+              placeholder="Any remarks..."
+              rows={3}
+              className="w-full resize-none rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setIsManualPaymentModalOpen(false);
+                setManualAmount("");
+                setManualNotes("");
+                setManualDate(new Date().toISOString().split("T")[0]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Record payment</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deletePurchaseTarget}
+        onClose={() => setDeletePurchaseTarget(null)}
+        onConfirm={handleDeletePurchase}
+        title="Delete purchase"
+        message={
+          deletePurchaseTarget?.status === "verified"
+            ? "This is a verified purchase. Deleting will reverse all accounting entries (stock, expenses, source funds)."
+            : "Are you sure you want to delete this unverified purchase?"
+        }
+        variant="danger"
+        confirmText="Delete"
+        isLoading={deletingPurchase}
+      />
+
+      <ConfirmDialog
+        isOpen={!!deleteMiscTarget}
+        onClose={() => setDeleteMiscTarget(null)}
+        onConfirm={handleDeleteMiscellaneous}
+        title="Delete miscellaneous expense"
+        message={
+          deleteMiscTarget?.status === "verified"
+            ? "This expense is verified. Deleting will reverse the accounting entries."
+            : "Are you sure you want to delete this unverified miscellaneous expense?"
+        }
+        variant="danger"
+        confirmText="Delete"
+        isLoading={deletingMisc}
+      />
+
+      <ConfirmDialog
+        isOpen={resetPhasesConfirmOpen}
+        onClose={() => setResetPhasesConfirmOpen(false)}
+        onConfirm={handleResetPhases}
+        title="Reset all phases"
+        message="Are you sure you want to reset all phases to 'not started'? This cannot be undone."
+        variant="warning"
+        confirmText="Reset phases"
+        isLoading={resettingPhases}
+      />
     </div>
   );
 };

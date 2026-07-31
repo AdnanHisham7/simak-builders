@@ -261,13 +261,11 @@ const mapSiteDetailsData = (
 
 export const getSites = async () => {
   const response = await privateClient?.get("/sites", { withCredentials: true });
-  console.log("LOLOLOLresponse", response.data);
   return response.data?.map(mapSiteData);
 };
 
 export const getSiteDetails = async (siteId: string) => {
   const response = await privateClient?.get(`/sites/${siteId}`);
-  console.log("responseresponseresponseresponse", response);
   return mapSiteDetailsData(
     response.data?.site,
     response.data?.client,
@@ -285,7 +283,7 @@ export const createSite = async (siteData: any) => {
 };
 
 export const updateSite = async (siteId: string, updateData: any) => {
-  const response = await privateClient?.put("/sites", { siteId, ...updateData });
+  await privateClient?.put("/sites", { siteId, ...updateData });
   return { siteId, ...updateData };
 };
 
