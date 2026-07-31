@@ -12,7 +12,6 @@ const LogUsageModal: React.FC<LogUsageModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
-  sites,
   stocks,
 }) => {
   const [stock, setStock] = useState<any>(null);

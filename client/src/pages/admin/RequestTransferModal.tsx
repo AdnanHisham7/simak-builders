@@ -4,9 +4,9 @@ interface RequestTransferModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (transferData: any) => Promise<void>;
-  sites: any;
-  stocks: any;
-  allowedToSites: any;
+  sites: any[];
+  stocks: any[];
+  allowedToSites: any[];
 }
 
 const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
@@ -25,7 +25,6 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [currentStep, setCurrentStep] = useState(1);
-console.log("Allowed TO SITES", allowedToSites)
   useEffect(() => {
     if (isOpen) {
       setIsAnimating(true);

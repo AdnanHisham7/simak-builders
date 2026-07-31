@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   getStocks,
   getStockTransfers,
@@ -7,96 +7,121 @@ import {
   requestStockTransfer,
   logStockUsage,
   addStock,
+  Stock,
+  StockTransfer,
 } from "@/services/stockService";
-import { getSites } from "@/services/siteService";
+import { getSites, Site } from "@/services/siteService";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import RequestTransferModal from "./RequestTransferModal";
 import AddStockModal from "./AddStockModal";
 import LogUsageModal from "./LogUsageModal";
+import { toast } from "sonner";
+import {
+  Search,
+  Plus,
+  ArrowLeftRight,
+  ClipboardList,
+  Package,
+  Grid as GridIcon,
+  List,
+  Building2,
+  MapPin,
+  AlertCircle,
+  CheckCircle2,
+  XCircle,
+  Clock,
+} from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import { cn } from "@/lib/cn";
 
-interface Stock {
-  _id: string;
-  name: string;
-  quantity: number;
-  unit: string;
-  category?: string;
-  averagePrice?: number;
-  site?: { _id: string; name: string };
-}
+const getStockStatusVariant = (
+  quantity: number,
+): "error" | "warning" | "success" => {
+  if (quantity <= 10) return "error";
+  if (quantity <= 50) return "warning";
+  return "success";
+};
 
-interface StockTransfer {
-  _id: string;
-  stock: { _id: string; name: string };
-  quantity: number;
-  fromSite?: { _id: string; name: string };
-  toSite: { _id: string; name: string };
-  status: "Requested" | "Approved" | "Rejected";
-  approvedBy?: { _id: string; username: string };
-  rejectedBy?: { _id: string; username: string };
-}
+const getStockStatusText = (quantity: number) => {
+  if (quantity <= 10) return "Low stock";
+  if (quantity <= 50) return "Medium stock";
+  return "In stock";
+};
 
 const Stocks: React.FC = () => {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [transfers, setTransfers] = useState<StockTransfer[]>([]);
-  const [sites, setSites] = useState<{ _id: string; name: string }[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [filterSite, setFilterSite] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [isRequestTransferOpen, setIsRequestTransferOpen] = useState(false);
   const [isLogUsageOpen, setIsLogUsageOpen] = useState(false);
   const [isAddStockOpen, setIsAddStockOpen] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [selectedStock, setSelectedStock] = useState<string | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
-  const { userType, user } = useSelector((state: RootState) => state.auth);
+  const { userType } = useSelector((state: RootState) => state.auth);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [stocksData, sitesData, transfersData] = await Promise.all([
+        getStocks(),
+        getSites(),
+        getStockTransfers(),
+      ]);
+      setStocks(stocksData);
+      setSites(sitesData);
+      setTransfers(transfersData);
+      setPageError(null);
+    } catch (err) {
+      setPageError("Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    setIsAnimating(true);
-    const fetchData = async () => {
-      try {
-        const [stocksData, sitesData, transfersData] = await Promise.all([
-          getStocks(),
-          getSites(),
-          getStockTransfers(),
-        ]);
-        setStocks(stocksData);
-        setSites(sitesData);
-        setTransfers(transfersData);
-        setLoading(false);
-      } catch (err) {
-        setError("Failed to fetch data");
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
   const handleApproveTransfer = async (transferId: string) => {
+    setApprovingId(transferId);
     try {
       await approveStockTransfer(transferId);
-      setTransfers(
-        transfers.map((t) =>
-          t._id === transferId ? { ...t, status: "Approved" } : t
-        )
+      setTransfers((prev) =>
+        prev.map((t) => (t._id === transferId ? { ...t, status: "Approved" } : t)),
       );
+      toast.success("Transfer approved");
+      fetchData();
     } catch (err) {
-      setError("Failed to approve transfer");
+      toast.error("Failed to approve transfer");
+    } finally {
+      setApprovingId(null);
     }
   };
 
   const handleRejectTransfer = async (transferId: string) => {
+    setRejectingId(transferId);
     try {
       await rejectStockTransfer(transferId);
-      setTransfers(
-        transfers.map((t) =>
-          t._id === transferId ? { ...t, status: "Rejected" } : t
-        )
+      setTransfers((prev) =>
+        prev.map((t) => (t._id === transferId ? { ...t, status: "Rejected" } : t)),
       );
+      toast.success("Transfer rejected");
     } catch (err) {
-      setError("Failed to reject transfer");
+      toast.error("Failed to reject transfer");
+    } finally {
+      setRejectingId(null);
     }
   };
 
@@ -106,8 +131,9 @@ const Stocks: React.FC = () => {
       const updatedTransfers = await getStockTransfers();
       setTransfers(updatedTransfers);
       setIsRequestTransferOpen(false);
+      toast.success("Transfer requested");
     } catch (err) {
-      setError("Failed to request transfer");
+      toast.error("Failed to request transfer");
     }
   };
 
@@ -117,8 +143,9 @@ const Stocks: React.FC = () => {
       const updatedStocks = await getStocks();
       setStocks(updatedStocks);
       setIsLogUsageOpen(false);
+      toast.success("Usage logged");
     } catch (err) {
-      setError("Failed to log usage");
+      toast.error("Failed to log usage");
     }
   };
 
@@ -128,8 +155,9 @@ const Stocks: React.FC = () => {
       const updatedStocks = await getStocks();
       setStocks(updatedStocks);
       setIsAddStockOpen(false);
+      toast.success("Stock added");
     } catch (err) {
-      setError("Failed to add stock");
+      toast.error("Failed to add stock");
     }
   };
 
@@ -151,679 +179,351 @@ const Stocks: React.FC = () => {
   const showCompanySection = !filterSite || filterSite === "company";
   const showSiteSection = !filterSite || filterSite !== "company";
 
-  const getStockStatusColor = (quantity: number) => {
-    if (quantity <= 10) return "from-red-500 to-red-600";
-    if (quantity <= 50) return "from-yellow-500 to-orange-500";
-    return "from-green-500 to-green-600";
-  };
-
-  const getStockStatusText = (quantity: number) => {
-    if (quantity <= 10) return "Low Stock";
-    if (quantity <= 50) return "Medium Stock";
-    return "In Stock";
-  };
-
-  const renderInventorySection = (
-    title: string,
-    list: Stock[],
-    accentGradient: string,
-  ) => (
-    <div
-      className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-        isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-      }`}
-    >
-      <div
-        className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${accentGradient} rounded-t-2xl overflow-hidden`}
-      />
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-          <div className="text-sm text-gray-500">
-            {list.length} item{list.length !== 1 ? "s" : ""} found
-          </div>
-        </div>
-
-        {viewMode === "grid" ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {list.map((stock, index) => (
-              <div
-                key={stock._id}
-                className={`group relative bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 p-6 hover:shadow-xl transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden ${
-                  selectedStock === stock._id
-                    ? "ring-2 ring-blue-500 shadow-xl"
-                    : ""
-                }`}
-                onClick={() =>
-                  setSelectedStock(
-                    selectedStock === stock._id ? null : stock._id,
-                  )
-                }
-                style={{ animationDelay: `${index * 0.1}s` }}
-              >
-                <div
-                  className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${getStockStatusColor(
-                    stock.quantity,
-                  )} rounded-t-xl`}
-                />
-
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h3
-                      className="font-semibold text-gray-900 text-lg truncate"
-                      title={stock.name}
-                    >
-                      {stock.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {stock.site ? stock.site.name : "Company"}
-                    </p>
-                  </div>
-                  <div
-                    className={`px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
-                      stock.quantity,
-                    )} text-white`}
-                  >
-                    {getStockStatusText(stock.quantity)}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-2xl font-bold text-gray-900">
-                      {stock.quantity}
-                    </div>
-                    <div className="text-sm text-gray-500 uppercase tracking-wider">
-                      {stock.unit}
-                    </div>
-                  </div>
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center">
-                    <svg
-                      className="w-6 h-6 text-blue-600"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 rounded-xl transition-all duration-300" />
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-xl border border-gray-200">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Item
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Quantity
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Site
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {list.map((stock) => (
-                  <tr
-                    key={stock._id}
-                    className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 cursor-pointer"
-                    onClick={() =>
-                      setSelectedStock(
-                        selectedStock === stock._id ? null : stock._id,
-                      )
-                    }
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-100 to-blue-200 rounded-lg flex items-center justify-center mr-3">
-                          <svg
-                            className="w-5 h-5 text-blue-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                            />
-                          </svg>
-                        </div>
-                        <div className="font-medium text-gray-900">
-                          {stock.name}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-lg font-semibold text-gray-900">
-                        {stock.quantity}{" "}
-                        <span className="text-sm text-gray-500">
-                          {stock.unit}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-gray-900">
-                      {stock.site ? stock.site.name : "Company"}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r ${getStockStatusColor(
-                          stock.quantity,
-                        )} text-white`}
-                      >
-                        {getStockStatusText(stock.quantity)}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {list.length === 0 && (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg
-                className="w-8 h-8 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                />
-              </svg>
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No stocks found
-            </h3>
-            <p className="text-gray-500">
-              Try adjusting your search or filter criteria
-            </p>
-          </div>
-        )}
+  const renderInventorySection = (title: string, icon: React.ReactNode, list: Stock[]) => (
+    <Card>
+      <div className="mb-5 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-console-text">
+          {icon}
+          {title}
+        </h2>
+        <span className="text-sm text-console-muted">
+          {list.length} item{list.length !== 1 ? "s" : ""}
+        </span>
       </div>
-    </div>
+
+      {list.length === 0 ? (
+        <EmptyState
+          icon={Package}
+          title="No stocks found"
+          description="Try adjusting your search or filter criteria."
+        />
+      ) : viewMode === "grid" ? (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {list.map((stock) => (
+            <button
+              type="button"
+              key={stock._id}
+              onClick={() =>
+                setSelectedStock(selectedStock === stock._id ? null : stock._id)
+              }
+              className={cn(
+                "rounded-console border p-4 text-left transition-shadow hover:shadow-console-lg",
+                selectedStock === stock._id
+                  ? "border-brand-400 ring-2 ring-brand-100"
+                  : "border-console-border",
+              )}
+            >
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-semibold text-console-text" title={stock.name}>
+                    {stock.name}
+                  </h3>
+                  <p className="mt-0.5 text-xs text-console-muted">
+                    {stock.site ? stock.site.name : "Company"}
+                  </p>
+                </div>
+                <Badge variant={getStockStatusVariant(stock.quantity)}>
+                  {getStockStatusText(stock.quantity)}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xl font-semibold text-console-text">{stock.quantity}</div>
+                  <div className="text-xs uppercase tracking-wide text-console-muted">{stock.unit}</div>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                  <Package size={18} />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-console border border-console-border">
+          <table className="min-w-full divide-y divide-console-border">
+            <thead className="bg-console-bg">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Site</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-console-border bg-white">
+              {list.map((stock) => (
+                <tr key={stock._id} className="hover:bg-console-bg">
+                  <td className="px-4 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                        <Package size={16} />
+                      </div>
+                      <span className="text-sm font-medium text-console-text">{stock.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="text-sm font-semibold text-console-text">{stock.quantity}</span>{" "}
+                    <span className="text-xs text-console-muted">{stock.unit}</span>
+                  </td>
+                  <td className="px-4 py-3.5 text-sm text-console-text">
+                    {stock.site ? stock.site.name : "Company"}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <Badge variant={getStockStatusVariant(stock.quantity)}>
+                      {getStockStatusText(stock.quantity)}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="relative">
-            <div className="w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-r-purple-600 rounded-full animate-spin animation-delay-150 mx-auto"></div>
-          </div>
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-          <p className="mt-4 text-lg font-medium text-gray-600">
-            Loading Stocks...
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const transferStatusVariant = (status: StockTransfer["status"]) => {
+    switch (status) {
+      case "Approved":
+        return "success";
+      case "Rejected":
+        return "error";
+      default:
+        return "warning";
+    }
+  };
 
-  if (error) {
+  const transferStatusIcon = (status: StockTransfer["status"]) => {
+    switch (status) {
+      case "Approved":
+        return <CheckCircle2 size={12} />;
+      case "Rejected":
+        return <XCircle size={12} />;
+      default:
+        return <Clock size={12} />;
+    }
+  };
+
+  if (pageError) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div
-            className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-          >
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-500 via-pink-500 to-red-600 rounded-t-2xl" />
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg
-                  className="w-8 h-8 text-red-500"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                Error Loading Data
-              </h3>
-              <p className="text-red-600">{error}</p>
-            </div>
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <AlertCircle size={22} />
           </div>
-        </div>
+          <h3 className="text-lg font-semibold text-console-text">Something went wrong</h3>
+          <p className="mt-1 text-sm text-console-muted">{pageError}</p>
+          <Button className="mt-5" onClick={fetchData}>
+            Try again
+          </Button>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto space-y-8 pb-10">
-        <div
-          className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-            isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
-        >
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-
-          <div className="p-8">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <svg
-                    className="w-6 h-6 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                    Stock Management
-                  </h1>
-                  <p className="text-gray-600 mt-1">
-                    Manage your inventory across all sites
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                {canManageStocks && (
-                  <>
-                    <button
-                      onClick={() => setIsRequestTransferOpen(true)}
-                      className="group relative px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 hover:from-blue-600 hover:to-blue-700"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                          />
-                        </svg>
-                        <span>Request Transfer</span>
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setIsLogUsageOpen(true)}
-                      className="group relative px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 hover:from-green-600 hover:to-green-700"
-                    >
-                      <span className="flex items-center space-x-2">
-                        <svg
-                          className="w-5 h-5"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                          />
-                        </svg>
-                        <span>Log Usage</span>
-                      </span>
-                    </button>
-                  </>
-                )}
-                {userType === "admin" && (
-                  <button
-                    onClick={() => setIsAddStockOpen(true)}
-                    className="group relative px-6 py-3 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-xl font-medium shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 hover:from-purple-600 hover:to-purple-700"
-                  >
-                    <span className="flex items-center space-x-2">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                        />
-                      </svg>
-                      <span>Add Stock</span>
-                    </span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Stock Management</h1>
+          <p className="mt-0.5 text-sm text-console-muted">
+            Manage your inventory across all sites
+          </p>
         </div>
+        <div className="flex flex-wrap gap-2">
+          {canManageStocks && (
+            <>
+              <Button variant="secondary" onClick={() => setIsRequestTransferOpen(true)}>
+                <ArrowLeftRight size={16} /> Request transfer
+              </Button>
+              <Button variant="secondary" onClick={() => setIsLogUsageOpen(true)}>
+                <ClipboardList size={16} /> Log usage
+              </Button>
+            </>
+          )}
+          {userType === "admin" && (
+            <Button onClick={() => setIsAddStockOpen(true)}>
+              <Plus size={16} /> Add stock
+            </Button>
+          )}
+        </div>
+      </div>
 
-        <div
-          className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-            isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
-          style={{ animationDelay: "0.1s" }}
-        >
-          <div className="p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-              <div className="relative flex-1 max-w-md">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
-                </div>
+      {loading ? (
+        <div className="space-y-6">
+          <SkeletonStatCards count={2} />
+          <SkeletonTable />
+        </div>
+      ) : (
+        <>
+          <Card>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative max-w-md flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
                 <input
                   type="text"
                   placeholder="Search stocks..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-gray-200 rounded-xl leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
               </div>
-
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <select
-                    value={filterSite || ""}
-                    onChange={(e) => setFilterSite(e.target.value || null)}
-                    className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  >
-                    <option value="">All Sites</option>
-                    <option value="company">Company Stocks</option>
-                    {sites.map((site) => (
-                      <option key={site.id} value={site.id}>
-                        {site.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-                    <svg
-                      className="w-4 h-4 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 9l-7 7-7-7"
-                      />
-                    </svg>
-                  </div>
-                </div>
-
-                <div className="flex bg-gray-100 rounded-xl p-1">
+              <div className="flex items-center gap-3">
+                <select
+                  value={filterSite || ""}
+                  onChange={(e) => setFilterSite(e.target.value || null)}
+                  className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="">All Sites</option>
+                  <option value="company">Company Stocks</option>
+                  {sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
                   <button
+                    type="button"
                     onClick={() => setViewMode("grid")}
-                    className={`px-4 py-2 rounded-lg transition-all duration-200 ${
-                      viewMode === "grid"
-                        ? "bg-white shadow-md text-blue-600"
-                        : "text-gray-600 hover:text-gray-800"
-                    }`}
+                    aria-label="Grid view"
+                    className={cn(
+                      "rounded-md p-1.5 transition-colors",
+                      viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                    )}
                   >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"
-                      />
-                    </svg>
+                    <GridIcon size={16} />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setViewMode("table")}
-                    className={`px-4 py-2 rounded-lg transition-all duration-200 ${
-                      viewMode === "table"
-                        ? "bg-white shadow-md text-blue-600"
-                        : "text-gray-600 hover:text-gray-800"
-                    }`}
+                    aria-label="Table view"
+                    className={cn(
+                      "rounded-md p-1.5 transition-colors",
+                      viewMode === "table" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                    )}
                   >
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
+                    <List size={16} />
                   </button>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
+          </Card>
 
-        {showCompanySection &&
-          renderInventorySection(
-            "🏢 Company Stocks",
-            companyStocks,
-            "from-purple-500 via-indigo-500 to-blue-500",
-          )}
+          {showCompanySection &&
+            renderInventorySection(
+              "Company Stocks",
+              <Building2 size={18} className="text-brand-600" />,
+              companyStocks,
+            )}
 
-        {showSiteSection &&
-          renderInventorySection(
-            "📍 Site Stocks",
-            siteStocksList,
-            "from-green-500 via-blue-500 to-purple-500",
-          )}
+          {showSiteSection &&
+            renderInventorySection(
+              "Site Stocks",
+              <MapPin size={18} className="text-success-600" />,
+              siteStocksList,
+            )}
 
-        {userType === "admin" && (
-          <div
-            className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-              isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-            }`}
-            style={{ animationDelay: "0.3s" }}
-          >
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-t-2xl" />
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg flex items-center justify-center">
-                    <svg
-                      className="w-5 h-5 text-white"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                      />
-                    </svg>
-                  </div>
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Stock Transfers
-                  </h2>
-                </div>
-                <div className="text-sm text-gray-500">
+          {userType === "admin" && (
+            <Card>
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-console-text">
+                  <ArrowLeftRight size={18} className="text-warning-600" />
+                  Stock Transfers
+                </h2>
+                <span className="text-sm text-console-muted">
                   {transfers.length} transfer{transfers.length !== 1 ? "s" : ""}
-                </div>
+                </span>
               </div>
-              <div className="overflow-hidden rounded-xl border border-gray-200">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Item
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Quantity
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        From
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        To
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Decided By
-                      </th>
-                      <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                        Action
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {transfers.map((transfer) => (
-                      <tr key={transfer._id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer?.stock?.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer.quantity}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer.fromSite
-                            ? transfer.fromSite.name
-                            : "Company"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer?.toSite?.name}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer.status === "Approved" && (
-                            <span className="px-3 py-1 bg-green-100 text-green-800 rounded-md">
-                              Approved
-                            </span>
-                          )}
-                          {transfer.status === "Rejected" && (
-                            <span className="px-3 py-1 bg-red-100 text-red-800 rounded-md">
-                              Rejected
-                            </span>
-                          )}
-                          {transfer.status === "Requested" && (
-                            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-md">
-                              Requested
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer.approvedBy
-                            ? transfer.approvedBy.username
-                            : transfer.rejectedBy
-                            ? transfer.rejectedBy.username
-                            : "-"}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {transfer.status === "Requested" && (
-                            <>
-                              <button
-                                onClick={() =>
-                                  handleApproveTransfer(transfer._id)
-                                }
-                                className="px-3 py-1 bg-green-600 text-white rounded-md hover:bg-green-700 mr-2"
-                              >
-                                Approve
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleRejectTransfer(transfer._id)
-                                }
-                                className="px-3 py-1 bg-red-600 text-white rounded-md hover:bg-red-700"
-                              >
-                                Reject
-                              </button>
-                            </>
-                          )}
-                        </td>
+              {transfers.length === 0 ? (
+                <EmptyState icon={ArrowLeftRight} title="No stock transfers yet" />
+              ) : (
+                <div className="overflow-hidden rounded-console border border-console-border">
+                  <table className="min-w-full divide-y divide-console-border">
+                    <thead className="bg-console-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">From</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">To</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                        <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+                    </thead>
+                    <tbody className="divide-y divide-console-border bg-white">
+                      {transfers.map((transfer) => (
+                        <tr key={transfer._id} className="hover:bg-console-bg">
+                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">{transfer.stock.name}</td>
+                          <td className="px-4 py-3.5 text-sm text-console-text">{transfer.quantity}</td>
+                          <td className="px-4 py-3.5 text-sm text-console-muted">
+                            {transfer.fromSite ? transfer.fromSite.name : "Company"}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-console-muted">{transfer.toSite.name}</td>
+                          <td className="px-4 py-3.5">
+                            <Badge variant={transferStatusVariant(transfer.status)}>
+                              {transferStatusIcon(transfer.status)}
+                              {transfer.status}
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            {transfer.status === "Requested" && (
+                              <div className="flex justify-end gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  loading={approvingId === transfer._id}
+                                  onClick={() => handleApproveTransfer(transfer._id)}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="danger"
+                                  loading={rejectingId === transfer._id}
+                                  onClick={() => handleRejectTransfer(transfer._id)}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          )}
+        </>
+      )}
 
-        {isRequestTransferOpen && (
-          <RequestTransferModal
-            isOpen={isRequestTransferOpen}
-            onClose={() => setIsRequestTransferOpen(false)}
-            onSubmit={handleRequestTransfer}
-            sites={sites}
-            stocks={stocks}
-            allowedToSites={sites.map((s) => s.id)}
-          />
-        )}
-        {isLogUsageOpen && (
-          <LogUsageModal
-            isOpen={isLogUsageOpen}
-            onClose={() => setIsLogUsageOpen(false)}
-            onSubmit={handleLogUsage}
-            sites={sites}
-            stocks={stocks}
-          />
-        )}
-        {isAddStockOpen && (
-          <AddStockModal
-            isOpen={isAddStockOpen}
-            onClose={() => setIsAddStockOpen(false)}
-            onSubmit={handleAddStock}
-            sites={sites}
-          />
-        )}
-      </div>
+      {isRequestTransferOpen && (
+        <RequestTransferModal
+          isOpen={isRequestTransferOpen}
+          onClose={() => setIsRequestTransferOpen(false)}
+          onSubmit={handleRequestTransfer}
+          stocks={stocks}
+          sites={sites}
+          allowedToSites={sites.map((s) => s.id)}
+        />
+      )}
+      {isLogUsageOpen && (
+        <LogUsageModal
+          isOpen={isLogUsageOpen}
+          onClose={() => setIsLogUsageOpen(false)}
+          onSubmit={handleLogUsage}
+          stocks={stocks}
+          sites={sites}
+        />
+      )}
+      {isAddStockOpen && (
+        <AddStockModal
+          isOpen={isAddStockOpen}
+          onClose={() => setIsAddStockOpen(false)}
+          onSubmit={handleAddStock}
+          sites={sites}
+        />
+      )}
     </div>
   );
 };
