@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import { privateClient } from "@/api";
 import {
@@ -12,6 +12,8 @@ import {
   Package,
   Wrench,
 } from "lucide-react";
+import Button from "@/components/ui/Button";
+import { cn } from "@/lib/cn";
 
 const defaultPhases = [
   "Site Visit",
@@ -26,7 +28,6 @@ const defaultPhases = [
   "Paint work",
 ] as const;
 
-// ==================== TYPES ====================
 interface SiteData {
   name: string;
   address: string;
@@ -72,7 +73,7 @@ interface FormDataState {
   phases: Phase[];
   purchases: Purchase[];
   miscellaneousExpenses: MiscellaneousExpense[];
-  attendances: any[]; // extend when you add UI
+  attendances: any[];
   stockUsages: any[];
   contractorTransactions: any[];
 }
@@ -101,36 +102,34 @@ interface Vendor {
 interface BulkImportFormProps {
   clients: Client[];
   vendors: Vendor[];
-  // employees, stocks, contractors are passed from AdminDashboard but not used yet
   employees?: any[];
   stocks?: any[];
   contractors?: any[];
 }
 
-// ==================== STABLE SUB-COMPONENTS (moved outside) ====================
 const SectionCard: React.FC<{
   children: React.ReactNode;
   title: string;
   icon: React.ComponentType<{ className?: string }>;
   count?: number;
 }> = ({ children, title, icon: Icon, count }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200">
-    <div className="p-6 border-b border-gray-50">
+  <div className="rounded-console border border-console-border bg-white">
+    <div className="border-b border-console-border p-5">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg">
-            <Icon className="w-5 h-5 text-blue-600" />
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+            <Icon className="h-4 w-4" />
           </div>
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          <h3 className="text-base font-semibold text-console-text">{title}</h3>
         </div>
         {count !== undefined && (
-          <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm font-medium">
+          <span className="rounded-full bg-console-bg px-3 py-1 text-xs font-medium text-console-muted">
             {count} items
           </span>
         )}
       </div>
     </div>
-    <div className="p-6">{children}</div>
+    <div className="p-5">{children}</div>
   </div>
 );
 
@@ -140,23 +139,23 @@ const InputField: React.FC<{
   required?: boolean;
   error?: boolean;
 }> = ({ label, children, required = false, error = false }) => (
-  <div className="space-y-2">
-    <label className="block text-sm font-medium text-gray-700">
+  <div className="space-y-1.5">
+    <label className="block text-sm font-medium text-console-text">
       {label}
-      {required && <span className="text-red-500 ml-1">*</span>}
+      {required && <span className="ml-1 text-danger-600">*</span>}
     </label>
     {children}
-    {error && (
-      <p className="text-red-500 text-sm mt-1">This field is required</p>
-    )}
+    {error && <p className="mt-1 text-sm text-danger-600">This field is required</p>}
   </div>
 );
 
-// ==================== MAIN COMPONENT ====================
-const BulkImportForm: React.FC<BulkImportFormProps> = ({
-  clients,
-  vendors,
-}) => {
+const fieldClass = (hasError?: boolean) =>
+  cn(
+    "w-full rounded-lg border px-3.5 py-2.5 text-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100",
+    hasError ? "border-danger-400" : "border-console-border",
+  );
+
+const BulkImportForm: React.FC<BulkImportFormProps> = ({ clients, vendors }) => {
   const [formData, setFormData] = useState<FormDataState>({
     site: {
       name: "",
@@ -191,11 +190,11 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
   });
 
   const [documentFiles, setDocumentFiles] = useState<File[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<
     "site" | "phases" | "documents" | "purchases" | "miscellaneous"
   >("site");
 
-  // Memoized handlers (stable across re-renders)
   const updateSiteField = useCallback((field: keyof SiteData, value: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -237,9 +236,11 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
 
     if (Object.values(siteErrors).some((error) => error)) {
       toast.error("Please fill in all required fields in Site Details");
+      setActiveSection("site");
       return;
     }
 
+    setIsSubmitting(true);
     try {
       const formDataToSend = new FormData();
       const jsonData = { ...formData };
@@ -269,7 +270,6 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
 
       toast.success("Bulk import successful");
 
-      // Reset
       setFormData({
         site: {
           name: "",
@@ -302,8 +302,11 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
         budget: false,
         status: false,
       });
+      setActiveSection("site");
     } catch (err) {
       toast.error("Bulk import failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -442,641 +445,479 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({
   ] as const;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-purple-50">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Bulk Import</h1>
-          <p className="text-gray-600">
-            Import site data, phases, purchases, and more in one go
-          </p>
-        </div>
+    <div className="space-y-6">
+      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+        {sections.map((section) => {
+          const Icon = section.icon;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActiveSection(section.id)}
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
+                activeSection === section.id
+                  ? "bg-brand-700 text-white"
+                  : "text-console-muted hover:bg-white",
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              <span>{section.label}</span>
+            </button>
+          );
+        })}
+      </div>
 
-        {/* Progress Navigation */}
-        <div className="mb-8">
-          <div className="flex space-x-1 bg-white p-2 rounded-xl shadow-sm border border-gray-100">
-            {sections.map((section) => {
-              const Icon = section.icon;
-              return (
-                <button
-                  key={section.id}
-                  onClick={() => setActiveSection(section.id)}
-                  className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
-                    activeSection === section.id
-                      ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md"
-                      : "text-gray-600 hover:bg-gray-50"
-                  }`}
+      <div className="space-y-6">
+        {activeSection === "site" && (
+          <SectionCard title="Site Details" icon={Building}>
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+              <InputField label="Site Name" required error={errors.name}>
+                <input
+                  type="text"
+                  value={formData.site.name}
+                  onChange={(e) => updateSiteField("name", e.target.value)}
+                  onBlur={(e) => handleBlur("name", e.target.value)}
+                  className={fieldClass(errors.name)}
+                  placeholder="Enter site name"
+                />
+              </InputField>
+
+              <InputField label="Address" required error={errors.address}>
+                <input
+                  type="text"
+                  value={formData.site.address}
+                  onChange={(e) => updateSiteField("address", e.target.value)}
+                  onBlur={(e) => handleBlur("address", e.target.value)}
+                  className={fieldClass(errors.address)}
+                  placeholder="Enter address"
+                />
+              </InputField>
+
+              <InputField label="City" required error={errors.city}>
+                <input
+                  type="text"
+                  value={formData.site.city}
+                  onChange={(e) => updateSiteField("city", e.target.value)}
+                  onBlur={(e) => handleBlur("city", e.target.value)}
+                  className={fieldClass(errors.city)}
+                  placeholder="Enter city"
+                />
+              </InputField>
+
+              <InputField label="State" required error={errors.state}>
+                <input
+                  type="text"
+                  value={formData.site.state}
+                  onChange={(e) => updateSiteField("state", e.target.value)}
+                  onBlur={(e) => handleBlur("state", e.target.value)}
+                  className={fieldClass(errors.state)}
+                  placeholder="Enter state"
+                />
+              </InputField>
+
+              <InputField label="ZIP Code" required error={errors.zip}>
+                <input
+                  type="text"
+                  value={formData.site.zip}
+                  onChange={(e) => updateSiteField("zip", e.target.value)}
+                  onBlur={(e) => handleBlur("zip", e.target.value)}
+                  className={fieldClass(errors.zip)}
+                  placeholder="Enter ZIP code"
+                />
+              </InputField>
+
+              <InputField label="Client" required error={errors.client}>
+                <select
+                  value={formData.site.client}
+                  onChange={(e) => updateSiteField("client", e.target.value)}
+                  onBlur={(e) => handleBlur("client", e.target.value)}
+                  className={fieldClass(errors.client)}
                 >
-                  <Icon className="w-4 h-4" />
-                  <span>{section.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+                  <option value="">Select a client</option>
+                  {clients.map((client) => (
+                    <option key={client.id} value={client.id}>
+                      {client.name}
+                    </option>
+                  ))}
+                </select>
+              </InputField>
 
-        <div className="space-y-8">
-          {/* Site Details */}
-          {activeSection === "site" && (
-            <SectionCard title="Site Details" icon={Building}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <InputField label="Site Name" required error={errors.name}>
-                  <input
-                    type="text"
-                    value={formData.site.name}
-                    onChange={(e) => updateSiteField("name", e.target.value)}
-                    onBlur={(e) => handleBlur("name", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.name ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter site name"
-                  />
-                </InputField>
+              <InputField label="Budget" required error={errors.budget}>
+                <input
+                  type="number"
+                  value={formData.site.budget}
+                  onChange={(e) =>
+                    updateSiteField(
+                      "budget",
+                      e.target.value === "" ? 0 : Number(e.target.value),
+                    )
+                  }
+                  onBlur={(e) => handleBlur("budget", e.target.value)}
+                  className={fieldClass(errors.budget)}
+                  placeholder="Enter budget amount"
+                />
+              </InputField>
 
-                <InputField label="Address" required error={errors.address}>
-                  <input
-                    type="text"
-                    value={formData.site.address}
-                    onChange={(e) => updateSiteField("address", e.target.value)}
-                    onBlur={(e) => handleBlur("address", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.address ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter address"
-                  />
-                </InputField>
-
-                <InputField label="City" required error={errors.city}>
-                  <input
-                    type="text"
-                    value={formData.site.city}
-                    onChange={(e) => updateSiteField("city", e.target.value)}
-                    onBlur={(e) => handleBlur("city", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.city ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter city"
-                  />
-                </InputField>
-
-                <InputField label="State" required error={errors.state}>
-                  <input
-                    type="text"
-                    value={formData.site.state}
-                    onChange={(e) => updateSiteField("state", e.target.value)}
-                    onBlur={(e) => handleBlur("state", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.state ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter state"
-                  />
-                </InputField>
-
-                <InputField label="ZIP Code" required error={errors.zip}>
-                  <input
-                    type="text"
-                    value={formData.site.zip}
-                    onChange={(e) => updateSiteField("zip", e.target.value)}
-                    onBlur={(e) => handleBlur("zip", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.zip ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter ZIP code"
-                  />
-                </InputField>
-
-                <InputField label="Client" required error={errors.client}>
-                  <select
-                    value={formData.site.client}
-                    onChange={(e) => updateSiteField("client", e.target.value)}
-                    onBlur={(e) => handleBlur("client", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.client ? "border-red-500" : "border-gray-200"
-                    }`}
-                  >
-                    <option value="">Select a client</option>
-                    {clients.map((client) => (
-                      <option key={client.id} value={client.id}>
-                        {client.name}
-                      </option>
-                    ))}
-                  </select>
-                </InputField>
-
-                <InputField label="Budget" required error={errors.budget}>
-                  <input
-                    type="number"
-                    value={formData.site.budget}
-                    onChange={(e) =>
-                      updateSiteField(
-                        "budget",
-                        e.target.value === "" ? 0 : Number(e.target.value),
-                      )
-                    }
-                    onBlur={(e) => handleBlur("budget", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.budget ? "border-red-500" : "border-gray-200"
-                    }`}
-                    placeholder="Enter budget amount"
-                  />
-                </InputField>
-
-                <InputField label="Status" required error={errors.status}>
-                  <select
-                    value={formData.site.status}
-                    onChange={(e) => updateSiteField("status", e.target.value)}
-                    onBlur={(e) => handleBlur("status", e.target.value)}
-                    className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 ${
-                      errors.status ? "border-red-500" : "border-gray-200"
-                    }`}
-                  >
-                    <option value="">Select status</option>
-                    <option value="InProgress">In Progress</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-                </InputField>
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Phases */}
-          {activeSection === "phases" && (
-            <SectionCard
-              title="Project Phases"
-              icon={CheckCircle}
-              count={formData.phases.length}
-            >
-              <div className="space-y-4">
-                {formData.phases.map((phase, index) => (
-                  <div
-                    key={index}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all duration-200"
-                  >
-                    <div className="flex items-center space-x-4">
-                      <div className="flex-shrink-0">
-                        {phase.status === "completed" ? (
-                          <CheckCircle className="w-6 h-6 text-green-500" />
-                        ) : (
-                          <Circle className="w-6 h-6 text-gray-400" />
-                        )}
-                      </div>
-                      <div>
-                        <h4 className="font-medium text-gray-900">
-                          {phase.name}
-                        </h4>
-                        <p className="text-sm text-gray-500 capitalize">
-                          {phase.status}
-                        </p>
-                      </div>
-                    </div>
-                    <label className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={phase.status === "completed"}
-                        onChange={(e) =>
-                          updatePhaseStatus(index, e.target.checked)
-                        }
-                        className="w-5 h-5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
-                      />
-                      <span className="text-sm font-medium text-gray-700">
-                        Mark as completed
-                      </span>
-                    </label>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Documents */}
-          {activeSection === "documents" && (
-            <SectionCard
-              title="Documents"
-              icon={FileText}
-              count={documentFiles.length}
-            >
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-all duration-200">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <div className="space-y-2">
-                    <p className="text-lg font-medium text-gray-700">
-                      Upload Documents
-                    </p>
-                    <p className="text-gray-500">
-                      Drag and drop files here, or click to select
-                    </p>
-                  </div>
-                  <input
-                    type="file"
-                    multiple
-                    onChange={(e) =>
-                      setDocumentFiles(Array.from(e.target.files || []))
-                    }
-                    className="mt-4 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                  />
-                </div>
-
-                {documentFiles.length > 0 && (
-                  <div className="space-y-2">
-                    <h4 className="font-medium text-gray-900">
-                      Selected Files:
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {documentFiles.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center space-x-3 p-3 bg-blue-50 rounded-lg"
-                        >
-                          <FileText className="w-5 h-5 text-blue-600" />
-                          <span className="text-sm text-gray-700 truncate">
-                            {file.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </SectionCard>
-          )}
-
-          {/* Purchases */}
-          {activeSection === "purchases" && (
-            <SectionCard
-              title="Purchases"
-              icon={Package}
-              count={formData.purchases.length}
-            >
-              <div className="space-y-6">
-                <button
-                  type="button"
-                  onClick={() => addArrayItem("purchases")}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-all duration-200"
+              <InputField label="Status" required error={errors.status}>
+                <select
+                  value={formData.site.status}
+                  onChange={(e) => updateSiteField("status", e.target.value)}
+                  onBlur={(e) => handleBlur("status", e.target.value)}
+                  className={fieldClass(errors.status)}
                 >
-                  <Plus className="w-5 h-5" />
-                  <span>Add New Purchase</span>
-                </button>
+                  <option value="">Select status</option>
+                  <option value="InProgress">In Progress</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </InputField>
+            </div>
+          </SectionCard>
+        )}
 
-                {formData.purchases.map((purchase, index) => (
-                  <div
-                    key={index}
-                    className="p-6 bg-gray-50 rounded-xl space-y-6"
-                  >
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-lg font-semibold text-gray-900">
-                        Purchase #{index + 1}
-                      </h4>
-                      <button
-                        type="button"
-                        onClick={() => removeArrayItem("purchases", index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <InputField label="Vendor" required>
-                        <select
-                          value={purchase.vendor}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "purchases",
-                              index,
-                              "vendor",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                        >
-                          <option value="">Select a vendor</option>
-                          {vendors.map((vendor) => (
-                            <option key={vendor._id} value={vendor._id}>
-                              {vendor.name}
-                            </option>
-                          ))}
-                        </select>
-                      </InputField>
-
-                      <InputField label="Total Amount">
-                        <input
-                          type="number"
-                          value={purchase.totalAmount}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "purchases",
-                              index,
-                              "totalAmount",
-                              Number(e.target.value),
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                          placeholder="Enter total amount"
-                        />
-                      </InputField>
-                    </div>
-
-                    {/* Purchase Items */}
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h5 className="font-medium text-gray-900">Items</h5>
-                        <button
-                          type="button"
-                          onClick={() => addPurchaseItem(index)}
-                          className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 transition-colors duration-200"
-                        >
-                          <Plus className="w-4 h-4" />
-                          <span>Add Item</span>
-                        </button>
-                      </div>
-
-                      {purchase.items.map((item, itemIndex) => (
-                        <div
-                          key={itemIndex}
-                          className="p-4 bg-white rounded-lg border border-gray-200"
-                        >
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                            <InputField label="Name">
-                              <input
-                                type="text"
-                                value={item.name}
-                                onChange={(e) =>
-                                  updatePurchaseItem(
-                                    index,
-                                    itemIndex,
-                                    "name",
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Item name"
-                              />
-                            </InputField>
-                            <InputField label="Unit">
-                              <input
-                                type="text"
-                                value={item.unit}
-                                onChange={(e) =>
-                                  updatePurchaseItem(
-                                    index,
-                                    itemIndex,
-                                    "unit",
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Unit"
-                              />
-                            </InputField>
-                            <InputField label="Category">
-                              <input
-                                type="text"
-                                value={item.category}
-                                onChange={(e) =>
-                                  updatePurchaseItem(
-                                    index,
-                                    itemIndex,
-                                    "category",
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Category"
-                              />
-                            </InputField>
-                            <InputField label="Quantity">
-                              <input
-                                type="number"
-                                value={item.quantity}
-                                onChange={(e) =>
-                                  updatePurchaseItem(
-                                    index,
-                                    itemIndex,
-                                    "quantity",
-                                    Number(e.target.value),
-                                  )
-                                }
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Qty"
-                              />
-                            </InputField>
-                            <InputField label="Price">
-                              <input
-                                type="number"
-                                value={item.price}
-                                onChange={(e) =>
-                                  updatePurchaseItem(
-                                    index,
-                                    itemIndex,
-                                    "price",
-                                    Number(e.target.value),
-                                  )
-                                }
-                                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                placeholder="Price"
-                              />
-                            </InputField>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => removePurchaseItem(index, itemIndex)}
-                            className="mt-3 text-red-600 hover:text-red-700 text-sm flex items-center space-x-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                            <span>Remove Item</span>
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Bill Upload */}
-                    <div className="space-y-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Bill Upload
-                      </label>
-                      <input
-                        type="file"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file)
-                            updateArrayItem(
-                              "purchases",
-                              index,
-                              "billFile",
-                              file,
-                            );
-                        }}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      {purchase.billFile && (
-                        <p className="text-sm text-green-600 flex items-center space-x-1">
-                          <FileText className="w-4 h-4" />
-                          <span>{purchase.billFile.name}</span>
-                        </p>
+        {activeSection === "phases" && (
+          <SectionCard title="Project Phases" icon={CheckCircle} count={formData.phases.length}>
+            <div className="space-y-3">
+              {formData.phases.map((phase, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between rounded-console border border-console-border p-4 transition-colors hover:bg-console-bg"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="shrink-0">
+                      {phase.status === "completed" ? (
+                        <CheckCircle className="h-5 w-5 text-success-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-slate-300" />
                       )}
                     </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-console-text">{phase.name}</h4>
+                      <p className="text-xs capitalize text-console-muted">{phase.status}</p>
+                    </div>
                   </div>
-                ))}
+                  <label className="flex cursor-pointer select-none items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={phase.status === "completed"}
+                      onChange={(e) => updatePhaseStatus(index, e.target.checked)}
+                      className="h-4 w-4 rounded border-console-border text-brand-600 focus:ring-brand-500"
+                    />
+                    <span className="text-sm font-medium text-console-text">Mark as completed</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
+
+        {activeSection === "documents" && (
+          <SectionCard title="Documents" icon={FileText} count={documentFiles.length}>
+            <div className="space-y-4">
+              <div className="rounded-console border-2 border-dashed border-console-border p-8 text-center transition-colors hover:border-brand-300">
+                <Upload className="mx-auto mb-3 h-10 w-10 text-console-muted" />
+                <p className="text-sm font-medium text-console-text">Upload documents</p>
+                <p className="mt-0.5 text-sm text-console-muted">
+                  Drag and drop files here, or click to select
+                </p>
+                <input
+                  type="file"
+                  multiple
+                  onChange={(e) => setDocumentFiles(Array.from(e.target.files || []))}
+                  className="mx-auto mt-4 block w-full max-w-sm text-sm text-console-muted file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+                />
               </div>
-            </SectionCard>
-          )}
 
-          {/* Miscellaneous Expenses */}
-          {activeSection === "miscellaneous" && (
-            <SectionCard
-              title="Miscellaneous Expenses"
-              icon={Wrench}
-              count={formData.miscellaneousExpenses.length}
-            >
-              <div className="space-y-6">
-                <button
-                  type="button"
-                  onClick={() => addArrayItem("miscellaneousExpenses")}
-                  className="w-full flex items-center justify-center space-x-2 py-3 px-4 border-2 border-dashed border-gray-300 rounded-xl text-gray-600 hover:border-blue-400 hover:text-blue-600"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>Add Miscellaneous Expense</span>
-                </button>
-
-                {formData.miscellaneousExpenses.map((exp, index) => (
-                  <div
-                    key={index}
-                    className="p-6 bg-gray-50 rounded-xl space-y-4"
-                  >
-                    <div className="flex justify-between">
-                      <h4 className="text-lg font-semibold">
-                        Expense #{index + 1}
-                      </h4>
-                      <button
-                        onClick={() =>
-                          removeArrayItem("miscellaneousExpenses", index)
-                        }
-                        className="text-red-600"
+              {documentFiles.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-console-text">Selected files:</h4>
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                    {documentFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-2.5 rounded-lg bg-brand-50 p-3"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <FileText className="h-4 w-4 shrink-0 text-brand-700" />
+                        <span className="truncate text-sm text-console-text">{file.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </SectionCard>
+        )}
+
+        {activeSection === "purchases" && (
+          <SectionCard title="Purchases" icon={Package} count={formData.purchases.length}>
+            <div className="space-y-5">
+              <button
+                type="button"
+                onClick={() => addArrayItem("purchases")}
+                className="flex w-full items-center justify-center gap-2 rounded-console border-2 border-dashed border-console-border py-3 text-sm font-medium text-console-muted transition-colors hover:border-brand-300 hover:text-brand-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add new purchase</span>
+              </button>
+
+              {formData.purchases.map((purchase, index) => (
+                <div key={index} className="space-y-5 rounded-console border border-console-border bg-console-bg p-5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-console-text">Purchase #{index + 1}</h4>
+                    <button
+                      type="button"
+                      onClick={() => removeArrayItem("purchases", index)}
+                      aria-label="Remove purchase"
+                      className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <InputField label="Vendor" required>
+                      <select
+                        value={purchase.vendor}
+                        onChange={(e) => updateArrayItem("purchases", index, "vendor", e.target.value)}
+                        className={fieldClass()}
+                      >
+                        <option value="">Select a vendor</option>
+                        {vendors.map((vendor) => (
+                          <option key={vendor._id} value={vendor._id}>
+                            {vendor.name}
+                          </option>
+                        ))}
+                      </select>
+                    </InputField>
+
+                    <InputField label="Total Amount (₹)">
+                      <input
+                        type="number"
+                        value={purchase.totalAmount}
+                        onChange={(e) =>
+                          updateArrayItem("purchases", index, "totalAmount", Number(e.target.value))
+                        }
+                        className={fieldClass()}
+                        placeholder="Enter total amount"
+                      />
+                    </InputField>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h5 className="text-sm font-medium text-console-text">Items</h5>
+                      <button
+                        type="button"
+                        onClick={() => addPurchaseItem(index)}
+                        className="flex items-center gap-1.5 text-sm font-medium text-brand-700 hover:text-brand-800"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add item</span>
                       </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <InputField label="Category" required>
-                        <select
-                          value={exp.category}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "category",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
+                    {purchase.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="rounded-lg border border-console-border bg-white p-4">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+                          <InputField label="Name">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => updatePurchaseItem(index, itemIndex, "name", e.target.value)}
+                              className={fieldClass()}
+                              placeholder="Item name"
+                            />
+                          </InputField>
+                          <InputField label="Unit">
+                            <input
+                              type="text"
+                              value={item.unit}
+                              onChange={(e) => updatePurchaseItem(index, itemIndex, "unit", e.target.value)}
+                              className={fieldClass()}
+                              placeholder="Unit"
+                            />
+                          </InputField>
+                          <InputField label="Category">
+                            <input
+                              type="text"
+                              value={item.category}
+                              onChange={(e) => updatePurchaseItem(index, itemIndex, "category", e.target.value)}
+                              className={fieldClass()}
+                              placeholder="Category"
+                            />
+                          </InputField>
+                          <InputField label="Quantity">
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) =>
+                                updatePurchaseItem(index, itemIndex, "quantity", Number(e.target.value))
+                              }
+                              className={fieldClass()}
+                              placeholder="Qty"
+                            />
+                          </InputField>
+                          <InputField label="Price (₹)">
+                            <input
+                              type="number"
+                              value={item.price}
+                              onChange={(e) =>
+                                updatePurchaseItem(index, itemIndex, "price", Number(e.target.value))
+                              }
+                              className={fieldClass()}
+                              placeholder="Price"
+                            />
+                          </InputField>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removePurchaseItem(index, itemIndex)}
+                          className="mt-3 flex items-center gap-1.5 text-sm text-danger-600 hover:text-danger-700"
                         >
-                          <option value="machinery">Machinery</option>
-                          <option value="rental">Rental</option>
-                          <option value="material">Material</option>
-                          <option value="service">Service</option>
-                        </select>
-                      </InputField>
-
-                      <InputField label="Name / Description" required>
-                        <input
-                          type="text"
-                          value={exp.name}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "name",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
-                          placeholder="e.g. JCB Hire, Generator Service"
-                        />
-                      </InputField>
-
-                      <InputField label="Amount (₹)" required>
-                        <input
-                          type="number"
-                          value={exp.amount}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "amount",
-                              Number(e.target.value),
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
-                        />
-                      </InputField>
-
-                      <InputField label="Tip (₹) Optional">
-                        <input
-                          type="number"
-                          value={exp.tip}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "tip",
-                              Number(e.target.value),
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
-                          placeholder="0"
-                        />
-                      </InputField>
-
-                      <InputField label="Notes">
-                        <textarea
-                          value={exp.notes}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "notes",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl h-20"
-                          placeholder="Additional notes..."
-                        />
-                      </InputField>
-
-                      <InputField label="Date" required>
-                        <input
-                          type="date"
-                          value={exp.date}
-                          onChange={(e) =>
-                            updateArrayItem(
-                              "miscellaneousExpenses",
-                              index,
-                              "date",
-                              e.target.value,
-                            )
-                          }
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl"
-                        />
-                      </InputField>
-                    </div>
+                          <Trash2 className="h-3.5 w-3.5" />
+                          <span>Remove item</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </SectionCard>
-          )}
-        </div>
 
-        {/* Submit Button */}
-        <div className="mt-12 flex justify-center">
-          <button
-            type="button"
-            onClick={handleBulkImport}
-            className="px-12 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-2xl font-semibold text-lg hover:shadow-xl hover:scale-105 transform transition-all duration-300 focus:ring-4 focus:ring-blue-200"
+                  <div className="space-y-1.5">
+                    <label className="block text-sm font-medium text-console-text">Bill upload</label>
+                    <input
+                      type="file"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) updateArrayItem("purchases", index, "billFile", file);
+                      }}
+                      className="block w-full text-sm text-console-muted file:mr-4 file:rounded-full file:border-0 file:bg-brand-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-brand-700 hover:file:bg-brand-100"
+                    />
+                    {purchase.billFile && (
+                      <p className="flex items-center gap-1.5 text-sm text-success-700">
+                        <FileText className="h-3.5 w-3.5" />
+                        <span>{purchase.billFile.name}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
+
+        {activeSection === "miscellaneous" && (
+          <SectionCard
+            title="Miscellaneous Expenses"
+            icon={Wrench}
+            count={formData.miscellaneousExpenses.length}
           >
-            Import All Data
-          </button>
-        </div>
+            <div className="space-y-5">
+              <button
+                type="button"
+                onClick={() => addArrayItem("miscellaneousExpenses")}
+                className="flex w-full items-center justify-center gap-2 rounded-console border-2 border-dashed border-console-border py-3 text-sm font-medium text-console-muted transition-colors hover:border-brand-300 hover:text-brand-700"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add miscellaneous expense</span>
+              </button>
+
+              {formData.miscellaneousExpenses.map((exp, index) => (
+                <div key={index} className="space-y-4 rounded-console border border-console-border bg-console-bg p-5">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-console-text">Expense #{index + 1}</h4>
+                    <button
+                      type="button"
+                      onClick={() => removeArrayItem("miscellaneousExpenses", index)}
+                      aria-label="Remove expense"
+                      className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <InputField label="Category" required>
+                      <select
+                        value={exp.category}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "category", e.target.value)
+                        }
+                        className={fieldClass()}
+                      >
+                        <option value="machinery">Machinery</option>
+                        <option value="rental">Rental</option>
+                        <option value="material">Material</option>
+                        <option value="service">Service</option>
+                      </select>
+                    </InputField>
+
+                    <InputField label="Name / Description" required>
+                      <input
+                        type="text"
+                        value={exp.name}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "name", e.target.value)
+                        }
+                        className={fieldClass()}
+                        placeholder="e.g. JCB Hire, Generator Service"
+                      />
+                    </InputField>
+
+                    <InputField label="Amount (₹)" required>
+                      <input
+                        type="number"
+                        value={exp.amount}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "amount", Number(e.target.value))
+                        }
+                        className={fieldClass()}
+                      />
+                    </InputField>
+
+                    <InputField label="Tip (₹) — Optional">
+                      <input
+                        type="number"
+                        value={exp.tip}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "tip", Number(e.target.value))
+                        }
+                        className={fieldClass()}
+                        placeholder="0"
+                      />
+                    </InputField>
+
+                    <InputField label="Notes">
+                      <textarea
+                        value={exp.notes}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "notes", e.target.value)
+                        }
+                        className={cn(fieldClass(), "h-20 resize-none")}
+                        placeholder="Additional notes..."
+                      />
+                    </InputField>
+
+                    <InputField label="Date" required>
+                      <input
+                        type="date"
+                        value={exp.date}
+                        onChange={(e) =>
+                          updateArrayItem("miscellaneousExpenses", index, "date", e.target.value)
+                        }
+                        className={fieldClass()}
+                      />
+                    </InputField>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
+      </div>
+
+      <div className="flex justify-center pt-2">
+        <Button size="lg" onClick={handleBulkImport} loading={isSubmitting}>
+          {isSubmitting ? "Importing..." : "Import all data"}
+        </Button>
       </div>
     </div>
   );
