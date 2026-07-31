@@ -1,4 +1,4 @@
-import { ReactNode, memo } from "react";
+import { memo } from "react";
 import { LucideIcon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import SidebarItem from "./SidebarItem";

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import {
   BarChart,
@@ -132,74 +132,6 @@ interface Contractor {
   name: string;
 }
 
-interface PurchaseItem {
-  name: string;
-  unit: string;
-  category: string;
-  quantity: number;
-  price: number;
-}
-
-interface Purchase {
-  vendor: string;
-  items: PurchaseItem[];
-  totalAmount: number;
-  billUpload: {
-    name: string;
-    size: number;
-    type: string;
-    uploadDate: string;
-    url: string;
-  };
-}
-
-interface MiscellaneousExpense {
-  category: "machinery" | "rental" | "service" | "material";
-  name: string;
-  amount: number;
-  tip: number;
-  notes: string;
-  date: string;
-}
-
-interface BulkImportFormShape {
-  siteUpdates: {
-    budget: number;
-    status: string;
-  };
-  phases: Array<{
-    name: string;
-    status: string;
-    completionDate: string;
-  }>;
-  documents: Array<{
-    name: string;
-    size: number;
-    type: string;
-    url: string;
-  }>;
-  purchases: Purchase[];
-  miscellaneousExpenses: MiscellaneousExpense[];
-  attendances: Array<{
-    employee: string;
-    date: string;
-    status: number;
-    dailyWage: number;
-  }>;
-  stockUsages: Array<{
-    stock: string;
-    quantity: number;
-    usageDate: string;
-  }>;
-  contractorTransactions: Array<{
-    contractor: string;
-    type: string;
-    amount: number;
-    description: string;
-    date: string;
-  }>;
-}
-
 const CHART_COLORS = ["#8C6424", "#059669", "#2563EB", "#D97706", "#DC2626", "#64748B"];
 
 const SECTIONS = [
@@ -232,7 +164,7 @@ const AdminDashboard = () => {
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [sites, setSites] = useState<Site[]>([]);
+  const [, setSites] = useState<Site[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [clients, setClients] = useState<[]>([]);

@@ -51,9 +51,13 @@ export default function Header({
     fetchNotifications();
   }, []);
 
-  const updateNotificationStatus = (id: string, newStatus: "pending" | "approved" | "rejected") => {
+  const updateNotificationStatus = (id: string, newStatus: string) => {
     setNotifications((prev: Notification[]) =>
-      prev.map((notif) => (notif._id === id ? { ...notif, status: newStatus } : notif)),
+      prev.map((notif) =>
+        notif._id === id
+          ? { ...notif, status: newStatus as Notification["status"] }
+          : notif,
+      ),
     );
   };
 

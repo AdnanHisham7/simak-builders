@@ -30,6 +30,7 @@ export interface UserWithSalary {
   role: string;
   salaryAssignments: SalaryAssignment[];
   totalSalary: number;
+  fixedSalary: number;
 }
 
 export interface Client {
