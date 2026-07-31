@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
+import { UserType } from "@/store/slices/authSlice";
 import {
   Search,
   Plus,
@@ -8,15 +9,11 @@ import {
   ChevronRight,
   Filter,
   AlertCircle,
-  AlignJustify,
   TrendingUp,
   Users,
   Calendar,
   DollarSign,
-  BarChart3,
   Eye,
-  Edit,
-  Archive,
   MapPin,
   Building2,
   Clock,
@@ -25,6 +22,7 @@ import {
   AlertTriangle,
   Upload,
   ShoppingCart,
+  Inbox,
 } from "lucide-react";
 import { createSite, getSites, Site } from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
@@ -32,6 +30,13 @@ import { UserRole } from "@/types/user";
 import AddSiteModal from "./AddSiteModal";
 import AddPurchaseModal from "./AddPurchaseModal";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Card, StatCard } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import { cn } from "@/lib/cn";
 
 interface User {
   id: string;
@@ -39,7 +44,39 @@ interface User {
   role: string;
 }
 
-const getProjectStatuses = (sites: Site[]) => {
+interface MappedSite {
+  id: string;
+  name: string;
+  location: string;
+  status: string;
+  clientName: string;
+  budget: number;
+  expenses: number;
+  createdAt: string;
+  siteManagerCount: number;
+  architectCount: number;
+  completedPhases: number;
+  totalPhases: number;
+}
+
+const mapSiteForDisplay = (site: Site): MappedSite => ({
+  id: site.id,
+  name: site.name,
+  location: `${site.address}, ${site.city}, ${site.state} ${site.zip}`
+    .trim()
+    .replace(/^,|,$/g, ""),
+  status: site.status || "Unknown",
+  clientName: site.client?.name || "Unknown",
+  budget: site.budget,
+  expenses: site.expenses,
+  createdAt: new Date(site.createdAt).toLocaleDateString(),
+  siteManagerCount: site.siteManagers?.length || 0,
+  architectCount: site.architects?.length || 0,
+  completedPhases: site.phases?.filter((p) => p.status === "completed").length || 0,
+  totalPhases: site.phases?.length || 0,
+});
+
+const getProjectStatuses = (sites: MappedSite[]) => {
   const statuses = sites.map((site) => site.status);
   return ["All Statuses", ...Array.from(new Set(statuses))];
 };
@@ -47,41 +84,39 @@ const getProjectStatuses = (sites: Site[]) => {
 const getStatusIcon = (status: string) => {
   switch (status.toLowerCase()) {
     case "completed":
-      return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+      return <CheckCircle2 size={14} />;
     case "in progress":
     case "active":
-      return <Clock className="w-4 h-4 text-blue-500" />;
+      return <Clock size={14} />;
     case "pending":
-      return <Circle className="w-4 h-4 text-yellow-500" />;
+      return <Circle size={14} />;
     case "on hold":
-      return <AlertTriangle className="w-4 h-4 text-orange-500" />;
+      return <AlertTriangle size={14} />;
     default:
-      return <Circle className="w-4 h-4 text-gray-400" />;
+      return <Circle size={14} />;
   }
 };
 
-const getStatusColor = (status: string) => {
+const getStatusVariant = (status: string): "success" | "info" | "warning" | "error" | "neutral" => {
   switch (status.toLowerCase()) {
     case "completed":
-      return "bg-green-50 text-green-700 border-green-200";
+      return "success";
     case "in progress":
     case "active":
-      return "bg-blue-50 text-blue-700 border-blue-200";
+      return "info";
     case "pending":
-      return "bg-yellow-50 text-yellow-700 border-yellow-200";
+      return "warning";
     case "on hold":
-      return "bg-orange-50 text-orange-700 border-orange-200";
+      return "error";
     default:
-      return "bg-gray-50 text-gray-700 border-gray-200";
+      return "neutral";
   }
 };
 
 const getActionsForRole = (role: UserType): string[] => {
   switch (role) {
     case "admin":
-      return ["view", "addPurchase"];
     case "siteManager":
-      return ["view", "addPurchase"];
     case "supervisor":
       return ["view", "addPurchase"];
     case "architect":
@@ -96,7 +131,7 @@ const getActionsForRole = (role: UserType): string[] => {
 const Sites: React.FC = () => {
   const { userType } = useSelector((state: RootState) => state.auth);
   const navigate = useNavigate();
-  const [sites, setSites] = useState<Site[]>([]);
+  const [sites, setSites] = useState<MappedSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,19 +147,12 @@ const Sites: React.FC = () => {
   const [projectStatuses, setProjectStatuses] = useState<string[]>([
     "All Statuses",
   ]);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [viewMode] = useState<"table" | "cards">("table");
 
   const itemsPerPage = 8;
 
-  useEffect(() => {
-    const timer = setTimeout(() => setIsAnimating(true), 100);
-    return () => clearTimeout(timer);
-  }, []);
-
   const handleViewSite = (siteId: string) => {
     if (userType === "admin") {
-      navigate(`/admin/sites/${siteId}`); // Navigate to site detail page
+      navigate(`/admin/sites/${siteId}`);
     } else if (userType === "siteManager") {
       navigate(`/siteManager/sites/${siteId}`);
     }
@@ -140,23 +168,7 @@ const Sites: React.FC = () => {
             getUsersByRole(UserRole.SiteManager),
             getUsersByRole(UserRole.Architect),
           ]);
-        const mappedSites = fetchedSites.map((site) => ({
-          id: site.id,
-          name: site.name,
-          location: `${site.address}, ${site.city}, ${site.state} ${site.zip}`
-            .trim()
-            .replace(/^,|,$/g, ""),
-          status: site.status || "Unknown",
-          clientName: site.client?.name || "Unknown",
-          budget: site.budget,
-          expenses: site.expenses,
-          createdAt: new Date(site.createdAt).toLocaleDateString(),
-          siteManagerCount: site.siteManagerCount,
-          architectCount: site.architectCount,
-          completedPhases: site.completedPhases,
-          totalPhases: site.totalPhases,
-        }));
-        console.log("HAHAHAHA", fetchedSites);
+        const mappedSites = fetchedSites.map(mapSiteForDisplay);
         setSites(mappedSites);
         setProjectStatuses(getProjectStatuses(mappedSites));
         setClients(clientList);
@@ -164,7 +176,7 @@ const Sites: React.FC = () => {
         setArchitects(architectList);
         setLoading(false);
       } catch (err) {
-        console.error("Error fetching data:", err);
+        toast.error("Failed to fetch sites");
         setError("Failed to fetch data. Please try again later.");
         setLoading(false);
       }
@@ -182,13 +194,12 @@ const Sites: React.FC = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const totalPages = Math.ceil(filteredSites.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredSites.length / itemsPerPage) || 1;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSites = filteredSites.slice(indexOfFirstItem, indexOfLastItem);
 
   const totalBudget = sites.reduce((sum, site) => sum + site.budget, 0);
-  const totalExpenses = sites.reduce((sum, site) => sum + site.expenses, 0);
   const completedSites = sites.filter(
     (site) => site.status.toLowerCase() === "completed"
   ).length;
@@ -207,43 +218,16 @@ const Sites: React.FC = () => {
   const handleModalSubmit = async (siteData: any) => {
     try {
       const createdSite = await createSite(siteData);
-      const mappedSite = {
-        id: createdSite.id,
-        name: createdSite.name,
-        location:
-          `${createdSite.address}, ${createdSite.city}, ${createdSite.state} ${createdSite.zip}`
-            .trim()
-            .replace(/^,|,$/g, ""),
-        status: createdSite.status || "Unknown",
-        clientName: createdSite.client?.name || "Unknown",
-        budget: createdSite.budget,
-        expenses: createdSite.expenses,
-        createdAt: new Date(createdSite.createdAt).toLocaleDateString(),
-        siteManagerCount: createdSite.siteManagerCount || 0,
-        architectCount: createdSite.architectCount || 0,
-        completedPhases: createdSite.completedPhases || 0,
-        totalPhases: createdSite.totalPhases || createdSite.phases.length,
-      };
+      const mappedSite = mapSiteForDisplay(createdSite);
       setSites((prevSites) => [...prevSites, mappedSite]);
-      if (!projectStatuses.includes(createdSite.status) && createdSite.status) {
-        setProjectStatuses((prev) => [...prev, createdSite.status]);
+      if (!projectStatuses.includes(mappedSite.status)) {
+        setProjectStatuses((prev) => [...prev, mappedSite.status]);
       }
       setIsModalOpen(false);
+      toast.success("Site created successfully");
     } catch (err) {
-      console.error("Error creating site:", err);
+      toast.error("Failed to create site");
     }
-  };
-
-  const handleEditSite = (siteId: string) => {
-    console.log(`Open edit modal for site ${siteId}`);
-  };
-
-  const handleArchiveSite = (siteId: string) => {
-    console.log(`Archive site ${siteId}`);
-  };
-
-  const handleManageAttendance = (siteId: string) => {
-    console.log(`Open attendance modal for site ${siteId}`);
   };
 
   const handleAddPurchase = (siteId: string) => {
@@ -252,172 +236,70 @@ const Sites: React.FC = () => {
   };
 
   const handleUploadDocuments = (siteId: string) => {
-    console.log(`Open upload documents modal for site ${siteId}`);
+    handleViewSite(siteId);
   };
 
   const handleViewProgress = (siteId: string) => {
-    console.log(`Navigate to progress page for site ${siteId}`);
+    handleViewSite(siteId);
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-10 w-48 bg-gradient-to-r from-gray-200 to-gray-300 rounded-xl mb-8"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {[...Array(4)].map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6"
-                >
-                  <div className="h-4 bg-gray-200 rounded mb-4"></div>
-                  <div className="h-8 bg-gray-300 rounded"></div>
-                </div>
-              ))}
-            </div>
-            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"></div>
-              <div className="p-6">
-                <div className="h-12 bg-gray-100 rounded mb-4"></div>
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="h-16 bg-gray-50 rounded mb-2"></div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6 flex items-center justify-center">
-        <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 max-w-md w-full transform transition-all duration-200">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 rounded-t-2xl"></div>
-          <div className="flex items-center mb-4">
-            <AlertCircle className="text-red-500 Mr-3" size={24} />
-            <h3 className="text-lg font-semibold text-gray-900">
-              Error Loading Sites
-            </h3>
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <AlertCircle size={22} />
           </div>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-200 font-medium shadow-lg"
-            onClick={() => window.location.reload()}
-          >
-            Try Again
-          </button>
-        </div>
+          <h3 className="text-lg font-semibold text-console-text">Error loading sites</h3>
+          <p className="mt-1 text-sm text-console-muted">{error}</p>
+          <Button className="mt-5" onClick={() => window.location.reload()}>
+            Try again
+          </Button>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 p-6 transition-all duration-700 ${
-        isAnimating ? "opacity-100" : "opacity-0"
-      }`}
-    >
-      <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4">
-          <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-800 to-indigo-800 bg-clip-text text-transparent mb-2">
-              Site Management
-            </h1>
-            <p className="text-gray-600 text-lg">
-              Manage and monitor your construction sites
-            </p>
-          </div>
-          {userType === "admin" && (
-            <div className="flex gap-3">
-              <button
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transform hover:scale-105 transition-all duration-200 flex items-center font-medium shadow-lg hover:shadow-xl"
-                onClick={() => setIsModalOpen(true)}
-              >
-                <Plus size={20} className="mr-2" />
-                <span>Add New Site</span>
-              </button>
-            </div>
-          )}
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Site Management</h1>
+          <p className="mt-0.5 text-sm text-console-muted">
+            Manage and monitor your construction sites
+          </p>
         </div>
+        {userType === "admin" && (
+          <Button onClick={() => setIsModalOpen(true)}>
+            <Plus size={16} /> Add new site
+          </Button>
+        )}
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 transform hover:scale-105 transition-all duration-200 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-cyan-500"></div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Total Sites</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {sites.length}
-                </p>
-              </div>
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Building2 className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-          </div>
-          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 transform hover:scale-105 transition-all duration-200 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-green-500 to-emerald-500"></div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">
-                  Active Sites
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {activeSites}
-                </p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-xl">
-                <TrendingUp className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-          </div>
-          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 transform hover:scale-105 transition-all duration-200 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-500 to-pink-500"></div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">
-                  Total Budget
-                </p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  ₹{(totalBudget / 1000000).toFixed(1)}M
-                </p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-xl">
-                <DollarSign className="w-6 h-6 text-purple-600" />
-              </div>
-            </div>
-          </div>
-          <div className="relative bg-white rounded-2xl shadow-xl border border-gray-200 p-6 transform hover:scale-105 transition-all duration-200 overflow-hidden">
-            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-orange-500 to-red-500"></div>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Completed</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {completedSites}
-                </p>
-              </div>
-              <div className="p-3 bg-orange-100 rounded-xl">
-                <CheckCircle2 className="w-6 h-6 text-orange-600" />
-              </div>
-            </div>
-          </div>
+      {loading ? (
+        <div className="space-y-6">
+          <SkeletonStatCards />
+          <SkeletonTable />
         </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard label="Total Sites" value={sites.length} icon={Building2} />
+            <StatCard label="Active Sites" value={activeSites} icon={TrendingUp} />
+            <StatCard
+              label="Total Budget"
+              value={`₹${(totalBudget / 1000000).toFixed(1)}M`}
+              icon={DollarSign}
+            />
+            <StatCard label="Completed" value={completedSites} icon={CheckCircle2} />
+          </div>
 
-        <div
-          className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-500 transform overflow-hidden ${
-            isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-          }`}
-        >
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-          <div className="p-6">
-            <div className="flex flex-col lg:flex-row gap-4 mb-6">
+          <Card>
+            <div className="mb-6 flex flex-col gap-4 lg:flex-row">
               <div className="relative flex-grow">
                 <Search
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={20}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+                  size={18}
                 />
                 <input
                   type="text"
@@ -427,13 +309,13 @@ const Sites: React.FC = () => {
                     setCurrentPage(1);
                   }}
                   placeholder="Search sites by name or location..."
-                  className="pl-12 pr-4 py-3 w-full border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                  className="w-full rounded-lg border border-console-border bg-console-bg py-2.5 pl-10 pr-4 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                 />
               </div>
               <div className="relative min-w-[200px]">
                 <Filter
-                  className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
-                  size={18}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+                  size={16}
                 />
                 <select
                   value={selectedProjectStatus}
@@ -441,7 +323,7 @@ const Sites: React.FC = () => {
                     setSelectedProjectStatus(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="pl-12 pr-10 py-3 w-full border border-gray-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white cursor-pointer"
+                  className="w-full appearance-none rounded-lg border border-console-border bg-console-bg py-2.5 pl-10 pr-4 text-sm transition-colors focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100"
                 >
                   {projectStatuses.map((status) => (
                     <option key={status} value={status}>
@@ -449,232 +331,176 @@ const Sites: React.FC = () => {
                     </option>
                   ))}
                 </select>
-                <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </div>
               </div>
             </div>
 
             {filteredSites.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="flex justify-center mb-6">
-                  <div className="p-4 bg-gray-100 rounded-full">
-                    <AlignJustify size={48} className="text-gray-400" />
-                  </div>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-700 mb-2">
-                  No sites found
-                </h3>
-                <p className="text-gray-500 mb-8 max-w-md mx-auto">
-                  We couldn't find any sites matching your search criteria. Try
-                  adjusting your filters or search terms.
-                </p>
-                <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setSelectedProjectStatus("All Statuses");
-                  }}
-                  className="px-6 py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transform hover:scale-105 transition-all duration-200 font-medium"
-                >
-                  Clear All Filters
-                </button>
-              </div>
+              <EmptyState
+                icon={Inbox}
+                title="No sites found"
+                description="We couldn't find any sites matching your search criteria. Try adjusting your filters or search terms."
+                action={
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setSelectedProjectStatus("All Statuses");
+                    }}
+                  >
+                    Clear all filters
+                  </Button>
+                }
+              />
             ) : (
               <>
-                <div className="overflow-hidden rounded-xl border border-gray-200 mb-6">
+                <div className="mb-6 overflow-hidden rounded-console border border-console-border">
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                    <table className="min-w-full divide-y divide-console-border">
+                      <thead className="bg-console-bg">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
                             Site Details
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                            Status & Client
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                            Status &amp; Client
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
                             Financial
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                            Team & Progress
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                            Team &amp; Progress
                           </th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
                             Actions
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white divide-y divide-gray-100">
-                        {currentSites.map((site, index) => {
+                      <tbody className="divide-y divide-console-border bg-white">
+                        {currentSites.map((site) => {
                           const actions = getActionsForRole(userType);
                           return (
                             <tr
                               key={site.id}
-                              className="hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 group cursor-pointer"
-                              style={{ animationDelay: `${index * 50}ms` }}
+                              className="cursor-pointer transition-colors hover:bg-brand-50/40"
                               onClick={() => handleViewSite(site.id)}
                             >
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4">
                                 <div className="flex items-center">
-                                  <div className="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                                    <Building2 className="h-6 w-6 text-white" />
+                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+                                    <Building2 size={18} />
                                   </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                                  <div className="ml-3">
+                                    <div className="text-sm font-semibold text-console-text">
                                       {site.name}
                                     </div>
-                                    <div className="text-sm text-gray-500 flex items-center mt-1">
-                                      <MapPin className="h-3 w-3 mr-1" />
+                                    <div className="mt-0.5 flex items-center text-xs text-console-muted">
+                                      <MapPin size={11} className="mr-1" />
                                       {site.location}
                                     </div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
-                                <div className="space-y-2">
-                                  <div
-                                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                                      site.status
-                                    )}`}
-                                  >
+                              <td className="px-6 py-4">
+                                <div className="space-y-1.5">
+                                  <Badge variant={getStatusVariant(site.status)}>
                                     {getStatusIcon(site.status)}
-                                    <span className="ml-1">{site.status}</span>
-                                  </div>
-                                  <div className="text-sm text-gray-600">
-                                    {site.clientName}
-                                  </div>
+                                    {site.status}
+                                  </Badge>
+                                  <div className="text-sm text-console-muted">{site.clientName}</div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4">
                                 <div className="space-y-1">
-                                  <div className="text-sm font-semibold text-gray-900">
+                                  <div className="text-sm font-semibold text-console-text">
                                     ₹{site.budget.toLocaleString()}
                                   </div>
-                                  <div className="text-xs text-gray-500">
+                                  <div className="text-xs text-console-muted">
                                     Spent: ₹{site.expenses.toLocaleString()}
                                   </div>
-                                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                  <div className="h-1.5 w-full rounded-full bg-console-bg">
                                     <div
-                                      className="bg-gradient-to-r from-blue-500 to-indigo-600 h-1.5 rounded-full transition-all duration-300"
+                                      className="h-1.5 rounded-full bg-brand-600"
                                       style={{
                                         width: `${Math.min(
-                                          (site.expenses / site.budget) * 100,
+                                          site.budget > 0 ? (site.expenses / site.budget) * 100 : 0,
                                           100
                                         )}%`,
                                       }}
-                                    ></div>
+                                    />
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap">
+                              <td className="px-6 py-4">
                                 <div className="space-y-2">
-                                  <div className="flex items-center space-x-4 text-sm text-gray-600">
-                                    <div className="flex items-center">
-                                      <Users className="h-4 w-4 mr-1" />
-                                      {site.siteManagerCount +
-                                        site.architectCount}
-                                    </div>
-                                    <div className="flex items-center">
-                                      <Calendar className="h-4 w-4 mr-1" />
-                                      {site.createdAt}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center">
-                                    <span className="text-xs text-gray-500 mr-2">
-                                      Progress:
+                                  <div className="flex items-center gap-4 text-xs text-console-muted">
+                                    <span className="flex items-center gap-1">
+                                      <Users size={13} />
+                                      {site.siteManagerCount + site.architectCount}
                                     </span>
-                                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar size={13} />
+                                      {site.createdAt}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-console-muted">Progress:</span>
+                                    <div className="h-1.5 flex-1 rounded-full bg-console-bg">
                                       <div
-                                        className="bg-gradient-to-r from-green-500 to-emerald-600 h-2 rounded-full transition-all duration-300"
+                                        className="h-1.5 rounded-full bg-success-600"
                                         style={{
                                           width: `${
                                             site.totalPhases > 0
-                                              ? (site.completedPhases /
-                                                  site.totalPhases) *
-                                                100
+                                              ? (site.completedPhases / site.totalPhases) * 100
                                               : 0
                                           }%`,
                                         }}
-                                      ></div>
+                                      />
                                     </div>
-                                    <span className="text-xs text-gray-600 ml-2">
+                                    <span className="text-xs text-console-muted">
                                       {site.completedPhases}/{site.totalPhases}
                                     </span>
                                   </div>
                                 </div>
                               </td>
                               <td
-                                className="px-6 py-4 whitespace-nowrap"
+                                className="px-6 py-4"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <div className="flex space-x-2">
-                                    <button
-                                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all duration-200"
-                                      onClick={() => handleViewSite(site.id)}
-                                    >
-                                      <Eye size={16} />
-                                    </button>
-                                  {actions.includes("edit") && (
-                                    <button
-                                      className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-all duration-200"
-                                      onClick={() => handleEditSite(site.id)}
-                                    >
-                                      <Edit size={16} />
-                                    </button>
-                                  )}
-                                  {actions.includes("archive") && (
-                                    <button
-                                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all duration-200"
-                                      onClick={() => handleArchiveSite(site.id)}
-                                    >
-                                      <Archive size={16} />
-                                    </button>
-                                  )}
-                                  {actions.includes("manageAttendance") && (
-                                    <button
-                                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-all duration-200"
-                                      onClick={() =>
-                                        handleManageAttendance(site.id)
-                                      }
-                                    >
-                                      <Calendar size={16} />
-                                    </button>
-                                  )}
+                                <div className="flex gap-1">
+                                  <button
+                                    type="button"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                    onClick={() => handleViewSite(site.id)}
+                                    aria-label="View site"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
                                   {actions.includes("addPurchase") && (
                                     <button
-                                      className="p-2 text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 rounded-lg transition-all duration-200"
+                                      type="button"
+                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
                                       onClick={() => handleAddPurchase(site.id)}
+                                      aria-label="Add purchase"
                                     >
                                       <ShoppingCart size={16} />
                                     </button>
                                   )}
                                   {actions.includes("uploadDocuments") && (
                                     <button
-                                      className="p-2 text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-all duration-200"
-                                      onClick={() =>
-                                        handleUploadDocuments(site.id)
-                                      }
+                                      type="button"
+                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                                      onClick={() => handleUploadDocuments(site.id)}
+                                      aria-label="Upload documents"
                                     >
                                       <Upload size={16} />
                                     </button>
                                   )}
                                   {actions.includes("viewProgress") && (
                                     <button
-                                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all duration-200"
-                                      onClick={() =>
-                                        handleViewProgress(site.id)
-                                      }
+                                      type="button"
+                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                                      onClick={() => handleViewProgress(site.id)}
+                                      aria-label="View progress"
                                     >
                                       <TrendingUp size={16} />
                                     </button>
@@ -689,107 +515,87 @@ const Sites: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center justify-between bg-gray-50 px-6 py-4 rounded-xl">
-                  <div className="text-sm text-gray-600 mb-4 sm:mb-0">
+                <div className="flex flex-col items-center justify-between gap-4 rounded-console bg-console-bg px-4 py-3 sm:flex-row">
+                  <p className="text-sm text-console-muted">
                     Showing{" "}
-                    <span className="font-semibold text-gray-900">
-                      {indexOfFirstItem + 1}
-                    </span>{" "}
-                    to{" "}
-                    <span className="font-semibold text-gray-900">
+                    <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
+                    <span className="font-semibold text-console-text">
                       {Math.min(indexOfLastItem, filteredSites.length)}
                     </span>{" "}
-                    of{" "}
-                    <span className="font-semibold text-gray-900">
-                      {filteredSites.length}
-                    </span>{" "}
-                    sites
-                  </div>
-                  <div className="flex items-center space-x-2">
+                    of <span className="font-semibold text-console-text">{filteredSites.length}</span> sites
+                  </p>
+                  <div className="flex items-center gap-1">
                     <button
+                      type="button"
                       onClick={() => paginate(currentPage - 1)}
                       disabled={currentPage === 1}
-                      className={`p-2 rounded-lg transition-all duration-200 ${
-                        currentPage === 1
-                          ? "text-gray-300 cursor-not-allowed"
-                          : "text-gray-600 hover:bg-white hover:shadow-md hover:text-blue-600"
-                      }`}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <ChevronLeft size={20} />
+                      <ChevronLeft size={18} />
                     </button>
-                    <div className="flex space-x-1">
-                      {[...Array(totalPages)].map((_, index) => {
-                        const pageNum = index + 1;
-                        if (
-                          pageNum === 1 ||
-                          pageNum === totalPages ||
-                          (pageNum >= currentPage - 1 &&
-                            pageNum <= currentPage + 1)
-                        ) {
-                          return (
-                            <button
-                              key={pageNum}
-                              onClick={() => paginate(pageNum)}
-                              className={`w-10 h-10 flex items-center justify-center rounded-lg font-medium transition-all duration-200 ${
-                                currentPage === pageNum
-                                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg"
-                                  : "text-gray-600 hover:bg-white hover:shadow-md hover:text-blue-600"
-                              }`}
-                            >
-                              {pageNum}
-                            </button>
-                          );
-                        }
-                        if (
-                          pageNum === currentPage - 2 ||
-                          pageNum === currentPage + 2
-                        ) {
-                          return (
-                            <span
-                              key={pageNum}
-                              className="w-10 h-10 flex items-center justify-center text-gray-400"
-                            >
-                              ...
-                            </span>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
+                    {[...Array(totalPages)].map((_, i) => {
+                      const pageNum = i + 1;
+                      if (
+                        pageNum === 1 ||
+                        pageNum === totalPages ||
+                        (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            type="button"
+                            key={pageNum}
+                            onClick={() => paginate(pageNum)}
+                            className={cn(
+                              "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium transition-colors",
+                              currentPage === pageNum
+                                ? "bg-brand-700 text-white"
+                                : "text-console-muted hover:bg-white",
+                            )}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                      if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                        return (
+                          <span key={pageNum} className="px-1 text-console-muted">
+                            …
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
                     <button
+                      type="button"
                       onClick={() => paginate(currentPage + 1)}
                       disabled={currentPage === totalPages}
-                      className={`p-2 rounded-lg transition-all duration-200 ${
-                        currentPage === totalPages
-                          ? "text-gray-300 cursor-not-allowed"
-                          : "text-gray-600 hover:bg-white hover:shadow-md hover:text-blue-600"
-                      }`}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
-                      <ChevronRight size={20} />
+                      <ChevronRight size={18} />
                     </button>
                   </div>
                 </div>
               </>
             )}
-          </div>
-        </div>
+          </Card>
+        </>
+      )}
 
-        {isModalOpen && (
-          <AddSiteModal
-            onClose={() => setIsModalOpen(false)}
-            onSubmit={handleModalSubmit}
-            clients={clients}
-            siteManagers={siteManagers}
-            architects={architects}
-          />
-        )}
-        {isAddPurchaseModalOpen && (
-          <AddPurchaseModal
-            siteId={selectedSiteId!}
-            onClose={() => setIsAddPurchaseModalOpen(false)}
-          />
-        )}
-      </div>
+      {isModalOpen && (
+        <AddSiteModal
+          onClose={() => setIsModalOpen(false)}
+          onSubmit={handleModalSubmit}
+          clients={clients}
+          siteManagers={siteManagers}
+          architects={architects}
+        />
+      )}
+      {isAddPurchaseModalOpen && (
+        <AddPurchaseModal
+          siteId={selectedSiteId!}
+          onClose={() => setIsAddPurchaseModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
