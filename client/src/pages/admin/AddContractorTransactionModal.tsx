@@ -9,7 +9,7 @@ interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; balance: number }[];
+  siteAssignments: { site: { id: string; name: string }; totalAmount: number }[];
 }
 
 interface AddContractorTransactionModalProps {
