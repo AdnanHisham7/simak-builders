@@ -1,5 +1,7 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { X, MapPin, AlertCircle, Search } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Search } from "lucide-react";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface Contractor {
   id: string;
@@ -8,7 +10,7 @@ interface Contractor {
   phone: string;
   company: string;
   status: "active" | "blocked";
-  siteAssignments: { site: { id: string; name: string }; }[];
+  siteAssignments: { site: { id: string; name: string } }[];
 }
 
 interface Site {
@@ -33,13 +35,11 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
   sites = [],
   onAssign,
   setError,
-  sizeStyles = "max-w-2xl w-full mx-4",
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [localSelectedSiteId, setLocalSelectedSiteId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reset form when modal is closed
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery("");
@@ -48,18 +48,13 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
     }
   }, [isOpen]);
 
-  const assignedSiteIds =
-    contractor?.siteAssignments.map((a) => a.site.id) || [];
-  const availableSites = sites.filter(
-    (site) => !assignedSiteIds.includes(site.id),
-  );
+  const assignedSiteIds = contractor?.siteAssignments.map((a) => a.site.id) || [];
+  const availableSites = sites.filter((site) => !assignedSiteIds.includes(site.id));
 
   const filteredSites = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return availableSites;
-    return availableSites.filter((site) =>
-      site.name.toLowerCase().includes(query),
-    );
+    return availableSites.filter((site) => site.name.toLowerCase().includes(query));
   }, [availableSites, searchQuery]);
 
   const handleAssign = async () => {
@@ -75,87 +70,63 @@ const ContractorAssignSiteModal: React.FC<ContractorAssignSiteModalProps> = ({
     }
   };
 
-  if (!isOpen || !contractor) return null;
+  if (!contractor) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div
-        className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform ${sizeStyles}`}
-      >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-green-500 via-blue-500 to-purple-500 rounded-t-2xl" />
-
-        <div className="p-8">
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-              <MapPin size={24} className="mr-3 text-green-600" />
-              Assign Site to {contractor.name}
-            </h2>
-            <button
-              onClick={onClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="relative mb-6">
-            <Search
-              className="absolute left-3 top-3.5 text-gray-400"
-              size={20}
-            />
-            <input
-              type="text"
-              placeholder="Search sites..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50"
-            />
-          </div>
-
-          <label className="block text-gray-700 text-sm font-semibold mb-3">
-            Select Available Site
-          </label>
-
-          <select
-            value={localSelectedSiteId}
-            onChange={(e) => setLocalSelectedSiteId(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all"
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      disableClose={isSubmitting}
+      closeOnOverlayClick={!isSubmitting}
+      title={`Assign Site to ${contractor.name}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleAssign}
+            disabled={!localSelectedSiteId}
+            loading={isSubmitting}
           >
-            <option value="">Choose a site to assign...</option>
-            {filteredSites.map((site) => (
-              <option key={site.id} value={site.id}>
-                {site.name}
-              </option>
-            ))}
-          </select>
-
-          {filteredSites.length === 0 && (
-            <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
-              {searchQuery.trim()
-                ? "No matching sites found."
-                : "No available sites remaining."}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-4 mt-8">
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-6 py-3 text-gray-700 border-2 border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleAssign}
-              disabled={!localSelectedSiteId || isSubmitting}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {isSubmitting ? "Assigning..." : "Assign Site"}
-            </button>
-          </div>
-        </div>
+            Assign site
+          </Button>
+        </>
+      }
+    >
+      <div className="relative mb-4">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
+        <input
+          type="text"
+          placeholder="Search sites..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+        />
       </div>
-    </div>
+
+      <label className="mb-1.5 block text-sm font-medium text-console-text">
+        Select available site
+      </label>
+      <select
+        value={localSelectedSiteId}
+        onChange={(e) => setLocalSelectedSiteId(e.target.value)}
+        className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+      >
+        <option value="">Choose a site to assign...</option>
+        {filteredSites.map((site) => (
+          <option key={site.id} value={site.id}>
+            {site.name}
+          </option>
+        ))}
+      </select>
+
+      {filteredSites.length === 0 && (
+        <div className="mt-4 rounded-console border border-warning-100 bg-warning-50 p-4 text-sm text-warning-800">
+          {searchQuery.trim() ? "No matching sites found." : "No available sites remaining."}
+        </div>
+      )}
+    </Modal>
   );
 };
 

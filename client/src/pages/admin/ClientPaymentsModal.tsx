@@ -1,7 +1,12 @@
-import React, { useEffect, useState } from "react";
-import { X, CheckCircle, Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CheckCircle, Trash2, Wallet } from "lucide-react";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
+import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PageLoader from "@/components/ui/PageLoader";
+import EmptyState from "@/components/ui/EmptyState";
+import Badge from "@/components/ui/Badge";
 
 interface ClientPayment {
   _id: string;
@@ -16,7 +21,7 @@ interface ClientPayment {
 interface ClientPaymentsModalProps {
   siteId: string;
   onClose: () => void;
-  onPaymentChanged: () => void; // refresh parent data
+  onPaymentChanged: () => void;
 }
 
 const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
@@ -26,15 +31,15 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
 }) => {
   const [payments, setPayments] = useState<ClientPayment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ClientPayment | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchPayments = async () => {
     try {
-      const { data } = await privateClient.get(
-        `/client/${siteId}/client-transactions`,
-      );
+      const { data } = await privateClient.get(`/client/${siteId}/client-transactions`);
       setPayments(data);
     } catch (err) {
-      console.error(err);
       toast.error("Failed to load payments");
     } finally {
       setLoading(false);
@@ -43,113 +48,96 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
 
   useEffect(() => {
     fetchPayments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [siteId]);
 
   const handleVerify = async (transactionId: string) => {
+    setVerifyingId(transactionId);
     try {
       await privateClient.put(`/client/transactions/${transactionId}/verify`);
       toast.success("Payment verified successfully");
       fetchPayments();
-      onPaymentChanged(); // refresh site budget and expenses
+      onPaymentChanged();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Verification failed");
+    } finally {
+      setVerifyingId(null);
     }
   };
 
-  const handleDelete = async (transactionId: string) => {
-    if (
-      !window.confirm("Delete this unverified payment? This cannot be undone.")
-    )
-      return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await privateClient.delete(`/client/transactions/${transactionId}`);
+      await privateClient.delete(`/client/transactions/${deleteTarget._id}`);
       toast.success("Payment deleted");
       fetchPayments();
-      onPaymentChanged(); // in case any changes (though unverified didn't affect budgets)
+      onPaymentChanged();
+      setDeleteTarget(null);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[80vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white">
-          <h2 className="text-2xl font-bold text-gray-900">Client Payments</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-600 hover:text-gray-900"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-        <div className="p-6">
-          {loading ? (
-            <p className="text-center">Loading...</p>
-          ) : payments.length === 0 ? (
-            <p className="text-center text-gray-500">No payments recorded.</p>
-          ) : (
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+    <>
+      <Modal isOpen onClose={onClose} title="Client Payments" size="lg">
+        {loading ? (
+          <PageLoader label="Loading payments" fullHeight={false} />
+        ) : payments.length === 0 ? (
+          <EmptyState icon={Wallet} title="No payments recorded" />
+        ) : (
+          <div className="overflow-x-auto rounded-console border border-console-border">
+            <table className="min-w-full divide-y divide-console-border">
+              <thead className="bg-console-bg">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Notes
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                    Actions
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Notes</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="divide-y divide-console-border bg-white">
                 {payments.map((payment) => (
                   <tr key={payment._id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {new Date(
-                        payment.transactionDate || payment.createdAt,
-                      ).toLocaleDateString()}
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                      {new Date(payment.transactionDate || payment.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap font-semibold">
+                    <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-console-text">
                       ₹{payment.amount.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-6 py-4 max-w-xs truncate">
+                    <td className="max-w-xs truncate px-4 py-3.5 text-sm text-console-muted">
                       {payment.notes || "-"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-1 text-xs font-medium rounded-full ${
-                          payment.status === "verified"
-                            ? "bg-green-100 text-green-800"
-                            : "bg-yellow-100 text-yellow-800"
-                        }`}
-                      >
+                    <td className="whitespace-nowrap px-4 py-3.5">
+                      <Badge variant={payment.status === "verified" ? "success" : "warning"}>
                         {payment.status}
-                      </span>
+                      </Badge>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="whitespace-nowrap px-4 py-3.5">
                       {payment.status === "pending" && (
-                        <div className="flex space-x-2">
+                        <div className="flex items-center gap-1">
                           <button
+                            type="button"
                             onClick={() => handleVerify(payment._id)}
-                            className="text-green-600 hover:text-green-800"
-                            title="Verify Payment"
+                            disabled={verifyingId === payment._id}
+                            aria-label="Verify payment"
+                            title="Verify payment"
+                            className="rounded-lg p-2 text-success-600 transition-colors hover:bg-success-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
-                            <CheckCircle className="w-5 h-5" />
+                            <CheckCircle size={16} />
                           </button>
                           <button
-                            onClick={() => handleDelete(payment._id)}
-                            className="text-red-600 hover:text-red-800"
-                            title="Delete Payment"
+                            type="button"
+                            onClick={() => setDeleteTarget(payment)}
+                            aria-label="Delete payment"
+                            title="Delete payment"
+                            className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
                           >
-                            <Trash2 className="w-5 h-5" />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       )}
@@ -158,10 +146,21 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
-      </div>
-    </div>
+          </div>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete payment"
+        message="Delete this unverified payment? This cannot be undone."
+        variant="danger"
+        confirmText="Delete"
+        isLoading={deleting}
+      />
+    </>
   );
 };
 
