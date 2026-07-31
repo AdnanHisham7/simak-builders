@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   getEmployees,
   createEmployee,
@@ -10,6 +10,28 @@ import {
   Employee,
 } from "@/services/employeeService";
 import MarkEmployeeAttendanceModal from "./MarkEmployeeAttendanceModal";
+import { toast } from "sonner";
+import {
+  Plus,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  BarChart3,
+  CalendarCheck,
+  Pencil,
+  Trash2,
+  Users,
+  Inbox,
+} from "lucide-react";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import EmptyState from "@/components/ui/EmptyState";
+import PageLoader from "@/components/ui/PageLoader";
+import { SkeletonTable } from "@/components/ui/Skeleton";
+import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface EmployeeFormData {
   name: string;
@@ -31,14 +53,18 @@ interface Attendance {
   updatedAt: string;
 }
 
+type SortField = "name" | "email" | "position";
+
 const Employees: React.FC = () => {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
-  const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState<EmployeeFormData>({
     name: "",
     email: "",
@@ -49,7 +75,7 @@ const Employees: React.FC = () => {
 
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [positionFilter, setPositionFilter] = useState<string>("");
-  const [sortBy, setSortBy] = useState<"name" | "email" | "position">("name");
+  const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] =
@@ -88,21 +114,14 @@ const Employees: React.FC = () => {
     }
   }, [isAttendanceModalOpen, selectedEmployeeId]);
 
-  useEffect(() => {
-    if (isModalOpen || isAttendanceModalOpen) {
-      setTimeout(() => setIsAnimating(true), 10);
-    } else {
-      setIsAnimating(false);
-    }
-  }, [isModalOpen, isAttendanceModalOpen]);
-
   const fetchEmployees = async () => {
     try {
       setLoading(true);
       const data = await getEmployees();
       setEmployees(data);
+      setPageError(null);
     } catch (err) {
-      setError("Failed to fetch employees");
+      setPageError("Failed to fetch employees");
     } finally {
       setLoading(false);
     }
@@ -115,7 +134,6 @@ const Employees: React.FC = () => {
       const data = await getAttendanceByEmployee(employeeId);
       setAttendanceData(data);
     } catch (err) {
-      console.error("Failed to fetch attendance:", err);
       setAttendanceError("Failed to fetch attendance data");
     } finally {
       setAttendanceLoading(false);
@@ -137,7 +155,7 @@ const Employees: React.FC = () => {
       return matchesSearch && matchesPosition;
     });
 
-    filtered.sort((a, b) => {
+    filtered = [...filtered].sort((a, b) => {
       const aValue = a[sortBy].toLowerCase();
       const bValue = b[sortBy].toLowerCase();
       return sortOrder === "asc"
@@ -180,28 +198,22 @@ const Employees: React.FC = () => {
   };
 
   const closeModal = () => {
-    setIsAnimating(false);
-    setTimeout(() => {
-      setIsModalOpen(false);
-      setCurrentEmployee(null);
-    }, 200);
+    setIsModalOpen(false);
+    setCurrentEmployee(null);
   };
 
   const closeAttendanceModal = () => {
-    setIsAnimating(false);
-    setTimeout(() => {
-      setIsAttendanceModalOpen(false);
-      setSelectedEmployeeId(null);
-      setSelectedEmployeeName(null);
-      setAttendanceData(null);
-      setAttendanceError(null);
-      setTotalSalary(null);
-      setAttendanceIds([]);
-      setEndDate("");
-      setStartDate("");
-      setPaymentFilter("all");
-      setSearchTermAttendance("");
-    }, 200);
+    setIsAttendanceModalOpen(false);
+    setSelectedEmployeeId(null);
+    setSelectedEmployeeName(null);
+    setAttendanceData(null);
+    setAttendanceError(null);
+    setTotalSalary(null);
+    setAttendanceIds([]);
+    setEndDate("");
+    setStartDate("");
+    setPaymentFilter("all");
+    setSearchTermAttendance("");
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -214,27 +226,36 @@ const Employees: React.FC = () => {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       if (isEditMode && currentEmployee) {
         await updateEmployee(currentEmployee.id, formData);
+        toast.success("Employee updated");
       } else {
         await createEmployee(formData);
+        toast.success("Employee created");
       }
       closeModal();
       fetchEmployees();
     } catch (err) {
-      setError("Operation failed");
+      toast.error("Operation failed");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this employee?")) {
-      try {
-        await deleteEmployee(id);
-        fetchEmployees();
-      } catch (err) {
-        setError("Failed to delete employee");
-      }
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteEmployee(deleteTarget.id);
+      toast.success("Employee deleted");
+      setDeleteTarget(null);
+      fetchEmployees();
+    } catch (err) {
+      toast.error("Failed to delete employee");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -249,7 +270,7 @@ const Employees: React.FC = () => {
       setTotalSalary(totalSalary);
       setAttendanceIds(attendanceIds);
     } catch (err) {
-      setAttendanceError("Failed to calculate salary");
+      toast.error("Failed to calculate salary");
     }
   };
 
@@ -257,15 +278,16 @@ const Employees: React.FC = () => {
     if (!attendanceIds.length) return;
     try {
       await markAttendancesPaid(attendanceIds);
+      toast.success("Attendances marked as paid");
       setTotalSalary(null);
       setAttendanceIds([]);
       fetchAttendance(selectedEmployeeId!);
     } catch (err) {
-      setAttendanceError("Failed to mark attendances as paid");
+      toast.error("Failed to mark attendances as paid");
     }
   };
 
-  const handleSort = (field: "name" | "email" | "position") => {
+  const handleSort = (field: SortField) => {
     if (sortBy === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
@@ -274,26 +296,15 @@ const Employees: React.FC = () => {
     }
   };
 
-  const getSortIcon = (field: "name" | "email" | "position") => {
-    if (sortBy !== field) return "↕️";
-    return sortOrder === "asc" ? "↑" : "↓";
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortBy !== field) return <ArrowUpDown size={13} className="text-console-muted" />;
+    return sortOrder === "asc" ? <ArrowUp size={13} /> : <ArrowDown size={13} />;
   };
 
   const getStatusBadge = (status: number) => {
     const percentage = (status * 100).toFixed(0);
-    const color =
-      status === 1
-        ? "bg-green-100 text-green-800 border-green-200"
-        : status === 0
-        ? "bg-red-100 text-red-800 border-red-200"
-        : "bg-blue-100 text-blue-800 border-blue-200";
-    return (
-      <span
-        className={`px-2 py-1 text-xs font-medium rounded-full border ${color}`}
-      >
-        {percentage}%
-      </span>
-    );
+    const variant = status === 1 ? "success" : status === 0 ? "error" : "info";
+    return <Badge variant={variant}>{percentage}%</Badge>;
   };
 
   const filteredAttendanceData = useMemo(() => {
@@ -331,588 +342,425 @@ const Employees: React.FC = () => {
     return filtered;
   }, [attendanceData, startDate, endDate, paymentFilter, searchTermAttendance]);
 
-  if (loading)
+  if (pageError) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <h3 className="text-lg font-semibold text-console-text">Something went wrong</h3>
+          <p className="mt-1 text-sm text-console-muted">{pageError}</p>
+          <Button className="mt-5" onClick={fetchEmployees}>
+            Try again
+          </Button>
+        </Card>
       </div>
     );
-  if (error)
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
-        {error}
-      </div>
-    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Employee Management
-              </h1>
-              <p className="text-gray-600 mt-2">
-                Manage your team members and track their attendance
-              </p>
-            </div>
-            <button
-              onClick={openCreateModal}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 font-medium flex items-center space-x-2"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                />
-              </svg>
-              <span>Add Employee</span>
-            </button>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Employee Management</h1>
+          <p className="mt-0.5 text-sm text-console-muted">
+            Manage your team members and track their attendance
+          </p>
         </div>
+        <Button onClick={openCreateModal}>
+          <Plus size={16} /> Add employee
+        </Button>
+      </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-6 mb-8">
-          {/* <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" /> */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Employees
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <svg
-                    className="h-5 w-5 text-gray-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                    />
-                  </svg>
+      {loading ? (
+        <SkeletonTable />
+      ) : (
+        <>
+          <Card>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="md:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Search employees
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={16} />
+                  <input
+                    type="text"
+                    placeholder="Search by name, email, or phone..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  />
                 </div>
-                <input
-                  type="text"
-                  placeholder="Search by name, email, or phone..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Filter by position
+                </label>
+                <select
+                  value={positionFilter}
+                  onChange={(e) => setPositionFilter(e.target.value)}
+                  className="w-full rounded-lg border border-console-border px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="">All Positions</option>
+                  {uniquePositions.map((position) => (
+                    <option key={position} value={position}>
+                      {position}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <Button
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setPositionFilter("");
+                  }}
+                >
+                  Clear filters
+                </Button>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Filter by Position
-              </label>
-              <select
-                value={positionFilter}
-                onChange={(e) => setPositionFilter(e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              >
-                <option value="">All Positions</option>
-                {uniquePositions.map((position) => (
-                  <option key={position} value={position}>
-                    {position}
-                  </option>
-                ))}
-              </select>
+            <div className="mt-4 flex items-center justify-between text-sm text-console-muted">
+              <span>
+                Showing {filteredAndSortedEmployees.length} of {employees.length} employees
+              </span>
+              <span>Total positions: {uniquePositions.length}</span>
             </div>
-            <div className="flex items-end">
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setPositionFilter("");
-                }}
-                className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium"
-              >
-                Clear Filters
-              </button>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-between text-sm text-gray-600">
-            <span>
-              Showing {filteredAndSortedEmployees.length} of {employees.length}{" "}
-              employees
-            </span>
-            <span>Total Positions: {uniquePositions.length}</span>
-          </div>
-        </div>
+          </Card>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-          {filteredAndSortedEmployees.length === 0 ? (
-            <div className="p-12 text-center">
-              <svg
-                className="mx-auto h-12 w-12 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
-                />
-              </svg>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">
-                No employees found
-              </h3>
-              <p className="mt-2 text-gray-500">
-                {searchTerm || positionFilter
-                  ? "Try adjusting your search criteria or filters."
-                  : "Get started by adding your first employee."}
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                  <tr>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("name")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Name</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("name")}
+          <Card>
+            {filteredAndSortedEmployees.length === 0 ? (
+              <EmptyState
+                icon={Users}
+                title="No employees found"
+                description={
+                  searchTerm || positionFilter
+                    ? "Try adjusting your search criteria or filters."
+                    : "Get started by adding your first employee."
+                }
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-console-border">
+                  <thead className="bg-console-bg">
+                    <tr>
+                      <th
+                        className="cursor-pointer px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted"
+                        onClick={() => handleSort("name")}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          Name <SortIcon field="name" />
                         </span>
-                      </div>
-                    </th>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("email")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Email</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("email")}
+                      </th>
+                      <th
+                        className="cursor-pointer px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted"
+                        onClick={() => handleSort("email")}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          Email <SortIcon field="email" />
                         </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Phone
-                    </th>
-                    <th
-                      className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition-colors duration-200"
-                      onClick={() => handleSort("position")}
-                    >
-                      <div className="flex items-center space-x-1">
-                        <span>Position</span>
-                        <span className="text-gray-400">
-                          {getSortIcon("position")}
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Phone
+                      </th>
+                      <th
+                        className="cursor-pointer px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted"
+                        onClick={() => handleSort("position")}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          Position <SortIcon field="position" />
                         </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredAndSortedEmployees.map((employee) => (
-                    <tr
-                      key={employee.id}
-                      className="hover:bg-gray-50 transition-colors duration-150"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-console-border">
+                    {filteredAndSortedEmployees.map((employee) => (
+                      <tr key={employee.id} className="hover:bg-console-bg">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
                             <div
-                              className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-white font-medium text-sm"
-                              title={`Total Paid Salary: $${(
-                                employee.totalPaidSalary || 0
-                              ).toFixed(2)}`}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800"
+                              title={`Total paid salary: ₹${(employee.totalPaidSalary || 0).toLocaleString("en-IN")}`}
                             >
                               {employee.name.charAt(0).toUpperCase()}
                             </div>
+                            <span className="text-sm font-medium text-console-text">{employee.name}</span>
                           </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {employee.name}
-                            </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-console-muted">{employee.email}</td>
+                        <td className="px-4 py-3.5 text-sm text-console-muted">{employee.phone}</td>
+                        <td className="px-4 py-3.5">
+                          <Badge variant="info">{employee.position}</Badge>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openAttendanceModal(employee)}
+                              aria-label="View attendance"
+                              title="View attendance"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                            >
+                              <BarChart3 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setMarkAttendanceTarget({ id: employee.id, name: employee.name })
+                              }
+                              aria-label="Mark attendance"
+                              title="Mark attendance"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                            >
+                              <CalendarCheck size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(employee)}
+                              aria-label="Edit employee"
+                              title="Edit employee"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                            >
+                              <Pencil size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(employee)}
+                              aria-label="Delete employee"
+                              title="Delete employee"
+                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {employee.email}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">
-                          {employee.phone}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex px-3 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 border border-blue-200">
-                          {employee.position}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <button
-                            onClick={() => openAttendanceModal(employee)}
-                            className="px-3 py-1.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            📊 Attendance
-                          </button>
-                          <button
-                            onClick={() =>
-                              setMarkAttendanceTarget({
-                                id: employee.id,
-                                name: employee.name,
-                              })
-                            }
-                            className="px-3 py-1.5 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            ✅ Mark Attendance
-                          </button>
-                          <button
-                            onClick={() => openEditModal(employee)}
-                            className="px-3 py-1.5 bg-gradient-to-r from-yellow-500 to-orange-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            ✏️ Edit
-                          </button>
-                          <button
-                            onClick={() => handleDelete(employee.id)}
-                            className="px-3 py-1.5 bg-gradient-to-r from-red-500 to-pink-600 text-white rounded-lg text-xs font-medium hover:shadow-lg transition-all duration-200 transform hover:scale-105"
-                          >
-                            🗑️ Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
+        </>
+      )}
+
+      <Modal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title={isEditMode ? "Edit Employee" : "Add Employee"}
+      >
+        <form onSubmit={handleFormSubmit} className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Full name</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleInputChange}
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="Enter full name"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Email address</label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleInputChange}
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="Enter email address"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Phone number</label>
+            <input
+              type="text"
+              name="phone"
+              value={formData.phone}
+              onChange={handleInputChange}
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="Enter phone number"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Position</label>
+            <input
+              type="text"
+              name="position"
+              value={formData.position}
+              onChange={handleInputChange}
+              required
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="Enter job position"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Daily wage (₹)</label>
+            <input
+              type="number"
+              name="dailyWage"
+              value={formData.dailyWage}
+              onChange={handleInputChange}
+              required
+              min="0"
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              placeholder="Enter daily wage"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={closeModal} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={isSubmitting}>
+              {isEditMode ? "Update employee" : "Create employee"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        isOpen={isAttendanceModalOpen}
+        onClose={closeAttendanceModal}
+        title={`Attendance records for ${selectedEmployeeName ?? ""}`}
+        size="xl"
+      >
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Start date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">End date</label>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+          <div className="flex items-end">
+            <Button className="w-full" onClick={handleCalculateSalary}>
+              Calculate salary
+            </Button>
+          </div>
         </div>
 
-        {isModalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-            <div
-              className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden w-full max-w-md ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-              <div className="p-6 mt-2">
-                <h2 className="text-2xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  {isEditMode ? "✏️ Edit Employee" : "➕ Add Employee"}
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter full name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Phone Number
-                    </label>
-                    <input
-                      type="text"
-                      name="phone"
-                      value={formData.phone}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Position
-                    </label>
-                    <input
-                      type="text"
-                      name="position"
-                      value={formData.position}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter job position"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Daily Wage
-                    </label>
-                    <input
-                      type="number"
-                      name="dailyWage"
-                      value={formData.dailyWage}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      placeholder="Enter daily wage"
-                    />
-                  </div>
-                  <div className="flex justify-end space-x-3 pt-4">
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="px-6 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-all duration-200 font-medium"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleFormSubmit}
-                      className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:shadow-lg transition-all duration-200 transform hover:scale-105 font-medium"
-                    >
-                      {isEditMode ? "Update Employee" : "Create Employee"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
+        {totalSalary !== null && (
+          <div className="mb-6 rounded-console border border-success-100 bg-success-50 p-4">
+            <p className="text-sm font-semibold text-success-700">
+              Total salary: ₹{totalSalary.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+            </p>
+            <Button size="sm" variant="secondary" className="mt-3" onClick={handleConfirmPayment}>
+              Confirm payment
+            </Button>
           </div>
         )}
 
-        {isAttendanceModalOpen && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50 p-4">
-            <div
-              className={`relative bg-white rounded-2xl shadow-2xl border border-gray-200 transition-all duration-200 transform overflow-hidden w-full max-w-6xl max-h-[90vh] ${
-                isAnimating ? "scale-100 opacity-100" : "scale-95 opacity-0"
-              }`}
-              onClick={(e) => e.stopPropagation()}
+        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">
+              Filter by payment status
+            </label>
+            <select
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value as "all" | "paid" | "unpaid")}
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             >
-              <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-              <div className="p-6 mt-2 overflow-y-auto max-h-[calc(90vh-2rem)]">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                    📊 Attendance Records for {selectedEmployeeName}
-                  </h2>
-                  <button
-                    onClick={closeAttendanceModal}
-                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors duration-200"
-                  >
-                    <svg
-                      className="w-6 h-6"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M6 18L18 6M6 6l12 12"
-                      />
-                    </svg>
-                  </button>
-                </div>
-
-                <div className="mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Start Date
-                      </label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        End Date
-                      </label>
-                      <input
-                        type="date"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <button
-                        onClick={handleCalculateSalary}
-                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all duration-200 font-medium"
-                      >
-                        Calculate Salary
-                      </button>
-                    </div>
-                  </div>
-                  {totalSalary !== null && (
-                    <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-xl">
-                      <p className="text-green-800">
-                        Total Salary: ${totalSalary.toFixed(2)}
-                      </p>
-                      <button
-                        onClick={handleConfirmPayment}
-                        className="mt-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all duration-200 font-medium"
-                      >
-                        Confirm Payment
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Filter by Payment Status
-                    </label>
-                    <select
-                      value={paymentFilter}
-                      onChange={(e) =>
-                        setPaymentFilter(
-                          e.target.value as "all" | "paid" | "unpaid"
-                        )
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    >
-                      <option value="all">All</option>
-                      <option value="paid">Paid</option>
-                      <option value="unpaid">Unpaid</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Search Attendance
-                    </label>
-                    <input
-                      type="text"
-                      value={searchTermAttendance}
-                      onChange={(e) => setSearchTermAttendance(e.target.value)}
-                      placeholder="Search by site, date, or marked by"
-                      className="w-full px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                    />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 mb-4">
-                  Showing {filteredAttendanceData.length} records
-                </p>
-
-                {attendanceLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                    <span className="ml-3 text-gray-600">
-                      Loading attendance data...
-                    </span>
-                  </div>
-                ) : attendanceError ? (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-                    <p className="text-red-800">{attendanceError}</p>
-                  </div>
-                ) : filteredAttendanceData.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Site
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Date
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Daily Wage
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Paid
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Paid At
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Marked By
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Created
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {filteredAttendanceData.map((record) => (
-                          <tr key={record.id}>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {record.site.name}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {new Date(record.date).toLocaleDateString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {getStatusBadge(record.status)}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              ${record.dailyWage}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {record.isPaid ? "Yes" : "No"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {record.isPaid
-                                ? new Date(record.updatedAt).toLocaleString()
-                                : "-"}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {record.markedBy.name}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              {new Date(record.createdAt).toLocaleString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="p-6 text-center">
-                    <p className="text-gray-500">
-                      No attendance records found.
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+              <option value="all">All</option>
+              <option value="paid">Paid</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
           </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-console-text">Search attendance</label>
+            <input
+              type="text"
+              value={searchTermAttendance}
+              onChange={(e) => setSearchTermAttendance(e.target.value)}
+              placeholder="Search by site, date, or marked by"
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            />
+          </div>
+        </div>
+        <p className="mb-4 text-sm text-console-muted">
+          Showing {filteredAttendanceData.length} records
+        </p>
+
+        {attendanceLoading ? (
+          <PageLoader label="Loading attendance data" fullHeight={false} />
+        ) : attendanceError ? (
+          <div className="rounded-console border border-danger-100 bg-danger-50 p-4 text-sm text-danger-700">
+            {attendanceError}
+          </div>
+        ) : filteredAttendanceData.length > 0 ? (
+          <div className="overflow-x-auto rounded-console border border-console-border">
+            <table className="min-w-full divide-y divide-console-border">
+              <thead className="bg-console-bg">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Site</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Daily Wage</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Paid</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Paid At</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Marked By</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Created</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-console-border bg-white">
+                {filteredAttendanceData.map((record) => (
+                  <tr key={record.id}>
+                    <td className="px-4 py-3 text-sm text-console-text">{record.site.name}</td>
+                    <td className="px-4 py-3 text-sm text-console-text">
+                      {new Date(record.date).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-3">{getStatusBadge(record.status)}</td>
+                    <td className="px-4 py-3 text-sm text-console-text">
+                      ₹{record.dailyWage.toLocaleString("en-IN")}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-console-text">
+                      {record.isPaid ? "Yes" : "No"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-console-muted">
+                      {record.isPaid ? new Date(record.updatedAt).toLocaleString() : "-"}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-console-text">{record.markedBy.name}</td>
+                    <td className="px-4 py-3 text-sm text-console-muted">
+                      {new Date(record.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState icon={Inbox} title="No attendance records found" />
         )}
-      </div>
+      </Modal>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete employee"
+        message={`Are you sure you want to delete ${deleteTarget?.name}? This action cannot be undone.`}
+        variant="danger"
+        confirmText="Delete"
+        isLoading={isDeleting}
+      />
 
       {markAttendanceTarget && (
         <MarkEmployeeAttendanceModal
