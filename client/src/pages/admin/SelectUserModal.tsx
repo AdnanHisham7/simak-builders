@@ -1,6 +1,9 @@
-// SelectUserModal.tsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { Users } from "lucide-react";
 import { getUsersByRole, User } from "@/services/userService";
+import Modal from "@/components/ui/Modal";
+import PageLoader from "@/components/ui/PageLoader";
+import EmptyState from "@/components/ui/EmptyState";
 
 interface SelectUserModalProps {
   role: string;
@@ -24,46 +27,47 @@ const SelectUserModal: React.FC<SelectUserModalProps> = ({
       try {
         const data = await getUsersByRole(role);
         const availableUsers = data.filter(
-          (user) => !excludedIds.includes(user.id)
+          (user) => !excludedIds.includes(user.id),
         );
         setUsers(availableUsers);
-        setLoading(false);
       } catch (err) {
         setError("Failed to fetch users");
+      } finally {
         setLoading(false);
       }
     };
     fetchUsers();
   }, [role, excludedIds]);
 
-  if (loading) return <div className="p-4">Loading...</div>;
-  if (error) return <div className="p-4 text-red-600">{error}</div>;
-
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg p-6 w-96">
-        <h2 className="text-xl font-bold mb-4">
-          Select {role.charAt(0).toUpperCase() + role.slice(1)}
-        </h2>
-        <ul className="max-h-60 overflow-y-auto mb-4">
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={`Select ${role.charAt(0).toUpperCase() + role.slice(1)}`}
+      size="sm"
+    >
+      {loading ? (
+        <PageLoader label="Loading users" fullHeight={false} />
+      ) : error ? (
+        <p className="text-sm text-danger-600">{error}</p>
+      ) : users.length === 0 ? (
+        <EmptyState icon={Users} title="No available users" description="Everyone with this role is already assigned." />
+      ) : (
+        <div className="max-h-72 space-y-1 overflow-y-auto">
           {users.map((user) => (
-            <li
+            <button
+              type="button"
               key={user.id}
-              className="p-2 hover:bg-gray-100 cursor-pointer"
               onClick={() => onSelect(user)}
+              className="flex w-full flex-col items-start rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-brand-50"
             >
-              {user.name} ({user.email})
-            </li>
+              <span className="text-sm font-medium text-console-text">{user.name}</span>
+              <span className="text-xs text-console-muted">{user.email}</span>
+            </button>
           ))}
-        </ul>
-        <button
-          onClick={onClose}
-          className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-        >
-          Close
-        </button>
-      </div>
-    </div>
+        </div>
+      )}
+    </Modal>
   );
 };
 

@@ -36,7 +36,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 
-interface Architect {
+export interface Architect {
   id: string;
   name: string;
   email: string;

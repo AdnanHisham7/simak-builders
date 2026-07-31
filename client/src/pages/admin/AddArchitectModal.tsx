@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { X } from "lucide-react";
+import { useState } from "react";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface AddArchitectModalProps {
   isOpen: boolean;
@@ -28,67 +29,46 @@ const AddArchitectModal: React.FC<AddArchitectModalProps> = ({
     }
   };
 
-  if (!isOpen) return null;
+  const handleClose = () => {
+    if (isSubmitting) return;
+    setName("");
+    setEmail("");
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl p-6 w-full max-w-md">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Add New Architect</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X size={24} />
-          </button>
+    <Modal isOpen={isOpen} onClose={handleClose} title="Add New Architect" disableClose={isSubmitting}>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-console-text">Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
         </div>
-        <div onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 block w-full border border-gray-300 rounded-md p-2"
-                required
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-200 rounded-md"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                onClick={handleSubmit}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md disabled:opacity-50"
-              >
-                {isSubmitting ? "Adding..." : "Add Architect"}
-              </button>
-            </div>
-          </div>
+        <div>
+          <label className="mb-1.5 block text-sm font-medium text-console-text">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+          />
         </div>
-      </div>
-    </div>
+        <div className="flex justify-end gap-3 pt-2">
+          <Button type="button" variant="secondary" onClick={handleClose} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={isSubmitting}>
+            Add architect
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 };
 
