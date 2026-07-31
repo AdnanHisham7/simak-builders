@@ -1,1739 +1,159 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  Download,
   Filter,
-  List,
-  BarChart3,
   FileText,
-  Users,
-  Package,
-  TrendingUp,
   Calendar,
   Search,
   RefreshCw,
-  Settings,
-  Eye,
   FileDown,
   Receipt,
   Wallet,
   RotateCcw,
 } from "lucide-react";
 import { privateClient } from "@/api";
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-import * as XLSX from "xlsx";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
 import ReportRowEditor from "./reports/ReportRowEditor";
 import EditableAmountField from "./reports/EditableAmountField";
 import { loadImage, generateProfessionalReportPdf } from "./reports/reportPdf";
-import { buildEditableRows, computeTotals, computeBalance, displayAmount } from "./reports/editableReport";
-import templateImage from "@/assets/template.png";
-import { UserOptions } from "jspdf-autotable";
+import {
+  buildEditableRows,
+  computeTotals,
+  computeBalance,
+  displayAmount,
+} from "./reports/editableReport";
 import "@/assets/Roboto-Regular";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import PageLoader from "@/components/ui/PageLoader";
+import EmptyState from "@/components/ui/EmptyState";
+import { cn } from "@/lib/cn";
 
-// Shared helper to load images and extract dimensions for accurate aspect ratio scaling
+interface ReportSite {
+  _id: string;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  client?: { name: string };
+  supervisionPercentage?: number;
+}
+
+const reportTypes = [
+  {
+    id: "expenseReport",
+    title: "Expense Report",
+    description: "Itemized site expenses with supervision calculation",
+    icon: Receipt,
+  },
+  {
+    id: "clientReport",
+    title: "Client Report",
+    description: "Client statement with supervision, amount received and balance",
+    icon: Wallet,
+  },
+] as const;
+
+type ReportId = (typeof reportTypes)[number]["id"];
+
 const Reports = () => {
-  const [selectedReport, setSelectedReport] = useState("clientReport");
-  const [sites, setSites] = useState([]);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<ReportId>("clientReport");
+  const [sites, setSites] = useState<ReportSite[]>([]);
+  const [loadingSites, setLoadingSites] = useState(true);
+
+  const fetchSites = async () => {
+    setLoadingSites(true);
+    try {
+      const res = await privateClient.get("/sites");
+      setSites(res.data);
+    } catch (err) {
+      console.error("Error fetching sites:", err);
+    } finally {
+      setLoadingSites(false);
+    }
+  };
 
   useEffect(() => {
-    setIsAnimating(true);
-    privateClient
-      .get("/sites")
-      .then((res) => setSites(res.data))
-      .catch((err) => console.error("Error fetching sites:", err));
+    fetchSites();
   }, []);
 
-  const reportTypes = [
-    // {
-    //   id: "stockTransactions",
-    //   title: "Stock Transactions",
-    //   description: "Track all stock movements and transactions",
-    //   icon: BarChart3,
-    //   color: "from-blue-500 to-indigo-600",
-    // },
-    // {
-    //   id: "stockInventory",
-    //   title: "Stock Inventory",
-    //   description: "Current stock levels and inventory status",
-    //   icon: Package,
-    //   color: "from-green-500 to-emerald-600",
-    // },
-    // {
-    //   id: "vendors",
-    //   title: "Vendors Report",
-    //   description: "Vendor performance and purchase history",
-    //   icon: Users,
-    //   color: "from-purple-500 to-violet-600",
-    // },
-    // {
-    //   id: "clients",
-    //   title: "Clients Report",
-    //   description: "Comprehensive client analytics and insights",
-    //   icon: FileText,
-    //   color: "from-pink-500 to-rose-600",
-    // },
-    {
-      id: "expenseReport",
-      title: "Expense Report",
-      description: "Itemized site expenses with supervision calculation",
-      icon: Receipt,
-      color: "from-orange-500 to-amber-600",
-    },
-    {
-      id: "clientReport",
-      title: "Client Report",
-      description: "Client statement with supervision, amount received and balance",
-      icon: Wallet,
-      color: "from-teal-500 to-cyan-600",
-    },
-  ];
-
-  const selectedReportData = reportTypes.find((r) => r.id === selectedReport);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-100 p-6">
-      <div
-        className={`max-w-7xl mx-auto transition-all duration-500 transform ${
-          isAnimating ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0"
-        }`}
-      >
-        {/* Header Section */}
-        <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 mb-8 overflow-hidden">
-          <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 rounded-t-2xl" />
-
-          <div className="p-8">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
-                    <BarChart3 className="w-8 h-8 text-white" />
-                  </div>
-                  <div className="absolute -top-1 -right-1 w-6 h-6 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full flex items-center justify-center">
-                    <TrendingUp className="w-3 h-3 text-white" />
-                  </div>
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
-                    Reports Dashboard
-                  </h1>
-                  <p className="text-gray-500 mt-1">
-                    Generate comprehensive business reports and analytics
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-3">
-                <button className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all duration-200 group">
-                  <Settings className="w-5 h-5 text-gray-600 group-hover:rotate-90 transition-transform duration-300" />
-                </button>
-                <button className="p-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105">
-                  <RefreshCw className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Reports</h1>
+          <p className="mt-0.5 text-sm text-console-muted">
+            Generate comprehensive business reports and analytics
+          </p>
         </div>
+        <Button variant="secondary" onClick={fetchSites} loading={loadingSites}>
+          <RefreshCw size={16} /> Refresh sites
+        </Button>
+      </div>
 
-        {/* Report Type Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
-          {reportTypes.map((report, index) => {
-            const Icon = report.icon;
-            const isSelected = selectedReport === report.id;
-
-            return (
-              <div
-                key={report.id}
-                className={`relative cursor-pointer transition-all duration-300 transform hover:scale-105 ${
-                  isAnimating
-                    ? "translate-y-0 opacity-100"
-                    : "translate-y-4 opacity-0"
-                }`}
-                style={{ transitionDelay: `${index * 100}ms` }}
-                onClick={() => setSelectedReport(report.id)}
-              >
-                <div
-                  className={`relative bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 overflow-hidden ${
-                    isSelected
-                      ? "border-blue-500 shadow-2xl ring-4 ring-blue-100"
-                      : "border-gray-200 hover:border-gray-300 hover:shadow-xl"
-                  }`}
-                >
-                  {isSelected && (
-                    <div
-                      className={`absolute top-0 left-0 right-0 h-1 bg-gradient-to-r ${report.color}`}
-                    />
-                  )}
-
-                  <div className="p-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <div
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center bg-gradient-to-r ${report.color} shadow-lg`}
-                      >
-                        <Icon className="w-6 h-6 text-white" />
-                      </div>
-                      {isSelected && (
-                        <div className="w-3 h-3 bg-gradient-to-r from-green-400 to-emerald-500 rounded-full animate-pulse" />
-                      )}
-                    </div>
-
-                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                      {report.title}
-                    </h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                      {report.description}
-                    </p>
-                  </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {reportTypes.map((report) => {
+          const Icon = report.icon;
+          const isSelected = selectedReport === report.id;
+          return (
+            <button
+              type="button"
+              key={report.id}
+              onClick={() => setSelectedReport(report.id)}
+              className={cn(
+                "rounded-console border-2 bg-white p-5 text-left transition-shadow",
+                isSelected
+                  ? "border-brand-500 shadow-console-lg"
+                  : "border-console-border hover:border-slate-300 hover:shadow-console",
+              )}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
+                  <Icon size={20} />
                 </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Report Content */}
-        <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-          <div
-            className={`absolute top-0 left-0 right-0 h-2 bg-gradient-to-r ${
-              selectedReportData?.color || "from-blue-500 to-indigo-600"
-            }`}
-          />
-
-          <div className="p-8">
-            <div className="flex items-center mb-6">
-              <div
-                className={`w-10 h-10 rounded-xl bg-gradient-to-r ${selectedReportData?.color} flex items-center justify-center mr-4`}
-              >
-                {selectedReportData && (
-                  <selectedReportData.icon className="w-5 h-5 text-white" />
+                {isSelected && (
+                  <span className="flex h-2.5 w-2.5 rounded-full bg-success-500" />
                 )}
               </div>
-              <div>
-                <h2 className="text-2xl font-bold text-gray-800">
-                  {selectedReportData?.title}
-                </h2>
-                <p className="text-gray-500">
-                  {selectedReportData?.description}
-                </p>
-              </div>
-            </div>
-{/* 
-            {selectedReport === "stockTransactions" && (
-              <StockTransactionsReport sites={sites} />
-            )}
-            {selectedReport === "stockInventory" && (
-              <StockInventoryReport sites={sites} />
-            )}
-            {selectedReport === "vendors" && <VendorsReport sites={sites} />}
-            {selectedReport === "clients" && <ClientsReportDetailed />} */}
-            {selectedReport === "expenseReport" && (
-              <ExpenseReport sites={sites} />
-            )}
-            {selectedReport === "clientReport" && (
-              <ClientSiteReport sites={sites} />
-            )}
-          </div>
-        </div>
+              <h3 className="text-sm font-semibold text-console-text">{report.title}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-console-muted">
+                {report.description}
+              </p>
+            </button>
+          );
+        })}
       </div>
+
+      <Card>
+        {loadingSites ? (
+          <PageLoader label="Loading sites" fullHeight={false} />
+        ) : (
+          <>
+            {selectedReport === "expenseReport" && <ExpenseReport sites={sites} />}
+            {selectedReport === "clientReport" && <ClientSiteReport sites={sites} />}
+          </>
+        )}
+      </Card>
     </div>
   );
 };
 
-// const StockTransactionsReport = ({ sites }) => {
-//   const [data, setData] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [isAnimating, setIsAnimating] = useState(false);
-//   const [filters, setFilters] = useState({
-//     siteId: "",
-//     startDate: "",
-//     endDate: "",
-//     type: "",
-//   });
-
-//   const getItemDescription = (item) => {
-//     if (item.type === "miscellaneous") {
-//       const label = item.name || "Miscellaneous expense";
-//       return item.notes ? `${label} - ${item.notes}` : label;
-//     }
-//     return (
-//       item.description ||
-//       item.items?.map((i) => i.name).join(", ") ||
-//       "-"
-//     );
-//   };
-
-//   useEffect(() => {
-//     setIsAnimating(true);
-//   }, []);
-
-//   const exportToPDF = async () => {
-//     try {
-//       const headerData = await loadImage(headerImg);
-//       const footerData = await loadImage(footerImg);
-//       const doc = new jsPDF();
-
-//       let yOffset = 50;
-
-//       // Add title
-//       doc.setFontSize(18);
-//       doc.text("Stock Transactions Report", 14, yOffset);
-//       yOffset += 10;
-
-//       // Add generation date and metadata
-//       doc.setFontSize(10);
-//       doc.text(
-//         `Generated on: ${new Date().toLocaleDateString("en-US", {
-//           weekday: "long",
-//           year: "numeric",
-//           month: "long",
-//           day: "numeric",
-//         })}`,
-//         14,
-//         yOffset
-//       );
-//       yOffset += 5;
-
-//       doc.text(`Total Records: ${data.length}`, 14, yOffset);
-//       yOffset += 5;
-
-//       const selectedSite = sites.find((s) => s._id === filters.siteId);
-//       if (selectedSite) {
-//         doc.text(`Site: ${selectedSite.name}`, 14, yOffset);
-//         yOffset += 5;
-//       }
-
-//       if (filters.startDate && filters.endDate) {
-//         doc.text(
-//           `Period: ${filters.startDate} to ${filters.endDate}`,
-//           14,
-//           yOffset
-//         );
-//         yOffset += 5;
-//       }
-
-//       // Add line separator after all metadata
-//       doc.setLineWidth(0.1);
-//       doc.line(14, yOffset, 196, yOffset);
-//       yOffset += 10;
-
-//       // Tight global layout margins to eliminate empty space on middle pages
-//       const tableOptions: UserOptions = {
-//         startY: yOffset,
-//         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-//         styles: {
-//           font: "Roboto-Regular",
-//           fontSize: 10,
-//           cellPadding: 2,
-//         },
-//         headStyles: {
-//           fillColor: [160, 61, 5],
-//           textColor: 255,
-//         },
-//         alternateRowStyles: {
-//           fillColor: [248, 250, 252],
-//         },
-//         columnStyles: {
-//           0: { cellWidth: 25 },
-//           1: { cellWidth: 30 },
-//           2: { cellWidth: 30 },
-//           3: { cellWidth: 20, halign: "center" },
-//           4: { cellWidth: 20, halign: "center" },
-//           5: { cellWidth: 30 },
-//           6: { cellWidth: 30 },
-//         },
-//       };
-
-//       doc.setFont("Roboto-Regular");
-
-//       // Add stock transactions table
-//       autoTable(doc, {
-//         head: [
-//           [
-//             "Date",
-//             "Type",
-//             "Description",
-//             "Qty",
-//             "Amount (INR)",
-//             "Vendor",
-//             "Added By",
-//           ],
-//         ],
-//         body: data.map((item) => {
-//           const fullDescription = getItemDescription(item);
-//           return [
-//             new Date(item.date || item.createdAt).toLocaleDateString("en-IN"),
-//             item.type.charAt(0).toUpperCase() +
-//               item.type.slice(1).toLowerCase() || "-",
-//             fullDescription.length > 50
-//               ? `${fullDescription.substring(0, 50)}...`
-//               : fullDescription,
-//             item.items?.reduce((sum: any, i: { quantity: any; }) => sum + i.quantity, 0) || "-",
-//             `₹${(item.amount || item.totalAmount || 0).toLocaleString("en-IN")}`,
-//             item.vendor?.name || "-",
-//             item.addedBy?.name || "-",
-//           ];
-//         }),
-//         ...tableOptions,
-//         styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
-//       });
-
-//       // Add total amount
-//       if (data.length > 0) {
-//         const totalAmount = data.reduce(
-//           (sum, item) => sum + (item.amount || item.totalAmount || 0),
-//           0
-//         );
-//         const finalY = doc.lastAutoTable.finalY + 10;
-//         doc.setFontSize(12);
-//         doc.setTextColor(0, 0, 0);
-//         doc.text(
-//           `Total Amount: ₹${totalAmount.toLocaleString("en-IN")}`,
-//           14,
-//           finalY
-//         );
-//       }
-
-//       // Add responsive Header and Footer right before downloading
-//       addHeaderFooter(doc, headerData, footerData);
-
-//       // Save the document
-//       doc.save(
-//         `stock-transactions-report-${
-//           new Date().toISOString().split("T")[0]
-//         }.pdf`
-//       );
-//     } catch (error) {
-//       console.error("Error generating PDF:", error);
-//     }
-//   };
-
-//   const fetchData = async () => {
-//     if (!filters.siteId) {
-//       setData([]);
-//       setLoading(false);
-//       return;
-//     }
-//     setLoading(true);
-//     try {
-//       const res = await privateClient.get("/reports/stock-transactions", {
-//         params: filters,
-//       });
-//       setData(res.data);
-//     } catch (err) {
-//       console.error("Error fetching stock transactions:", err);
-//     }
-//     setLoading(false);
-//   };
-
-//   useEffect(() => {
-//     fetchData();
-//   }, [filters]);
-
-//   return (
-//     <div
-//       className={`transition-all duration-500 ${
-//         isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-//       }`}
-//     >
-//       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6 border border-blue-100">
-//         <div className="flex items-center mb-4">
-//           <Filter className="w-5 h-5 text-blue-600 mr-2" />
-//           <h3 className="font-semibold text-gray-800">Report Filters</h3>
-//         </div>
-//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-//           <div className="relative">
-//             <select
-//               className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none"
-//               value={filters.siteId}
-//               onChange={(e) =>
-//                 setFilters({ ...filters, siteId: e.target.value })
-//               }
-//             >
-//               <option value="">Select Site</option>
-//               {sites.map((site) => (
-//                 <option key={site._id} value={site._id}>
-//                   {site.name}
-//                 </option>
-//               ))}
-//             </select>
-//             <div className="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">
-//               <svg
-//                 className="w-4 h-4 text-gray-400"
-//                 fill="currentColor"
-//                 viewBox="0 0 20 20"
-//               >
-//                 <path
-//                   fillRule="evenodd"
-//                   d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-//                   clipRule="evenodd"
-//                 />
-//               </svg>
-//             </div>
-//           </div>
-//           <div className="relative">
-//             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-//             <input
-//               type="date"
-//               className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-//               value={filters.startDate}
-//               onChange={(e) =>
-//                 setFilters({ ...filters, startDate: e.target.value })
-//               }
-//             />
-//           </div>
-//           <div className="relative">
-//             <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-//             <input
-//               type="date"
-//               className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-//               value={filters.endDate}
-//               onChange={(e) =>
-//                 setFilters({ ...filters, endDate: e.target.value })
-//               }
-//             />
-//           </div>
-//           <select
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-//             value={filters.type}
-//             onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-//           >
-//             <option value="">All Types</option>
-//             <option value="purchase">Purchase</option>
-//             <option value="miscellaneous">Miscellaneous</option>
-//           </select>
-//         </div>
-//         <div className="flex items-center space-x-3">
-//           <button
-//             onClick={exportToPDF}
-//             className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-//             disabled={loading || data.length === 0}
-//           >
-//             <FileDown className="w-4 h-4 mr-2" /> Export PDF
-//           </button>
-
-//           <button
-//             onClick={fetchData}
-//             className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-indigo-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-//             disabled={loading}
-//           >
-//             <RefreshCw
-//               className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-//             />{" "}
-//             Refresh
-//           </button>
-//         </div>
-//       </div>
-//       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-//         {!filters.siteId ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <Search className="w-8 h-8 text-blue-500" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Select a Site
-//             </h3>
-//             <p className="text-gray-500">
-//               Please select a site from the filters above to view the stock
-//               transactions report.
-//             </p>
-//           </div>
-//         ) : loading ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Loading Report
-//             </h3>
-//             <p className="text-gray-500">Fetching stock transaction data...</p>
-//           </div>
-//         ) : data.length === 0 ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <FileText className="w-8 h-8 text-gray-400" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               No Data Found
-//             </h3>
-//             <p className="text-gray-500">
-//               No stock transactions found for the selected filters.
-//             </p>
-//           </div>
-//         ) : (
-//           <div className="overflow-x-auto">
-//             <table className="w-full">
-//               <thead>
-//                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Date
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Type
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Description
-//                   </th>
-//                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Quantity
-//                   </th>
-//                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Amount
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Vendor
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Added By
-//                   </th>
-//                 </tr>
-//               </thead>
-//               <tbody className="divide-y divide-gray-200">
-//                 {data.map((item) => (
-//                   <tr
-//                     key={item._id}
-//                     className="hover:bg-gray-50 transition-colors duration-150"
-//                   >
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {new Date(item.date || item.createdAt).toLocaleDateString(
-//                         "en-IN"
-//                       )}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap">
-//                       <span
-//                         className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-//                           item.type === "purchase"
-//                             ? "bg-green-100 text-green-800"
-//                             : "bg-blue-100 text-blue-800"
-//                         }`}
-//                       >
-//                         {item.type}
-//                       </span>
-//                     </td>
-//                     <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
-//                       {getItemDescription(item)}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-//                       {item.items?.reduce((sum, i) => sum + i.quantity, 0) ||
-//                         "-"}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-//                       ₹
-//                       {(item.amount || item.totalAmount || 0).toLocaleString(
-//                         "en-IN"
-//                       )}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {item.vendor?.name || "-"}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {item.addedBy?.name || "-"}
-//                     </td>
-//                   </tr>
-//                 ))}
-//               </tbody>
-//             </table>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-// const StockInventoryReport = ({ sites }) => {
-//   const [data, setData] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [isAnimating, setIsAnimating] = useState(false);
-//   const [filters, setFilters] = useState({
-//     siteId: "",
-//     category: "",
-//     minQuantity: "",
-//   });
-
-//   useEffect(() => {
-//     setIsAnimating(true);
-//     fetchData();
-//   }, [filters]);
-
-//   const exportToPDF = async () => {
-//     try {
-//       const headerData = await loadImage(headerImg);
-//       const footerData = await loadImage(footerImg);
-//       const doc = new jsPDF();
-
-//       let yOffset = 50;
-
-//       // Add title
-//       doc.setFontSize(18);
-//       const selectedSite = sites.find((s) => s._id === filters.siteId);
-//       const title = filters.siteId
-//         ? `Stock Inventory Report for ${selectedSite.name}`
-//         : "Stock Inventory Report for All Sites";
-//       doc.text(title, 14, yOffset);
-//       yOffset += 10;
-
-//       // Add generation date
-//       doc.setFontSize(10);
-//       doc.text(
-//         `Generated on: ${new Date().toLocaleDateString("en-US", {
-//           weekday: "long",
-//           year: "numeric",
-//           month: "long",
-//           day: "numeric",
-//         })}`,
-//         14,
-//         yOffset
-//       );
-//       yOffset += 10;
-
-//       // Add line separator
-//       doc.setLineWidth(0.1);
-//       doc.line(14, yOffset, 196, yOffset);
-//       yOffset += 10;
-
-//       // Tight global layout margins to eliminate empty space on middle pages
-//       const tableOptions: UserOptions = {
-//         startY: yOffset,
-//         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-//         styles: {
-//           fontSize: 10,
-//           cellPadding: 2,
-//         },
-//         headStyles: {
-//           fillColor: [160, 61, 5],
-//           textColor: 255,
-//         },
-//         alternateRowStyles: {
-//           fillColor: [248, 250, 252],
-//         },
-//       };
-//       doc.setFont("Roboto-Regular");
-
-//       // Add stock table
-//       autoTable(doc, {
-//         head: [["Name", "Category", "Unit", "Quantity", "Site"]],
-//         body: data.map((stock) => [
-//           stock.name,
-//           stock.category,
-//           stock.unit,
-//           stock.quantity,
-//           stock.site?.name || "Company",
-//         ]),
-//         ...tableOptions,
-//         styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
-//       });
-
-//       // Add summary section if data exists
-//       if (data.length > 0) {
-//         const totalQuantity = data.reduce(
-//           (sum, stock) => sum + stock.quantity,
-//           0
-//         );
-//         const finalY = doc.lastAutoTable.finalY + 10;
-//         doc.setFontSize(12);
-//         doc.text(`Total Items: ${data.length}`, 14, finalY);
-//         doc.text(`Total Quantity: ${totalQuantity}`, 14, finalY + 10);
-//       }
-
-//       // Render custom assets
-//       addHeaderFooter(doc, headerData, footerData);
-
-//       // Save the document
-//       const filename = filters.siteId
-//         ? `stock-inventory-${selectedSite.name}-${
-//             new Date().toISOString().split("T")[0]
-//           }.pdf`
-//         : `stock-inventory-all-sites-${
-//             new Date().toISOString().split("T")[0]
-//           }.pdf`;
-//       doc.save(filename);
-//     } catch (error) {
-//       console.error("Error generating PDF:", error);
-//     }
-//   };
-
-//   const fetchData = async () => {
-//     setLoading(true);
-//     try {
-//       const res = await privateClient.get("/reports/stock-inventory", {
-//         params: filters,
-//       });
-//       setData(res.data);
-//     } catch (err) {
-//       console.error("Error fetching stock inventory:", err);
-//     }
-//     setLoading(false);
-//   };
-
-//   return (
-//     <div
-//       className={`transition-all duration-500 ${
-//         isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-//       }`}
-//     >
-//       <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 mb-6 border border-green-100">
-//         <div className="flex items-center mb-4">
-//           <Filter className="w-5 h-5 text-green-600 mr-2" />
-//           <h3 className="font-semibold text-gray-800">Report Filters</h3>
-//         </div>
-//         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-//           <select
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-//             value={filters.siteId}
-//             onChange={(e) => setFilters({ ...filters, siteId: e.target.value })}
-//           >
-//             <option value="">All Sites</option>
-//             {sites.map((site) => (
-//               <option key={site._id} value={site._id}>
-//                 {site.name}
-//               </option>
-//             ))}
-//           </select>
-          
-//           <input
-//             type="number"
-//             placeholder="Min Quantity"
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200"
-//             value={filters.minQuantity}
-//             onChange={(e) =>
-//               setFilters({ ...filters, minQuantity: e.target.value })
-//             }
-//           />
-//         </div>
-//         <div className="flex items-center space-x-3">
-//           <button
-//             onClick={exportToPDF}
-//             className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-//             disabled={loading || data.length === 0}
-//           >
-//             <FileDown className="w-4 h-4 mr-2" /> Export PDF
-//           </button>
-
-//           <button
-//             onClick={fetchData}
-//             className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-//             disabled={loading}
-//           >
-//             <RefreshCw
-//               className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-//             />{" "}
-//             Refresh
-//           </button>
-//         </div>
-//       </div>
-//       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-//         {loading ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-green-100 to-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <RefreshCw className="w-8 h-8 text-green-500 animate-spin" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Loading Report
-//             </h3>
-//             <p className="text-gray-500">Fetching stock inventory data...</p>
-//           </div>
-//         ) : data.length === 0 ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <FileText className="w-8 h-8 text-gray-400" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               No Data Found
-//             </h3>
-//             <p className="text-gray-500">
-//               No stock inventory found for the selected filters.
-//             </p>
-//           </div>
-//         ) : (
-//           <div className="overflow-x-auto">
-//             <table className="w-full">
-//               <thead>
-//                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Name
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Category
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Unit
-//                   </th>
-//                   <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Quantity
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Site
-//                   </th>
-//                 </tr>
-//               </thead>
-//               <tbody className="divide-y divide-gray-200">
-//                 {data.map((stock) => (
-//                   <tr
-//                     key={stock._id}
-//                     className="hover:bg-gray-50 transition-colors duration-150"
-//                   >
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {stock.name}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {stock.category}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {stock.unit}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center">
-//                       {stock.quantity}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {stock.site?.name || "Company"}
-//                     </td>
-//                   </tr>
-//                 ))}
-//               </tbody>
-//             </table>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-// const VendorsReport = ({ sites }) => {
-//   const [vendors, setVendors] = useState([]);
-//   const [selectedVendor, setSelectedVendor] = useState("");
-//   const [purchases, setPurchases] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [isAnimating, setIsAnimating] = useState(false);
-
-//   useEffect(() => {
-//     setIsAnimating(true);
-//     const fetchVendors = async () => {
-//       try {
-//         const res = await privateClient.get("/vendors");
-//         setVendors(res.data);
-//       } catch (err) {
-//         console.error("Error fetching vendors:", err);
-//       }
-//     };
-//     fetchVendors();
-//   }, []);
-
-//   const fetchPurchases = async () => {
-//     if (!selectedVendor) {
-//       setPurchases([]);
-//       return;
-//     }
-//     loading = true;
-//     try {
-//       const res = await privateClient.get("/reports/vendor-purchases", {
-//         params: { vendorId: selectedVendor },
-//       });
-//       setPurchases(res.data);
-//     } catch (err) {
-//       console.error("Error fetching vendor purchases:", err);
-//     }
-//     loading = false;
-//   };
-
-//   useEffect(() => {
-//     fetchPurchases();
-//   }, [selectedVendor]);
-
-//   const exportToPDF = async () => {
-//     try {
-//       const headerData = await loadImage(headerImg);
-//       const footerData = await loadImage(footerImg);
-//       const doc = new jsPDF();
-
-//       let yOffset = 50;
-
-//       // Add title
-//       doc.setFontSize(18);
-//       doc.text("Vendor Purchases Report", 14, yOffset);
-//       yOffset += 10;
-
-//       // Add generation date and vendor info
-//       doc.setFontSize(10);
-//       doc.text(
-//         `Generated on: ${new Date().toLocaleDateString("en-US", {
-//           weekday: "long",
-//           year: "numeric",
-//           month: "long",
-//           day: "numeric",
-//         })}`,
-//         14,
-//         yOffset
-//       );
-//       yOffset += 5;
-//       const selectedVendorData = vendors.find((v) => v._id === selectedVendor);
-//       if (selectedVendorData) {
-//         doc.text(`Vendor: ${selectedVendorData.name}`, 14, yOffset);
-//         yOffset += 5;
-//       }
-//       yOffset += 5;
-
-//       // Add line separator
-//       doc.setLineWidth(0.1);
-//       doc.line(14, yOffset, 196, yOffset);
-//       yOffset += 10;
-
-//       // Tight global layout margins to eliminate empty space on middle pages
-//       const tableOptions = {
-//         startY: yOffset,
-//         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-//         styles: { fontSize: 10, cellPadding: 2 },
-//         headStyles: {
-//           fillColor: [160, 61, 5] as const,
-//           textColor: 255,
-//         },
-//         alternateRowStyles: {
-//           fillColor: [248, 250, 252] as const,
-//         },
-//       };
-
-//       doc.setFont("Roboto-Regular");
-//       // Add purchases table
-//       autoTable(doc, {
-//         head: [["Date", "Items", "Total Amount (INR)", "Added By"]],
-//         body: purchases.map((purchase) => [
-//           new Date(purchase.createdAt).toLocaleDateString("en-IN"),
-//           purchase.items.map((item) => item.name).join(", "),
-//           `₹${purchase.totalAmount.toLocaleString("en-IN")}`,
-//           purchase.addedBy.name,
-//         ]),
-//         ...tableOptions,
-//         styles: { font: "Roboto-Regular", fontSize: 10, cellPadding: 2 },
-//       });
-
-//       // Add total amount
-//       if (purchases.length > 0) {
-//         const totalAmount = purchases.reduce(
-//           (sum, purchase) => sum + purchase.totalAmount,
-//           0
-//         );
-//         const finalY = doc.lastAutoTable.finalY + 10;
-//         doc.setFontSize(12);
-//         doc.text(
-//           `Total Amount: ₹${totalAmount.toLocaleString("en-IN")}`,
-//           14,
-//           finalY
-//         );
-//       }
-
-//       // Process and stamp Header and Footer
-//       addHeaderFooter(doc, headerData, footerData);
-
-//       // Save the document
-//       doc.save(
-//         `vendor-${selectedVendorData.name}-purchases-${
-//           new Date().toISOString().split("T")[0]
-//         }.pdf`
-//       );
-//     } catch (error) {
-//       console.error("Error generating PDF:", error);
-//     }
-//   };
-
-//   return (
-//     <div
-//       className={`transition-all duration-500 ${
-//         isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-//       }`}
-//     >
-//       <div className="bg-gradient-to-r from-purple-50 to-violet-50 rounded-xl p-6 mb-6 border border-purple-100">
-//         <div className="flex items-center mb-4">
-//           <Filter className="w-5 h-5 text-purple-600 mr-2" />
-//           <h3 className="font-semibold text-gray-800">Select Vendor</h3>
-//         </div>
-//         <select
-//           className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-//           value={selectedVendor}
-//           onChange={(e) => setSelectedVendor(e.target.value)}
-//         >
-//           <option value="">Select Vendor</option>
-//           {vendors.map((vendor) => (
-//             <option key={vendor._id} value={vendor._id}>
-//               {vendor.name}
-//             </option>
-//           ))}
-//         </select>
-//         {selectedVendor && (
-//           <div className="flex items-center space-x-3 mt-4">
-//             <button
-//               onClick={exportToPDF}
-//               className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-//               disabled={loading || purchases.length === 0}
-//             >
-//               <FileDown className="w-4 h-4 mr-2" /> Export PDF
-//             </button>
-//             <button
-//               onClick={fetchPurchases}
-//               className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-//               disabled={loading}
-//             >
-//               <RefreshCw
-//                 className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-//               />{" "}
-//               Refresh
-//             </button>
-//           </div>
-//         )}
-//       </div>
-//       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-//         {!selectedVendor ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-purple-100 to-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <Users className="w-8 h-8 text-purple-500" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Select a Vendor
-//             </h3>
-//             <p className="text-gray-500">
-//               Please select a vendor to view their purchase history.
-//             </p>
-//           </div>
-//         ) : loading ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-purple-100 to-violet-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <RefreshCw className="w-8 h-8 text-purple-500 animate-spin" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Loading Purchases
-//             </h3>
-//             <p className="text-gray-500">
-//               Fetching purchase data for the selected vendor...
-//             </p>
-//           </div>
-//         ) : purchases.length === 0 ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <FileText className="w-8 h-8 text-gray-400" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               No Purchases Found
-//             </h3>
-//             <p className="text-gray-500">No purchases found for this vendor.</p>
-//           </div>
-//         ) : (
-//           <div className="overflow-x-auto">
-//             <table className="w-full">
-//               <thead>
-//                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Date
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Items
-//                   </th>
-//                   <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Total Amount
-//                   </th>
-//                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-//                     Added By
-//                   </th>
-//                 </tr>
-//               </thead>
-//               <tbody className="divide-y divide-gray-200">
-//                 {purchases.map((purchase) => (
-//                   <tr
-//                     key={purchase._id}
-//                     className="hover:bg-gray-50 transition-colors duration-150"
-//                   >
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {new Date(purchase.createdAt).toLocaleDateString("en-IN")}
-//                     </td>
-//                     <td className="px-6 py-4 text-sm text-gray-900">
-//                       {purchase.items.map((item) => item.name).join(", ")}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">
-//                       ₹{purchase.totalAmount.toLocaleString("en-IN")}
-//                     </td>
-//                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-//                       {purchase.addedBy.name}
-//                     </td>
-//                   </tr>
-//                 ))}
-//               </tbody>
-//             </table>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-// const ClientsReportDetailed = () => {
-//   const [data, setData] = useState([]);
-//   const [clients, setClients] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [isAnimating, setIsAnimating] = useState(false);
-//   const [filters, setFilters] = useState({
-//     status: "",
-//     clientId: "",
-//     minAmount: "",
-//     search: "",
-//     startDate: "",
-//     endDate: "",
-//   });
-//   const [selectedSections, setSelectedSections] = useState([]);
-//   const [siteData, setSiteData] = useState(null);
-//   const [attendances, setAttendances] = useState([]);
-//   const [purchases, setPurchases] = useState([]);
-//   const [stockTransfers, setStockTransfers] = useState([]);
-//   const [stocks, setStocks] = useState([]);
-//   const [paymentTransactions, setPaymentTransactions] = useState([]);
-
-//   useEffect(() => {
-//     setIsAnimating(true);
-//     const fetchClients = async () => {
-//       try {
-//         const res = await privateClient.get("/users", {
-//           params: { role: "client" },
-//         });
-//         setClients(res.data);
-//       } catch (err) {
-//         console.error("Error fetching clients:", err);
-//       }
-//     };
-//     fetchClients();
-//   }, []);
-
-//   const fetchData = async () => {
-//     loading = true;
-//     try {
-//       const res = await privateClient.get("/reports/clients", {
-//         params: filters,
-//       });
-//       setData(res.data);
-
-//       if (filters.clientId) {
-//         const siteRes = await privateClient.get(
-//           `/sites/client/${filters.clientId}`
-//         );
-//         const site = Array.isArray(siteRes.data)
-//           ? siteRes.data[0]
-//           : siteRes.data;
-//         setSiteData(site);
-
-//         if (site && site._id) {
-//           const attendanceRes = await privateClient.get(
-//             `/attendance/site/${site._id}`,
-//             {
-//               params: {
-//                 startDate: filters.startDate,
-//                 endDate: filters.endDate,
-//               },
-//             }
-//           );
-//           setAttendances(attendanceRes.data);
-
-//           const purchaseRes = await privateClient.get(
-//             `/purchases/site/${site._id}`,
-//             { params: filters }
-//           );
-//           setPurchases(purchaseRes.data);
-
-//           const stockTransferRes = await privateClient.get(
-//             `/stocks/transfers?siteId=${site._id}`
-//           );
-//           setStockTransfers(stockTransferRes.data);
-
-//           const stocksRes = await privateClient.get(
-//             `/stocks?siteId=${site._id}`
-//           );
-//           setStocks(stocksRes.data);
-
-//           const paymentTransactionsRes = await privateClient.get(
-//             `/client/transactions/${filters.clientId}`
-//           );
-//           setPaymentTransactions(paymentTransactionsRes.data);
-//         } else {
-//           setSiteData(null);
-//           setAttendances([]);
-//           setPurchases([]);
-//           setStockTransfers([]);
-//           setStocks([]);
-//           setPaymentTransactions([]);
-//         }
-//       } else {
-//         setSiteData(null);
-//         setAttendances([]);
-//         setPurchases([]);
-//         setStockTransfers([]);
-//         setStocks([]);
-//         setPaymentTransactions([]);
-//       }
-//     } catch (err) {
-//       console.error("Error fetching clients report:", err);
-//     }
-//     loading = false;
-//   };
-
-//   const handleGenerateReport = () => {
-//     fetchData();
-//   };
-
-//   const handleSectionChange = (e) => {
-//     const { value, checked } = e.target;
-//     setSelectedSections((prev) =>
-//       checked ? [...prev, value] : prev.filter((s) => s !== value)
-//     );
-//   };
-
-//   const exportToPDF = async () => {
-//     try {
-//       const headerData = await loadImage(headerImg);
-//       const footerData = await loadImage(footerImg);
-//       const doc = new jsPDF();
-
-//       let yOffset = 50;
-
-//       // Tight global layout margins to eliminate empty space on middle pages
-//       const tableOptions = {
-//         margin: { top: 20, bottom: 25, left: 14, right: 14 },
-//         styles: { fontSize: 10, cellPadding: 2 },
-//         headStyles: { fillColor: [160, 61, 5], textColor: 255 },
-//         alternateRowStyles: { fillColor: [240, 248, 255] },
-//       };
-
-//       // Add report title
-//       doc.setFontSize(18);
-//       doc.text(
-//         filters.clientId ? "Client Detailed Report" : "All Clients Report",
-//         14,
-//         yOffset
-//       );
-//       yOffset += 10;
-
-//       // Add generation date
-//       doc.setFontSize(10);
-//       doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, yOffset);
-//       yOffset += 10;
-
-//       // Draw a line
-//       doc.setLineWidth(0.1);
-//       doc.line(14, yOffset, 196, yOffset);
-//       yOffset += 10;
-
-//       // Case 1: All clients report
-//       if (!filters.clientId) {
-//         autoTable(doc, {
-//           startY: yOffset,
-//           head: [
-//             [
-//               "Client Name",
-//               "Site Name",
-//               "Site Address",
-//               "Site Status",
-//               "Budget",
-//               "Expenses",
-//               "Total Transactions",
-//               "Total Amount Sent",
-//             ],
-//           ],
-//           body: data.map((client) => [
-//             client.name,
-//             client.site?.name || "-",
-//             client.site?.address || "-",
-//             client.site?.status || "-",
-//             client.site?.budget || 0,
-//             client.site?.expenses || 0,
-//             client.totalTransactions,
-//             client.totalAmount,
-//           ]),
-//           ...tableOptions,
-//         ]);
-//       }
-//       // Case 2: Client-specific report
-//       else {
-//         const client = data[0];
-
-//         if (client) {
-//           doc.setFontSize(14);
-//           doc.text("Client Details", 14, yOffset);
-//           yOffset += 10;
-//           doc.setFontSize(10);
-//           doc.text(`Name: ${client.name}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Email: ${client.email}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Status: ${client.status || "-"}`, 14, yOffset);
-//           yOffset += 10;
-//         }
-
-//         if (selectedSections.includes("siteDetails") && siteData) {
-//           doc.setFontSize(14);
-//           doc.text("Site Details", 14, yOffset);
-//           yOffset += 10;
-//           doc.setFontSize(10);
-//           doc.text(`Name: ${siteData.name}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Address: ${siteData.address}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`City: ${siteData.city}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`State: ${siteData.state}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Zip: ${siteData.zip}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Status: ${siteData.status}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Budget: ${siteData.budget}`, 14, yOffset);
-//           yOffset += 5;
-//           doc.text(`Expenses: ${siteData.expenses}`, 14, yOffset);
-//           yOffset += 10;
-//         }
-
-//         if (
-//           selectedSections.includes("transactions") &&
-//           siteData?.transactions?.length > 0
-//         ) {
-//           doc.setFontSize(14);
-//           doc.text("Transactions", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [["Date", "Type", "Amount", "Description"]],
-//             body: siteData.transactions.map((t) => [
-//               new Date(t.date).toLocaleDateString(),
-//               t.type,
-//               t.amount,
-//               t.description || "-",
-//             ]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-
-//         if (
-//           selectedSections.includes("attendances") &&
-//           attendances.length > 0
-//         ) {
-//           doc.setFontSize(14);
-//           doc.text("Attendances", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [
-//               ["Date", "Total Employees", "Effective Attendance", "Percentage"],
-//             ],
-//             body: attendances.map((a) => [
-//               new Date(a.date).toLocaleDateString(),
-//               a.totalEmployees,
-//               a.totalEffectiveAttendance,
-//               a.percentage.toFixed(2),
-//             ]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-
-//         if (
-//           selectedSections.includes("paymentTransactions") &&
-//           paymentTransactions.length > 0
-//         ) {
-//           doc.setFontSize(14);
-//           doc.text("Payment Transactions", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [["Date", "Amount", "Status"]],
-//             body: paymentTransactions.map((t) => [
-//               new Date(t.createdAt).toLocaleDateString(),
-//               t.amount,
-//               t.status || "Unknown",
-//             ]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-
-//         if (selectedSections.includes("purchases") && purchases.length > 0) {
-//           doc.setFontSize(14);
-//           doc.text("Purchases", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [["Date", "Items", "Total Amount", "Vendor"]],
-//             body: purchases.map((p) => [
-//               new Date(p.createdAt).toLocaleDateString(),
-//               p.items.map((i) => i.name).join(", "),
-//               p.totalAmount,
-//               p.vendor.name,
-//             ]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-
-//         if (
-//           selectedSections.includes("stockTransfers") &&
-//           stockTransfers.length > 0
-//         ) {
-//           doc.setFontSize(14);
-//           doc.text("Stock Transfers", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [
-//               [
-//                 "Date",
-//                 "Stock Name",
-//                 "Quantity",
-//                 "From Site",
-//                 "To Site",
-//                 "Status",
-//               ],
-//             ],
-//             body: stockTransfers.map((t) => [
-//               new Date(t.createdAt).toLocaleDateString(),
-//               t.stock?.name,
-//               t.quantity,
-//               t.fromSite ? t.fromSite.name : "Company",
-//               t.toSite?.name,
-//               t.status,
-//             ]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-
-//         if (selectedSections.includes("stocks") && stocks.length > 0) {
-//           doc.setFontSize(14);
-//           doc.text("Stocks", 14, yOffset);
-//           yOffset += 10;
-//           autoTable(doc, {
-//             startY: yOffset,
-//             head: [["Name", "Quantity", "Unit", "Category"]],
-//             body: stocks.map((s) => [s.name, s.quantity, s.unit, s.category]),
-//             ...tableOptions,
-//           ]);
-//           yOffset = doc.lastAutoTable.finalY + 10;
-//         }
-//       }
-
-//       // Append header asset to first page, and footer asset to final page
-//       addHeaderFooter(doc, headerData, footerData);
-
-//       // Save the PDF
-//       doc.save(
-//         filters.clientId
-//           ? `client-${filters.clientId}-report.pdf`
-//           : "all-clients-report.pdf"
-//       );
-//     } catch (error) {
-//       console.error("Error generating PDF:", error);
-//     }
-//   };
-
-//   return (
-//     <div
-//       className={`transition-all duration-500 ${
-//         isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-//       }`}
-//     >
-//       <div className="bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl p-6 mb-6 border border-pink-100">
-//         <div className="flex items-center mb-4">
-//           <Filter className="w-5 h-5 text-pink-600 mr-2" />
-//           <h3 className="font-semibold text-gray-800">Report Filters</h3>
-//         </div>
-//         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4 mb-4">
-//           <select
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200"
-//             value={filters.status}
-//             onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-//           >
-//             <option value="">All Statuses</option>
-//             <option value="pending">Pending</option>
-//             <option value="verified">Verified</option>
-//           </select>
-//           <select
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200"
-//             value={filters.clientId}
-//             onChange={(e) =>
-//               setFilters({ ...filters, clientId: e.target.value })
-//             }
-//           >
-//             <option value="">All Clients</option>
-//             {clients.map((client) => (
-//               <option key={client.id} value={client.id}>
-//                 {client.name}
-//               </option>
-//             ))}
-//           </select>
-//           <input
-//             type="date"
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200"
-//             value={filters.startDate}
-//             onChange={(e) =>
-//               setFilters({ ...filters, startDate: e.target.value })
-//             }
-//           />
-//           <input
-//             type="date"
-//             className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all duration-200"
-//             value={filters.endDate}
-//             onChange={(e) =>
-//               setFilters({ ...filters, endDate: e.target.value })
-//             }
-//           />
-//         </div>
-//         <button
-//           onClick={handleGenerateReport}
-//           className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-//           disabled={loading}
-//         >
-//           {loading ? "Generating..." : "Generate Report"}
-//         </button>
-//       </div>
-//       {filters.clientId && (
-//         <div className="bg-white rounded-xl p-6 mb-6 shadow-sm border border-gray-200">
-//           <h3 className="font-medium text-gray-700 mb-4">PDF Export Options</h3>
-//           <div className="grid grid-cols-2 gap-2">
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="siteDetails"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Site Details
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="transactions"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Transactions
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="attendances"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Attendances
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="purchases"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Purchases
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="stockTransfers"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Stock Transfers
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="stocks"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Stocks
-//             </label>
-//             <label className="flex items-center">
-//               <input
-//                 type="checkbox"
-//                 value="paymentTransactions"
-//                 onChange={handleSectionChange}
-//                 className="mr-2 accent-pink-500"
-//               />{" "}
-//               Payment Transactions
-//             </label>
-//           </div>
-//         </div>
-//       )}
-//       <div className="flex items-center space-x-3 mb-6">
-//         <button
-//           onClick={exportToPDF}
-//           className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-//           disabled={loading || data.length === 0}
-//         >
-//           <FileDown className="w-4 h-4 mr-2" /> Export PDF
-//         </button>
-
-//         <button
-//           onClick={handleGenerateReport}
-//           className="flex items-center px-6 py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
-//           disabled={loading}
-//         >
-//           <RefreshCw
-//             className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-//           />{" "}
-//           Refresh
-//         </button>
-//       </div>
-//       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-//         {(!filters.clientId && data.length === 0 && !loading) ||
-//         (filters.clientId && !siteData && !loading) ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-pink-100 to-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <Search className="w-8 h-8 text-pink-500" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Generate Report
-//             </h3>
-//             <p className="text-gray-500">
-//               Please select filters and generate the report.
-//             </p>
-//           </div>
-//         ) : loading ? (
-//           <div className="p-12 text-center">
-//             <div className="w-16 h-16 bg-gradient-to-r from-pink-100 to-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-//               <RefreshCw className="w-8 h-8 text-pink-500 animate-spin" />
-//             </div>
-//             <h3 className="text-lg font-semibold text-gray-800 mb-2">
-//               Loading Report
-//             </h3>
-//             <p className="text-gray-500">Fetching client report data...</p>
-//           </div>
-//         ) : (
-//           <div className="p-6">
-//             <p className="text-gray-600">
-//               Report data loaded. Use the export buttons above to download.
-//             </p>
-//           </div>
-//         )}
-//       </div>
-//     </div>
-//   );
-// };
-
-const ExpenseReport = ({ sites }) => {
+const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
   const [filters, setFilters] = useState({
     siteId: "",
     supervisionPercentage: "",
     startDate: "",
     endDate: "",
   });
-  const [supervisionTouched, setSupervisionTouched] = useState(false);
-  const [reportData, setReportData] = useState(null);
+  const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [editableRows, setEditableRows] = useState([]);
+  const [editableRows, setEditableRows] = useState<any[]>([]);
   const [roundAmounts, setRoundAmounts] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    setIsAnimating(true);
-  }, []);
-
-  const handleSiteChange = (siteId) => {
+  const handleSiteChange = (siteId: string) => {
     const selectedSite = sites.find((s) => s._id === siteId);
-    setSupervisionTouched(false);
     setFilters((prev) => ({
       ...prev,
       siteId,
@@ -1744,8 +164,7 @@ const ExpenseReport = ({ sites }) => {
     setRoundAmounts(false);
   };
 
-  const handleSupervisionChange = (value) => {
-    setSupervisionTouched(true);
+  const handleSupervisionChange = (value: string) => {
     setFilters((prev) => ({ ...prev, supervisionPercentage: value }));
   };
 
@@ -1817,23 +236,19 @@ const ExpenseReport = ({ sites }) => {
   };
 
   return (
-    <div
-      className={`transition-all duration-500 ${
-        isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-      }`}
-    >
-      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-6 mb-6 border border-orange-100">
-        <div className="flex items-center mb-4">
-          <Filter className="w-5 h-5 text-orange-600 mr-2" />
-          <h3 className="font-semibold text-gray-800">Report Filters</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div className="space-y-6">
+      <div className="rounded-console border border-console-border bg-console-bg p-5">
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-console-text">
+          <Filter size={16} className="text-brand-600" />
+          Report filters
+        </h3>
+        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <select
-            className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
             value={filters.siteId}
             onChange={(e) => handleSiteChange(e.target.value)}
+            className="w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
           >
-            <option value="">Select Site</option>
+            <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site._id} value={site._id}>
                 {site.name}
@@ -1841,138 +256,94 @@ const ExpenseReport = ({ sites }) => {
             ))}
           </select>
           <div className="relative">
-            <Receipt className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Receipt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="number"
               min={0}
               max={100}
               step="0.01"
               placeholder="Supervision %"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
               value={filters.supervisionPercentage}
               onChange={(e) => handleSupervisionChange(e.target.value)}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="date"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
               value={filters.startDate}
-              onChange={(e) =>
-                setFilters({ ...filters, startDate: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="date"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all duration-200"
               value={filters.endDate}
-              onChange={(e) =>
-                setFilters({ ...filters, endDate: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={fetchData}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-orange-500 to-amber-600 text-white rounded-xl hover:from-orange-600 hover:to-amber-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
-            disabled={loading || !filters.siteId}
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            {loading ? "Generating..." : "Generate Report"}
-          </button>
-          <button
+        <div className="flex items-center gap-3">
+          <Button onClick={fetchData} loading={loading} disabled={!filters.siteId}>
+            <RefreshCw size={15} /> {loading ? "Generating..." : "Generate report"}
+          </Button>
+          <Button
+            variant="danger"
             onClick={exportToPDF}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            disabled={loading || exporting || !reportData || editableRows.length === 0}
+            loading={exporting}
+            disabled={loading || !reportData || editableRows.length === 0}
           >
-            <FileDown className="w-4 h-4 mr-2" /> {exporting ? "Exporting..." : "Export PDF"}
-          </button>
+            <FileDown size={15} /> {exporting ? "Exporting..." : "Export PDF"}
+          </Button>
         </div>
       </div>
 
       {!filters.siteId ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-orange-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Select a Site
-          </h3>
-          <p className="text-gray-500">
-            Please select a site to view its expense report.
-          </p>
-        </div>
+        <EmptyState icon={Search} title="Select a site" description="Please select a site to view its expense report." />
       ) : loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-orange-100 to-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <RefreshCw className="w-8 h-8 text-orange-500 animate-spin" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Loading Report
-          </h3>
-          <p className="text-gray-500">Fetching expense data...</p>
-        </div>
+        <PageLoader label="Fetching expense data" fullHeight={false} />
       ) : !reportData ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Generate Report
-          </h3>
-          <p className="text-gray-500">
-            Click "Generate Report" to load the expense report for this site.
-          </p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="Generate report"
+          description='Click "Generate report" to load the expense report for this site.'
+        />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">
-                Total Amount (Without Supervision)
-              </p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">Total amount (without supervision)</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
                 ₹{totals.totalAmount.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">
-                Supervision Amount ({reportData.supervisionPercentage}%)
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">
+                Supervision amount ({reportData.supervisionPercentage}%)
               </p>
-              <p className="text-xl font-bold text-orange-600 mt-1">
+              <p className="mt-1 text-xl font-semibold text-warning-600">
                 ₹{totals.supervisionAmount.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">
-                Net Total (With Supervision)
-              </p>
-              <p className="text-xl font-bold text-emerald-600 mt-1">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">Net total (with supervision)</p>
+              <p className="mt-1 text-xl font-semibold text-success-700">
                 ₹{totals.netTotal.toLocaleString("en-IN")}
               </p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="rounded-console border border-console-border bg-white p-5">
             {editableRows.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  No Expenses Found
-                </h3>
-                <p className="text-gray-500">
-                  No expenses recorded for this site in the selected period.
-                </p>
-              </div>
+              <EmptyState
+                icon={FileText}
+                title="No expenses found"
+                description="No expenses recorded for this site in the selected period."
+              />
             ) : (
               <ReportRowEditor
                 rows={editableRows}
@@ -1989,27 +360,22 @@ const ExpenseReport = ({ sites }) => {
   );
 };
 
-const ClientSiteReport = ({ sites }) => {
+const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
   const [filters, setFilters] = useState({
     siteId: "",
     supervisionPercentage: "",
     startDate: "",
     endDate: "",
   });
-  const [reportData, setReportData] = useState(null);
+  const [reportData, setReportData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [editableRows, setEditableRows] = useState([]);
+  const [editableRows, setEditableRows] = useState<any[]>([]);
   const [roundAmounts, setRoundAmounts] = useState(false);
   const [roundBalance, setRoundBalance] = useState(false);
-  const [balanceOverride, setBalanceOverride] = useState(null);
+  const [balanceOverride, setBalanceOverride] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  useEffect(() => {
-    setIsAnimating(true);
-  }, []);
-
-  const handleSiteChange = (siteId) => {
+  const handleSiteChange = (siteId: string) => {
     const selectedSite = sites.find((s) => s._id === siteId);
     setFilters((prev) => ({
       ...prev,
@@ -2102,23 +468,19 @@ const ClientSiteReport = ({ sites }) => {
   };
 
   return (
-    <div
-      className={`transition-all duration-500 ${
-        isAnimating ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-      }`}
-    >
-      <div className="bg-gradient-to-r from-teal-50 to-cyan-50 rounded-xl p-6 mb-6 border border-teal-100">
-        <div className="flex items-center mb-4">
-          <Filter className="w-5 h-5 text-teal-600 mr-2" />
-          <h3 className="font-semibold text-gray-800">Report Filters</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+    <div className="space-y-6">
+      <div className="rounded-console border border-console-border bg-console-bg p-5">
+        <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-console-text">
+          <Filter size={16} className="text-brand-600" />
+          Report filters
+        </h3>
+        <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
           <select
-            className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
             value={filters.siteId}
             onChange={(e) => handleSiteChange(e.target.value)}
+            className="w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
           >
-            <option value="">Select Site</option>
+            <option value="">Select site</option>
             {sites.map((site) => (
               <option key={site._id} value={site._id}>
                 {site.name}
@@ -2126,147 +488,111 @@ const ClientSiteReport = ({ sites }) => {
             ))}
           </select>
           <div className="relative">
-            <Wallet className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Wallet className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="number"
               min={0}
               max={100}
               step="0.01"
               placeholder="Supervision %"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
               value={filters.supervisionPercentage}
-              onChange={(e) =>
-                setFilters({ ...filters, supervisionPercentage: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, supervisionPercentage: e.target.value })}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="date"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
               value={filters.startDate}
-              onChange={(e) =>
-                setFilters({ ...filters, startDate: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
             <input
               type="date"
-              className="w-full pl-10 pr-3 py-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all duration-200"
               value={filters.endDate}
-              onChange={(e) =>
-                setFilters({ ...filters, endDate: e.target.value })
-              }
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={fetchData}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-teal-500 to-cyan-600 text-white rounded-xl hover:from-teal-600 hover:to-cyan-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50"
-            disabled={loading || !filters.siteId}
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            {loading ? "Generating..." : "Generate Report"}
-          </button>
-          <button
+        <div className="flex items-center gap-3">
+          <Button onClick={fetchData} loading={loading} disabled={!filters.siteId}>
+            <RefreshCw size={15} /> {loading ? "Generating..." : "Generate report"}
+          </Button>
+          <Button
+            variant="danger"
             onClick={exportToPDF}
-            className="flex items-center px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-            disabled={loading || exporting || !reportData || editableRows.length === 0}
+            loading={exporting}
+            disabled={loading || !reportData || editableRows.length === 0}
           >
-            <FileDown className="w-4 h-4 mr-2" /> {exporting ? "Exporting..." : "Export PDF"}
-          </button>
+            <FileDown size={15} /> {exporting ? "Exporting..." : "Export PDF"}
+          </Button>
         </div>
       </div>
 
       {!filters.siteId ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Search className="w-8 h-8 text-teal-500" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Select a Site
-          </h3>
-          <p className="text-gray-500">
-            Please select a site to view its client report.
-          </p>
-        </div>
+        <EmptyState icon={Search} title="Select a site" description="Please select a site to view its client report." />
       ) : loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-teal-100 to-cyan-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <RefreshCw className="w-8 h-8 text-teal-500 animate-spin" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Loading Report
-          </h3>
-          <p className="text-gray-500">Fetching client report data...</p>
-        </div>
+        <PageLoader label="Fetching client report data" fullHeight={false} />
       ) : !reportData ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-          <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <FileText className="w-8 h-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-800 mb-2">
-            Generate Report
-          </h3>
-          <p className="text-gray-500">
-            Click "Generate Report" to load the client report for this site.
-          </p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="Generate report"
+          description='Click "Generate report" to load the client report for this site.'
+        />
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">Total</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-5">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">Total</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
                 ₹{totals.totalAmount.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">
                 Supervision ({reportData.supervisionPercentage}%)
               </p>
-              <p className="text-xl font-bold text-amber-600 mt-1">
+              <p className="mt-1 text-xl font-semibold text-warning-600">
                 ₹{totals.supervisionAmount.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">Net Total</p>
-              <p className="text-xl font-bold text-gray-900 mt-1">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">Net total</p>
+              <p className="mt-1 text-xl font-semibold text-console-text">
                 ₹{totals.netTotal.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <p className="text-sm text-gray-500">Varav (Received)</p>
-              <p className="text-xl font-bold text-emerald-600 mt-1">
+            <div className="rounded-console border border-console-border bg-white p-5">
+              <p className="text-sm text-console-muted">Varav (Received)</p>
+              <p className="mt-1 text-xl font-semibold text-success-700">
                 ₹{reportData.varav.toLocaleString("en-IN")}
               </p>
             </div>
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="rounded-console border border-console-border bg-white p-5">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">Balance</p>
+                <p className="text-sm text-console-muted">Balance</p>
                 <div className="flex items-center gap-2">
                   {balanceOverride !== null && (
                     <button
                       type="button"
                       title="Reset to computed balance"
                       onClick={() => setBalanceOverride(null)}
-                      className="text-gray-400 hover:text-gray-600"
+                      className="text-console-muted hover:text-console-text"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
+                      <RotateCcw size={13} />
                     </button>
                   )}
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 select-none cursor-pointer">
+                  <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-console-muted">
                     <input
                       type="checkbox"
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                       checked={roundBalance}
                       onChange={(e) => setRoundBalance(e.target.checked)}
+                      className="rounded border-console-border text-brand-600 focus:ring-brand-500"
                     />
                     Round off
                   </label>
@@ -2275,34 +601,30 @@ const ClientSiteReport = ({ sites }) => {
               <div className="mt-1">
                 <EditableAmountField
                   value={balance}
-                  onCommit={(value) => setBalanceOverride(value)}
-                  inputClassName={`w-full px-0 py-0 text-xl font-bold text-right border-0 border-b border-transparent hover:border-gray-300 focus:border-teal-500 focus:ring-0 bg-transparent transition-colors ${
-                    balance > 0 ? "text-red-600" : "text-emerald-600"
-                  }`}
-                  currencyClassName={`text-xl font-bold mr-1 ${
-                    balance > 0 ? "text-red-600" : "text-emerald-600"
-                  }`}
+                  onCommit={(value: number) => setBalanceOverride(value)}
+                  inputClassName={cn(
+                    "w-full border-0 border-b border-transparent bg-transparent px-0 py-0 text-right text-xl font-semibold transition-colors hover:border-slate-300 focus:border-brand-500 focus:ring-0",
+                    balance > 0 ? "text-danger-600" : "text-success-700",
+                  )}
+                  currencyClassName={cn(
+                    "mr-1 text-xl font-semibold",
+                    balance > 0 ? "text-danger-600" : "text-success-700",
+                  )}
                 />
               </div>
               {balanceOverride !== null && (
-                <p className="text-[11px] text-amber-600 mt-1">Manually overridden</p>
+                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
               )}
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="rounded-console border border-console-border bg-white p-5">
             {editableRows.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="w-16 h-16 bg-gradient-to-r from-gray-100 to-gray-200 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                  <FileText className="w-8 h-8 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
-                  No Expenses Found
-                </h3>
-                <p className="text-gray-500">
-                  No expenses recorded for this site in the selected period.
-                </p>
-              </div>
+              <EmptyState
+                icon={FileText}
+                title="No expenses found"
+                description="No expenses recorded for this site in the selected period."
+              />
             ) : (
               <ReportRowEditor
                 rows={editableRows}
