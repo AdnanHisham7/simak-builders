@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   DollarSign,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 interface Notification {
   _id: string;
@@ -115,9 +116,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         }
       }
       toast.success(`${getPastTense(action)} successfully`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to ${action} notification`, error);
-      toast.error(`Failed to ${action} notification`);
+      const message: string =
+        error?.response?.data?.message || `Failed to ${action} notification`;
+      toast.error(message);
+      // The underlying record was already verified/approved elsewhere (a
+      // second click, another admin, or a stale panel that hadn't picked up
+      // the earlier update yet). Sync this notification's status locally
+      // instead of leaving it stuck as "pending" until the next manual
+      // refresh, since the server-side action it represents did complete.
+      if (message.toLowerCase().includes("already verified")) {
+        updateNotificationStatus(notification._id, "approved");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -193,14 +204,15 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     return `${Math.floor(diffInHours / 24)}d ago`;
   };
 
-  return (
+return createPortal(
     <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-40 transition-opacity duration-300"
-          onClick={onClose}
-        />
-      )}
+       {isOpen && (
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300"
+        onClick={onClose}
+      />
+    )}
+
       <div
         className={`
           fixed top-0 right-0 h-full w-[550px] bg-white overflow-auto shadow-2xl transform transition-all duration-300 ease-out z-50
@@ -402,7 +414,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                                 disabled={
                                   actionLoading === `${notif._id}-verify`
                                 }
-                                className="flex items-center space-x-1 px-3 py-2 bg-brand-700 text-white text-xs rounded-lg hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center space-x-1 px-3 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {actionLoading === `${notif._id}-verify` ? (
                                   <RefreshCw className="w-3 h-3 animate-spin" />
@@ -455,7 +467,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
           )}
         </div>
       </div>
-    </>
+     </>,
+  document.body
   );
 };
 

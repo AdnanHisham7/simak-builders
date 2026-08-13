@@ -216,6 +216,12 @@ const SiteDetail: React.FC = () => {
   const [deletingMisc, setDeletingMisc] = useState(false);
   const [resetPhasesConfirmOpen, setResetPhasesConfirmOpen] = useState(false);
   const [resettingPhases, setResettingPhases] = useState(false);
+  const [verifyingPurchaseIds, setVerifyingPurchaseIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [verifyingMiscIds, setVerifyingMiscIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -383,12 +389,49 @@ const SiteDetail: React.FC = () => {
   }, [attendanceData]);
 
   const handleVerifyMiscellaneous = async (expenseId: string) => {
+    if (verifyingMiscIds.has(expenseId)) return;
+    setVerifyingMiscIds((prev) => new Set(prev).add(expenseId));
     try {
-      await verifyMiscellaneousExpense(expenseId);
+      const data = await verifyMiscellaneousExpense(expenseId);
+      setMiscellaneousExpenses((prev) =>
+        prev.map((exp) =>
+          exp._id === expenseId ? { ...exp, status: "verified" } : exp,
+        ),
+      );
+      if (data?.site) {
+        setSite((prev) =>
+          prev
+            ? {
+                ...prev,
+                expenses: data.site.expenses,
+                transactions: data.transaction
+                  ? [data.transaction, ...prev.transactions]
+                  : prev.transactions,
+              }
+            : prev,
+        );
+      }
       toast.success("Expense verified");
-      fetchMiscellaneousExpenses();
-    } catch (err) {
-      toast.error("Failed to verify expense");
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Failed to verify expense";
+      toast.error(message);
+      // The backend rejects a repeat verify with "already verified" once the
+      // first request has gone through elsewhere (another admin tab, or a
+      // stale notification panel). Reconcile local state instead of leaving
+      // a pending badge on an expense that's actually done.
+      if (typeof message === "string" && message.toLowerCase().includes("already verified")) {
+        setMiscellaneousExpenses((prev) =>
+          prev.map((exp) =>
+            exp._id === expenseId ? { ...exp, status: "verified" } : exp,
+          ),
+        );
+      }
+    } finally {
+      setVerifyingMiscIds((prev) => {
+        const next = new Set(prev);
+        next.delete(expenseId);
+        return next;
+      });
     }
   };
 
@@ -412,13 +455,23 @@ const SiteDetail: React.FC = () => {
     }
     setSavingMiscEdit(true);
     try {
-      await updateMiscellaneousExpense(editingMiscId, {
+      const data = await updateMiscellaneousExpense(editingMiscId, {
         name: editMiscName.trim(),
         category: editMiscCategory,
       });
+      setMiscellaneousExpenses((prev) =>
+        prev.map((exp) =>
+          exp._id === editingMiscId
+            ? {
+                ...exp,
+                name: data?.expense?.name ?? editMiscName.trim(),
+                category: data?.expense?.category ?? editMiscCategory,
+              }
+            : exp,
+        ),
+      );
       toast.success("Expense updated successfully");
       cancelEditMiscExpense();
-      fetchMiscellaneousExpenses();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to update expense.");
     } finally {
@@ -447,12 +500,49 @@ const SiteDetail: React.FC = () => {
       site?.siteManagers.some((m) => m.id === user?.id));
 
   const handleVerify = async (purchaseId: string) => {
+    if (verifyingPurchaseIds.has(purchaseId)) return;
+    setVerifyingPurchaseIds((prev) => new Set(prev).add(purchaseId));
     try {
-      await verifyPurchase(purchaseId);
+      const data = await verifyPurchase(purchaseId);
+      setPurchases((prev) =>
+        prev.map((p) =>
+          p._id === purchaseId
+            ? { ...p, status: "verified", items: data?.purchase?.items ?? p.items }
+            : p,
+        ),
+      );
+      if (data?.site) {
+        setSite((prev) =>
+          prev
+            ? {
+                ...prev,
+                expenses: data.site.expenses,
+                transactions: data.transaction
+                  ? [data.transaction, ...prev.transactions]
+                  : prev.transactions,
+              }
+            : prev,
+        );
+      }
+      // Stock levels change on verification too, keep the Stocks tab fresh.
+      getStocksBySite(siteId!).then(setStocks).catch(() => {});
       toast.success("Purchase verified");
-      fetchPurchases();
-    } catch (err) {
-      toast.error("Failed to verify purchase");
+    } catch (err: any) {
+      const message = err.response?.data?.message || "Failed to verify purchase";
+      toast.error(message);
+      if (typeof message === "string" && message.toLowerCase().includes("already verified")) {
+        setPurchases((prev) =>
+          prev.map((p) =>
+            p._id === purchaseId ? { ...p, status: "verified" } : p,
+          ),
+        );
+      }
+    } finally {
+      setVerifyingPurchaseIds((prev) => {
+        const next = new Set(prev);
+        next.delete(purchaseId);
+        return next;
+      });
     }
   };
 
@@ -503,13 +593,30 @@ const SiteDetail: React.FC = () => {
     }
     setSavingItemEdit(true);
     try {
-      await updatePurchaseItem(editingItem.purchaseId, editingItem.index, {
-        name: editItemName.trim(),
-        category: editItemCategory.trim(),
-      });
+      const data = await updatePurchaseItem(
+        editingItem.purchaseId,
+        editingItem.index,
+        {
+          name: editItemName.trim(),
+          category: editItemCategory.trim(),
+        },
+      );
+      setPurchases((prev) =>
+        prev.map((p) => {
+          if (p._id !== editingItem.purchaseId) return p;
+          const items = [...p.items];
+          items[editingItem.index] = data?.item ?? {
+            ...items[editingItem.index],
+            name: editItemName.trim(),
+            category: editItemCategory.trim(),
+          };
+          return { ...p, items };
+        }),
+      );
+      // A verified purchase's item edit can move stock between item names.
+      getStocksBySite(siteId!).then(setStocks).catch(() => {});
       toast.success("Item updated successfully");
       cancelEditPurchaseItem();
-      fetchPurchases();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to update item.");
     } finally {
@@ -574,8 +681,19 @@ const SiteDetail: React.FC = () => {
     if (!deletePurchaseTarget) return;
     setDeletingPurchase(true);
     try {
-      await deletePurchase(deletePurchaseTarget._id);
-      fetchPurchases();
+      const targetId = deletePurchaseTarget._id;
+      const data = await deletePurchase(targetId);
+      setPurchases((prev) => prev.filter((p) => p._id !== targetId));
+      // Deleting a verified purchase with a transportation fee also removes
+      // its linked miscellaneous (transportation) expense on the backend.
+      setMiscellaneousExpenses((prev) =>
+        prev.filter((exp) => exp.purchaseId?._id !== targetId && exp.purchaseId !== targetId),
+      );
+      if (data?.site) {
+        setSite((prev) =>
+          prev ? { ...prev, expenses: data.site.expenses } : prev,
+        );
+      }
       toast.success("Purchase deleted successfully");
       setDeletePurchaseTarget(null);
     } catch (err: any) {
@@ -589,8 +707,16 @@ const SiteDetail: React.FC = () => {
     if (!deleteMiscTarget) return;
     setDeletingMisc(true);
     try {
-      await deleteMiscellaneousExpense(deleteMiscTarget._id);
-      fetchMiscellaneousExpenses();
+      const targetId = deleteMiscTarget._id;
+      const data = await deleteMiscellaneousExpense(targetId);
+      setMiscellaneousExpenses((prev) =>
+        prev.filter((exp) => exp._id !== targetId),
+      );
+      if (data?.site) {
+        setSite((prev) =>
+          prev ? { ...prev, expenses: data.site.expenses } : prev,
+        );
+      }
       toast.success("Miscellaneous expense deleted successfully");
       setDeleteMiscTarget(null);
     } catch (err: any) {
@@ -917,79 +1043,88 @@ const SiteDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <button
-            type="button"
-            onClick={() => navigate(`/${userType}/sites`)}
-            className="mb-2 flex items-center gap-1.5 text-sm font-medium text-console-muted transition-colors hover:text-console-text"
-          >
-            <ChevronLeft size={16} /> Back to sites
-          </button>
-          <h1 className="text-xl font-semibold text-console-text">{site.name}</h1>
-          <p className="mt-0.5 flex items-center gap-1.5 text-sm text-console-muted">
-            <MapPin size={13} />
-            {site.address}, {site.city}, {site.state} {site.zip}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={site.status === "InProgress" ? "warning" : "success"}>
-            {site.status}
-          </Badge>
-          <div className="flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50 px-3 py-1 text-sm font-medium text-brand-800">
-            <Percent size={13} />
-            {isEditingSupervision ? (
-              <>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.01"
-                  autoFocus
-                  value={supervisionInput}
-                  onChange={(e) => setSupervisionInput(e.target.value)}
-                  className="w-16 rounded border border-brand-200 px-1 py-0.5 text-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-400"
-                />
-                <button
-                  type="button"
-                  onClick={handleSaveSupervision}
-                  disabled={isSavingSupervision}
-                  className="text-success-600 hover:text-success-800 disabled:opacity-50"
-                  title="Save"
-                >
-                  <Check size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelEditingSupervision}
-                  disabled={isSavingSupervision}
-                  className="text-console-muted hover:text-console-text disabled:opacity-50"
-                  title="Cancel"
-                >
-                  <X size={15} />
-                </button>
-              </>
-            ) : (
-              <>
-                <span>Supervision: {site.supervisionPercentage ?? 0}%</span>
-                {userType === "admin" && (
+      {/* Sticky header: site name, location, status, supervision — glassmorphism, pinned on scroll */}
+      <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 border-b border-white/40 bg-white/70 px-4 py-4 shadow-sm backdrop-blur-md backdrop-saturate-150 sm:px-6">
+        <div className="grid grid-cols-1 items-center gap-3 lg:grid-cols-[auto_1fr_auto] lg:gap-6">
+          <div className="lg:border-r lg:border-console-border/40 lg:pr-6">
+            <button
+              type="button"
+              onClick={() => navigate(`/${userType}/sites`)}
+              className="flex items-center gap-1.5 text-sm font-medium text-console-muted transition-colors hover:text-console-text"
+            >
+              <ChevronLeft size={16} /> Back to sites
+            </button>
+          </div>
+
+          <div className="min-w-0">
+            <h1 className="truncate text-xl font-semibold text-console-text">{site.name}</h1>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-console-muted">
+              <MapPin size={13} className="shrink-0" />
+              <span className="truncate">
+                {site.address}, {site.city}, {site.state} {site.zip}
+              </span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+            <Badge variant={site.status === "InProgress" ? "warning" : "success"}>
+              {site.status}
+            </Badge>
+            <div className="flex items-center gap-1.5 rounded-full border border-brand-100 bg-brand-50/90 px-3 py-1 text-sm font-medium text-brand-800 backdrop-blur-sm">
+              <Percent size={13} />
+              {isEditingSupervision ? (
+                <>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.01"
+                    autoFocus
+                    value={supervisionInput}
+                    onChange={(e) => setSupervisionInput(e.target.value)}
+                    className="w-16 rounded border border-brand-200 px-1 py-0.5 text-brand-900 focus:outline-none focus:ring-1 focus:ring-brand-400"
+                  />
                   <button
                     type="button"
-                    onClick={handleStartEditingSupervision}
-                    className="text-brand-600 hover:text-brand-800"
-                    title="Edit supervision percentage"
+                    onClick={handleSaveSupervision}
+                    disabled={isSavingSupervision}
+                    className="text-success-600 hover:text-success-800 disabled:opacity-50"
+                    title="Save"
                   >
-                    <Edit2 size={13} />
+                    <Check size={15} />
                   </button>
-                )}
-              </>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditingSupervision}
+                    disabled={isSavingSupervision}
+                    className="text-console-muted hover:text-console-text disabled:opacity-50"
+                    title="Cancel"
+                  >
+                    <X size={15} />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span>Supervision: {site.supervisionPercentage ?? 0}%</span>
+                  {userType === "admin" && (
+                    <button
+                      type="button"
+                      onClick={handleStartEditingSupervision}
+                      className="text-brand-600 hover:text-brand-800"
+                      title="Edit supervision percentage"
+                    >
+                      <Edit2 size={13} />
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {userType === "admin" && site.status === "InProgress" && (
+              <Button size="sm" onClick={() => setIsCompleteModalOpen(true)}>
+                <CheckCircle2 size={15} /> Mark as completed
+              </Button>
             )}
           </div>
-          {userType === "admin" && site.status === "InProgress" && (
-            <Button size="sm" onClick={() => setIsCompleteModalOpen(true)}>
-              <CheckCircle2 size={15} /> Mark as completed
-            </Button>
-          )}
         </div>
       </div>
 
@@ -1414,9 +1549,10 @@ const SiteDetail: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleVerify(purchase._id)}
-                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800"
+                                  disabled={verifyingPurchaseIds.has(purchase._id)}
+                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  Verify
+                                  {verifyingPurchaseIds.has(purchase._id) ? "Verifying..." : "Verify"}
                                 </button>
                               )}
                               {purchase.billUpload && purchase.billUpload.url && (
@@ -1861,9 +1997,10 @@ const SiteDetail: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => handleVerifyMiscellaneous(exp._id)}
-                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800"
+                                  disabled={verifyingMiscIds.has(exp._id)}
+                                  className="rounded-md bg-brand-700 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-800 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                  Verify
+                                  {verifyingMiscIds.has(exp._id) ? "Verifying..." : "Verify"}
                                 </button>
                               )}
                               {(userType === "admin" || exp.status === "pending") && (

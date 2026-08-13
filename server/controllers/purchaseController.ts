@@ -219,12 +219,22 @@ const verifyPurchase = async (
 ) => {
   try {
     const { purchaseId } = req.params;
-    const purchase: any =
-      await PurchaseModel.findById(purchaseId).populate("site");
-    if (!purchase)
-      throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
 
-    if (purchase.status === "verified") {
+    // Atomically flip status pending -> verified in a single findOneAndUpdate
+    // so two near-simultaneous verify requests can't both observe "pending"
+    // and both fall through to double-apply stock updates, site expenses,
+    // and the source-of-funds deduction below.
+    const purchase: any = await PurchaseModel.findOneAndUpdate(
+      { _id: purchaseId, status: { $ne: "verified" } },
+      { $set: { status: "verified" } },
+      { new: true },
+    ).populate("site");
+
+    if (!purchase) {
+      const stillExists = await PurchaseModel.exists({ _id: purchaseId });
+      if (!stillExists) {
+        throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+      }
       throw new ApiError(
         "Purchase is already verified",
         HttpStatus.BAD_REQUEST,
@@ -246,8 +256,6 @@ const verifyPurchase = async (
       item.name = canonicalName;
     }
     purchase.markModified("items");
-
-    purchase.status = "verified";
     await purchase.save();
 
     // Stock update
@@ -652,6 +660,18 @@ const deletePurchase = async (
     }
 
     await PurchaseModel.findByIdAndDelete(purchaseId);
+
+    // Close out any notifications still pointing at this purchase so the
+    // notification panel doesn't keep showing a "pending verification"
+    // entry for a purchase that no longer exists.
+    await NotificationModel.updateMany(
+      {
+        relatedId: purchase._id,
+        type: "purchase_verification",
+        status: "pending",
+      },
+      { status: "rejected" },
+    );
 
     await ActivityLogModel.create({
       user: req.user?.userId,

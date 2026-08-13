@@ -139,23 +139,31 @@ const verifyMiscellaneousExpense = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    const expense: any =
-      await MiscellaneousExpenseModel.findById(expenseId).populate("site");
-    if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+    // Atomically flip status pending -> verified in a single findOneAndUpdate.
+    // This closes the race window that a plain findById + save left open:
+    // two near-simultaneous verify requests (e.g. an accidental double click,
+    // or a stale notification panel retried after the first click already
+    // succeeded) could otherwise both read status "pending" before either
+    // write landed, and both would then proceed to double-count the site
+    // expense and the source-of-funds deduction below.
+    const expense: any = await MiscellaneousExpenseModel.findOneAndUpdate(
+      { _id: expenseId, status: { $ne: "verified" } },
+      { $set: { status: "verified" } },
+      { new: true },
+    ).populate("site");
 
-    // Guard against double verification (this is what was causing the
-    // notification "verify" button to double/triple-count expenses whenever
-    // it was clicked again after the notification list failed to reflect
-    // the already-verified state).
-    if (expense.status === "verified") {
+    if (!expense) {
+      const stillExists = await MiscellaneousExpenseModel.exists({
+        _id: expenseId,
+      });
+      if (!stillExists) {
+        throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+      }
       throw new ApiError(
         "Expense is already verified",
         HttpStatus.BAD_REQUEST,
       );
     }
-
-    expense.status = "verified";
-    await expense.save();
 
     const totalExpense = expense.amount + (expense.tip || 0);
 
@@ -332,6 +340,19 @@ const deleteMiscellaneousExpense = async (
 
     // Delete the expense document
     await MiscellaneousExpenseModel.findByIdAndDelete(expenseId);
+
+    // Close out any notifications still pointing at this expense so the
+    // notification panel doesn't keep showing a "pending verification"
+    // entry for an expense that no longer exists (which would otherwise
+    // 404 forever if an admin tried to verify it from a stale panel).
+    await NotificationModel.updateMany(
+      {
+        relatedId: expense._id,
+        type: "miscellaneous_expense_verification",
+        status: "pending",
+      },
+      { status: "rejected" },
+    );
 
     // Activity log
     await ActivityLogModel.create({
