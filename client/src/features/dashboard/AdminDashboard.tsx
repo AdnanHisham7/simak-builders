@@ -28,7 +28,6 @@ import {
   DollarSign,
   Eye,
   Import,
-  Plus,
   Compass,
   Wrench,
   Truck,
@@ -49,6 +48,9 @@ import { StatCard, Card } from "@/components/ui/Card";
 import { SkeletonStatCards, SkeletonChart } from "@/components/ui/Skeleton";
 import EmptyState from "@/components/ui/EmptyState";
 import Modal from "@/components/ui/Modal";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import HoverTooltip from "@/components/ui/Tooltip";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/cn";
 
 interface DashboardData {
@@ -285,23 +287,31 @@ const AdminDashboard = () => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-white p-1 shadow-console">
-        {SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            onClick={() => setActiveSection(section.id)}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              activeSection === section.id
-                ? "bg-brand-700 text-white"
-                : "text-console-muted hover:bg-console-bg hover:text-console-text",
-            )}
-          >
-            <section.icon size={16} />
-            {section.label}
-          </button>
-        ))}
+      <div className="relative flex flex-wrap gap-1 rounded-console border border-console-border bg-white p-1 shadow-console">
+        {SECTIONS.map((section) => {
+          const isActive = activeSection === section.id;
+          return (
+            <button
+              key={section.id}
+              type="button"
+              onClick={() => setActiveSection(section.id)}
+              className={cn(
+                "relative z-10 flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-200",
+                isActive ? "text-white" : "text-console-muted hover:bg-console-bg hover:text-console-text",
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="admin-dashboard-section-pill"
+                  className="absolute inset-0 -z-10 rounded-lg bg-brand-700"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              <section.icon size={16} />
+              {section.label}
+            </button>
+          );
+        })}
       </div>
 
       {loading ? (
@@ -315,65 +325,38 @@ const AdminDashboard = () => {
           <p>{error}</p>
         </div>
       ) : (
-        <>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeSection}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          >
           {activeSection === "overview" && (
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <Card className="cursor-pointer transition-shadow hover:shadow-console-lg">
-                  <button
-                    type="button"
-                    onClick={() => setIsCompanyFundsModalOpen(true)}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-console-muted">
-                        Company Funds
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-console-text">
-                        ₹{companyTotalAmount !== null ? formatNumber(companyTotalAmount) : "—"}
-                      </p>
-                      <p className="mt-1 text-xs text-console-muted">View transaction history</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
-                        <DollarSign size={20} />
-                      </div>
-                      <span
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsCompanyFundsModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1 rounded-md bg-success-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-success-700"
-                      >
-                        <Plus size={13} /> Add funds
-                      </span>
-                    </div>
-                  </button>
-                </Card>
+                <GradientStatCard
+                  label="Company Funds"
+                  value={companyTotalAmount ?? 0}
+                  prefix="₹"
+                  helperText="View transaction history"
+                  icon={DollarSign}
+                  onClick={() => setIsCompanyFundsModalOpen(true)}
+                  action={{
+                    label: "Add funds",
+                    onClick: () => setIsCompanyFundsModalOpen(true),
+                  }}
+                />
 
-                <Card className="cursor-pointer transition-shadow hover:shadow-console-lg">
-                  <button
-                    type="button"
-                    onClick={() => setIsReceivableModalOpen(true)}
-                    className="flex w-full items-center justify-between text-left"
-                  >
-                    <div>
-                      <p className="text-xs font-medium uppercase tracking-wide text-console-muted">
-                        Amount to be received
-                      </p>
-                      <p className="mt-2 text-2xl font-semibold text-console-text">
-                        ₹
-                        {amountToBeReceived !== null
-                          ? formatNumber(Math.round(amountToBeReceived))
-                          : "—"}
-                      </p>
-                      <p className="mt-1 text-xs text-console-muted">View per-site breakdown</p>
-                    </div>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning-50 text-warning-700">
-                      <AlertCircle size={20} />
-                    </div>
-                  </button>
-                </Card>
+                <GradientStatCard
+                  label="Amount to be received"
+                  value={amountToBeReceived !== null ? Math.round(amountToBeReceived) : 0}
+                  prefix="₹"
+                  helperText="View per-site breakdown"
+                  icon={AlertCircle}
+                  onClick={() => setIsReceivableModalOpen(true)}
+                />
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -493,14 +476,16 @@ const AdminDashboard = () => {
                 title="Live activity feed"
                 description="Recent changes across the console"
                 action={
-                  <button
-                    type="button"
-                    onClick={handleViewAllActivity}
-                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
-                    aria-label="View all activity"
-                  >
-                    <Eye size={16} />
-                  </button>
+                  <HoverTooltip label="View all activity">
+                    <button
+                      type="button"
+                      onClick={handleViewAllActivity}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
+                      aria-label="View all activity"
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </HoverTooltip>
                 }
               >
                 {data?.recentActivity?.length ? (
@@ -592,7 +577,8 @@ const AdminDashboard = () => {
               />
             </Card>
           )}
-        </>
+        </motion.div>
+        </AnimatePresence>
       )}
 
       <Modal

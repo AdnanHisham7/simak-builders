@@ -24,14 +24,17 @@ import {
   Users,
   Inbox,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
-import { SkeletonTable } from "@/components/ui/Skeleton";
+import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Tooltip from "@/components/ui/Tooltip";
+import CopyButton from "@/components/ui/CopyButton";
+import GradientStatCard from "@/components/ui/GradientStatCard";
 
 interface EmployeeFormData {
   name: string;
@@ -371,9 +374,27 @@ const Employees: React.FC = () => {
       </div>
 
       {loading ? (
-        <SkeletonTable />
+        <div className="space-y-6">
+          <SkeletonStatCards count={3} />
+          <SkeletonTable />
+        </div>
       ) : (
         <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <StatCard label="Total Employees" value={employees.length} icon={Users} />
+            <StatCard
+              label="Total Daily Wage"
+              value={`₹${employees.reduce((sum, e) => sum + (e.dailyWage || 0), 0).toLocaleString()}`}
+              icon={BarChart3}
+            />
+            <GradientStatCard
+              label="Total Paid Salary"
+              value={employees.reduce((sum, e) => sum + (e.totalPaidSalary || 0), 0)}
+              prefix="₹"
+              icon={CalendarCheck}
+            />
+          </div>
+
           <Card>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <div className="md:col-span-2">
@@ -491,51 +512,65 @@ const Employees: React.FC = () => {
                             <span className="text-sm font-medium text-console-text">{employee.name}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 text-sm text-console-muted">{employee.email}</td>
-                        <td className="px-4 py-3.5 text-sm text-console-muted">{employee.phone}</td>
+                        <td className="px-4 py-3.5 text-sm text-console-muted">
+                          <div className="flex items-center gap-2">
+                            <span>{employee.email}</span>
+                            <CopyButton value={employee.email} label="Email" />
+                          </div>
+                        </td>
+                        <td className="px-4 py-3.5 text-sm text-console-muted">
+                          <div className="flex items-center gap-2">
+                            <span>{employee.phone}</span>
+                            <CopyButton value={employee.phone} label="Phone" />
+                          </div>
+                        </td>
                         <td className="px-4 py-3.5">
                           <Badge variant="info">{employee.position}</Badge>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => openAttendanceModal(employee)}
-                              aria-label="View attendance"
-                              title="View attendance"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
-                            >
-                              <BarChart3 size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setMarkAttendanceTarget({ id: employee.id, name: employee.name })
-                              }
-                              aria-label="Mark attendance"
-                              title="Mark attendance"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
-                            >
-                              <CalendarCheck size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(employee)}
-                              aria-label="Edit employee"
-                              title="Edit employee"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(employee)}
-                              aria-label="Delete employee"
-                              title="Delete employee"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <Tooltip label="View attendance">
+                              <button
+                                type="button"
+                                onClick={() => openAttendanceModal(employee)}
+                                aria-label="View attendance"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                              >
+                                <BarChart3 size={16} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Mark attendance">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setMarkAttendanceTarget({ id: employee.id, name: employee.name })
+                                }
+                                aria-label="Mark attendance"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                              >
+                                <CalendarCheck size={16} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Edit employee">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(employee)}
+                                aria-label="Edit employee"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Delete employee">
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(employee)}
+                                aria-label="Delete employee"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </Tooltip>
                           </div>
                         </td>
                       </tr>

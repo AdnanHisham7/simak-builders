@@ -9,7 +9,7 @@ export const SkeletonStatCards: React.FC<{ count?: number }> = ({ count = 4 }) =
     {Array.from({ length: count }).map((_, index) => (
       <div
         key={index}
-        className="rounded-console border border-console-border bg-console-surface p-5 shadow-console"
+        className="rounded-glass border border-console-border bg-console-surface p-5 shadow-console"
       >
         <Skeleton className="h-3 w-20" />
         <Skeleton className="mt-4 h-7 w-24" />
@@ -23,7 +23,7 @@ export const SkeletonTable: React.FC<{ rows?: number; columns?: number }> = ({
   rows = 6,
   columns = 5,
 }) => (
-  <div className="overflow-hidden rounded-console border border-console-border bg-console-surface shadow-console">
+  <div className="overflow-hidden rounded-glass border border-console-border bg-console-surface shadow-console">
     <div className="flex gap-4 border-b border-console-border px-5 py-3">
       {Array.from({ length: columns }).map((_, index) => (
         <Skeleton key={index} className="h-3 flex-1" />
@@ -45,7 +45,7 @@ export const SkeletonTable: React.FC<{ rows?: number; columns?: number }> = ({
 export const SkeletonCard: React.FC<{ className?: string }> = ({ className }) => (
   <div
     className={cn(
-      "rounded-console border border-console-border bg-console-surface p-5 shadow-console",
+      "rounded-glass border border-console-border bg-console-surface p-5 shadow-console",
       className,
     )}
   >
@@ -59,7 +59,7 @@ export const SkeletonCard: React.FC<{ className?: string }> = ({ className }) =>
 export const SkeletonChart: React.FC<{ className?: string }> = ({ className }) => (
   <div
     className={cn(
-      "rounded-console border border-console-border bg-console-surface p-5 shadow-console",
+      "rounded-glass border border-console-border bg-console-surface p-5 shadow-console",
       className,
     )}
   >

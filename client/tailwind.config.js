@@ -58,9 +58,35 @@ export default {
       boxShadow: {
         console: "0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 1px 3px 0 rgba(15, 23, 42, 0.06)",
         "console-lg": "0 4px 6px -1px rgba(15, 23, 42, 0.06), 0 10px 15px -3px rgba(15, 23, 42, 0.08)",
+        glass: "0 1px 1px 0 rgba(15, 23, 42, 0.03), 0 8px 24px -8px rgba(15, 23, 42, 0.12), inset 0 1px 0 0 rgba(255, 255, 255, 0.6)",
+        "glass-lg": "0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 24px 48px -12px rgba(15, 23, 42, 0.18), inset 0 1px 0 0 rgba(255, 255, 255, 0.5)",
+        "glass-dark": "0 1px 0 0 rgba(255, 255, 255, 0.06) inset, 0 20px 40px -12px rgba(0, 0, 0, 0.45)",
+        "glow-brand": "0 8px 24px -8px rgba(140, 100, 36, 0.45)",
       },
       borderRadius: {
         console: "10px",
+        glass: "20px",
+        "glass-sm": "14px",
+      },
+      backdropBlur: {
+        xs: "2px",
+      },
+      transitionTimingFunction: {
+        apple: "cubic-bezier(0.22, 1, 0.36, 1)",
+      },
+      keyframes: {
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" },
+        },
+        "fade-scale-in": {
+          "0%": { opacity: "0", transform: "scale(0.96) translateY(6px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
+      },
+      animation: {
+        shimmer: "shimmer 2.4s linear infinite",
+        "fade-scale-in": "fade-scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },

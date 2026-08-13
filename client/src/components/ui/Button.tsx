@@ -1,4 +1,4 @@
-import React from "react";
+import React, { forwardRef } from "react";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -16,6 +16,10 @@ type ButtonSize = "sm" | "md" | "lg";
 interface ButtonProps {
   onClick?: (event: React.MouseEvent<HTMLButtonElement>) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLButtonElement>) => void;
+  onMouseEnter?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onMouseLeave?: (event: React.MouseEvent<HTMLButtonElement>) => void;
+  onFocus?: (event: React.FocusEvent<HTMLButtonElement>) => void;
+  onBlur?: (event: React.FocusEvent<HTMLButtonElement>) => void;
   type?: "button" | "submit" | "reset";
   children: React.ReactNode;
   className?: string;
@@ -47,22 +51,34 @@ const sizeClasses: Record<ButtonSize, string> = {
   lg: "text-sm font-semibold px-5 py-2.5",
 };
 
-const Button: React.FC<ButtonProps> = ({
-  onClick,
-  onKeyDown,
-  type = "button",
-  children,
-  className = "",
-  loading = false,
-  disabled = false,
-  variant = "primary",
-  size = "md",
-}) => {
+const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
+  {
+    onClick,
+    onKeyDown,
+    onMouseEnter,
+    onMouseLeave,
+    onFocus,
+    onBlur,
+    type = "button",
+    children,
+    className = "",
+    loading = false,
+    disabled = false,
+    variant = "primary",
+    size = "md",
+  },
+  ref,
+) {
   return (
     <button
+      ref={ref}
       type={type}
       onClick={onClick}
       onKeyDown={onKeyDown}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onFocus={onFocus}
+      onBlur={onBlur}
       disabled={disabled || loading}
       className={cn(
         "inline-flex items-center justify-center gap-2 transition-colors duration-150",
@@ -77,6 +93,6 @@ const Button: React.FC<ButtonProps> = ({
       {loading ? "Loading..." : children}
     </button>
   );
-};
+});
 
 export default Button;

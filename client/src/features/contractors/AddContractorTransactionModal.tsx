@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { X, AlertCircle } from "lucide-react";
+import { AlertCircle, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface Contractor {
   id: string;
@@ -19,6 +21,10 @@ interface AddContractorTransactionModalProps {
   onAddTransaction: (data: any) => Promise<any>;
   defaultSiteId?: string;
 }
+
+const fieldClass =
+  "w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100";
+const labelClass = "mb-1.5 block text-sm font-medium text-console-text";
 
 const AddContractorTransactionModal: React.FC<
   AddContractorTransactionModalProps
@@ -99,7 +105,6 @@ const AddContractorTransactionModal: React.FC<
       setError(null);
       onClose();
       toast.success("Transaction added successfully");
-      // window.location.href = "/admin/contractors";
     } catch (err) {
       setError("Failed to add transaction. Ensure the site exists.");
     } finally {
@@ -107,154 +112,142 @@ const AddContractorTransactionModal: React.FC<
     }
   };
 
-  if (!isOpen) return null;
+  const handleClose = () => {
+    if (isSubmitting) return;
+    onClose();
+  };
 
   const assignedSites = contractor.siteAssignments.map(
     (assignment) => assignment.site,
   );
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="relative bg-white rounded-2xl shadow-2xl border border-gray-200 p-8 max-w-lg w-full">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600"
-        >
-          <X size={20} />
-        </button>
-        <h2 className="text-2xl font-bold mb-6">
-          Add Transaction for {contractor.name}
-        </h2>
-        {assignedSites.length === 0 ? (
-          <p className="text-red-500">No sites assigned to this contractor.</p>
-        ) : (
-          <>
-            {!defaultSiteId ? (
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-semibold mb-2">
-                  Site *
-                </label>
-                <select
-                  name="siteId"
-                  value={transaction.siteId}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-                >
-                  <option value="">Select a site</option>
-                  {assignedSites.map((site) => (
-                    <option key={site.id} value={site.id}>
-                      {site.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : (
-              <div className="mb-4">
-                <label className="block text-gray-700 text-sm font-semibold mb-2">
-                  Site
-                </label>
-                <input
-                  type="text"
-                  value={
-                    assignedSites.find((s) => s.id === defaultSiteId)?.name ||
-                    ""
-                  }
-                  disabled
-                  className="w-full px-4 py-3 border-2 border-gray-100 bg-gray-100 rounded-xl text-gray-600"
-                />
-              </div>
-            )}
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">
-                Type *
-              </label>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={`Add transaction for ${contractor.name}`}
+      size="md"
+      disableClose={isSubmitting}
+      closeOnOverlayClick={!isSubmitting}
+      footer={
+        assignedSites.length > 0 ? (
+          <Button onClick={handleAdd} loading={isSubmitting}>
+            <ReceiptText className="h-4 w-4" />
+            Add transaction
+          </Button>
+        ) : undefined
+      }
+    >
+      {assignedSites.length === 0 ? (
+        <p className="text-sm text-danger-600">No sites assigned to this contractor.</p>
+      ) : (
+        <div className="space-y-4">
+          {!defaultSiteId ? (
+            <div>
+              <label className={labelClass}>Site *</label>
               <select
-                name="type"
-                value={transaction.type}
+                name="siteId"
+                value={transaction.siteId}
                 onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
+                className={fieldClass}
               >
-                <option value="">Select type</option>
-                <option value="advance">Advance</option>
-                <option value="expense">Expense</option>
-                <option value="additional_payment">Additional Payment</option>
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">
-                Amount *
-              </label>
-              <input
-                type="number"
-                name="amount"
-                value={transaction.amount || ""}
-                onChange={handleChange}
-                min="0"
-                step="0.01"
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-                placeholder="Enter amount"
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">
-                Category Type *
-              </label>
-              <select
-                value={showCustomCategory ? "other" : category}
-                onChange={handleCategoryChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-              >
-                <option value="">Select category</option>
-                {predefinedCategories.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
+                <option value="">Select a site</option>
+                {assignedSites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.name}
                   </option>
                 ))}
-                <option value="other">Other (specify)</option>
               </select>
-              {showCustomCategory && (
-                <input
-                  type="text"
-                  value={customCategory}
-                  onChange={(e) => setCustomCategory(e.target.value)}
-                  placeholder="Enter custom category"
-                  className="mt-2 w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500"
-                  required
-                />
-              )}
             </div>
-            <div className="mb-4">
-              <label className="block text-gray-700 text-sm font-semibold mb-2">
-                Description
-              </label>
+          ) : (
+            <div>
+              <label className={labelClass}>Site</label>
               <input
                 type="text"
-                name="description"
-                value={transaction.description}
-                onChange={handleChange}
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-blue-50 transition-all duration-200"
-                placeholder="Transaction description"
+                value={assignedSites.find((s) => s.id === defaultSiteId)?.name || ""}
+                disabled
+                className="w-full rounded-lg border border-console-border bg-console-bg px-3.5 py-2.5 text-sm text-console-muted"
               />
             </div>
-            {error && (
-              <p className="text-red-500 text-sm mb-4 flex items-center">
-                <AlertCircle size={16} className="mr-2" />
-                {error}
-              </p>
+          )}
+
+          <div>
+            <label className={labelClass}>Type *</label>
+            <select
+              name="type"
+              value={transaction.type}
+              onChange={handleChange}
+              className={fieldClass}
+            >
+              <option value="">Select type</option>
+              <option value="advance">Advance</option>
+              <option value="expense">Expense</option>
+              <option value="additional_payment">Additional payment</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass}>Amount *</label>
+            <input
+              type="number"
+              name="amount"
+              value={transaction.amount || ""}
+              onChange={handleChange}
+              min="0"
+              step="0.01"
+              className={fieldClass}
+              placeholder="Enter amount"
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>Category type *</label>
+            <select
+              value={showCustomCategory ? "other" : category}
+              onChange={handleCategoryChange}
+              className={fieldClass}
+            >
+              <option value="">Select category</option>
+              {predefinedCategories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+              <option value="other">Other (specify)</option>
+            </select>
+            {showCustomCategory && (
+              <input
+                type="text"
+                value={customCategory}
+                onChange={(e) => setCustomCategory(e.target.value)}
+                placeholder="Enter custom category"
+                className={`${fieldClass} mt-2`}
+                required
+              />
             )}
-            <div className="flex justify-end">
-              <button
-                onClick={handleAdd}
-                disabled={isSubmitting}
-                className="px-6 py-3 bg-gradient-to-r from-green-500 to-blue-500 text-white rounded-xl hover:from-green-600 hover:to-blue-600 transition-all duration-200 font-medium shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? "Adding..." : 'Add "Transaction"'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+          </div>
+
+          <div>
+            <label className={labelClass}>Description</label>
+            <input
+              type="text"
+              name="description"
+              value={transaction.description}
+              onChange={handleChange}
+              className={fieldClass}
+              placeholder="Transaction description"
+            />
+          </div>
+
+          {error && (
+            <p className="flex items-center gap-1.5 text-sm text-danger-600">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 };
 

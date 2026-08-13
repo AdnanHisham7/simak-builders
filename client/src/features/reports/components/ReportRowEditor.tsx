@@ -129,7 +129,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700 select-none">
           <input
             type="checkbox"
-            className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            className="w-4 h-4 rounded border-console-border text-brand-600 focus:ring-brand-500"
             checked={roundAmounts}
             disabled={disabled}
             onChange={(e) => onToggleRoundAmounts(e.target.checked)}
@@ -144,7 +144,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                 type="button"
                 onClick={openMergeModal}
                 disabled={disabled}
-                className="flex items-center px-3 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                className="flex items-center px-3 py-2 text-sm font-medium bg-brand-700 text-white rounded-lg hover:bg-brand-800 transition-colors disabled:opacity-50"
               >
                 <Combine className="w-4 h-4 mr-1.5" /> Merge Selected (2)
               </button>
@@ -174,21 +174,21 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
             <input
               type="text"
               placeholder="Item / description"
-              className="md:col-span-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="md:col-span-2 w-full px-3 py-2 border border-console-border rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-500"
               value={newRowName}
               onChange={(e) => setNewRowName(e.target.value)}
             />
             <input
               type="number"
               placeholder="Quantity (optional)"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-console-border rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-500"
               value={newRowQuantity}
               onChange={(e) => setNewRowQuantity(e.target.value)}
             />
             <input
               type="number"
               placeholder="Amount"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-console-border rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-500"
               value={newRowAmount}
               onChange={(e) => setNewRowAmount(e.target.value)}
             />
@@ -198,7 +198,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
             <button
               type="button"
               onClick={handleAddRow}
-              className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              className="px-4 py-2 text-sm font-medium bg-brand-700 text-white rounded-lg hover:bg-brand-800 transition-colors"
             >
               Add
             </button>
@@ -225,7 +225,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
               <input
                 type="text"
                 autoFocus
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent mb-4"
+                className="w-full px-3 py-2 border border-console-border rounded-lg text-sm focus:ring-2 focus:ring-brand-100 focus:border-brand-500 mb-4"
                 placeholder="Merged row name"
                 value={mergeName}
                 onChange={(e) => setMergeName(e.target.value)}
@@ -242,7 +242,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                   type="button"
                   onClick={confirmMerge}
                   disabled={!mergeName.trim()}
-                  className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium bg-brand-700 text-white rounded-lg hover:bg-brand-800 transition-colors disabled:opacity-50"
                 >
                   Confirm Merge
                 </button>
@@ -280,7 +280,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                 <td className="px-3 py-3 text-center">
                   <input
                     type="checkbox"
-                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="w-4 h-4 rounded border-console-border text-brand-600 focus:ring-brand-500"
                     checked={selectedForMerge.includes(row.id)}
                     disabled={disabled}
                     onChange={() => toggleSelectForMerge(row.id)}
@@ -290,7 +290,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                 <td className="px-4 py-3 text-sm text-gray-900">
                   {row.itemOfWork}
                   {row.isCustom && (
-                    <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700 bg-indigo-50 rounded">
+                    <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-50 rounded">
                       Custom
                     </span>
                   )}

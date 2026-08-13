@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { getSites, uploadDocument } from "@/services/siteService";
 import { getCurrentUser, UserWithSalary } from "@/services/userService";
 import {
@@ -19,6 +20,8 @@ import { Card, StatCard } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 interface Document {
@@ -226,14 +229,16 @@ const ArchitectDashboard: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded p-1.5 hover:bg-slate-200"
-                      >
-                        <Download size={15} className="text-console-muted" />
-                      </a>
+                      <Tooltip label="Download document">
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded p-1.5 hover:bg-slate-200"
+                        >
+                          <Download size={15} className="text-console-muted" />
+                        </a>
+                      </Tooltip>
                     </div>
                   ))}
                 </div>
@@ -265,21 +270,27 @@ const ArchitectDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div className="relative flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
         {TABS.map((tab) => {
           const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
-                activeTab === tab.id
-                  ? "bg-white text-brand-700 shadow-console"
-                  : "text-console-muted hover:bg-white/60",
+                "relative z-10 flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
+                isActive ? "text-brand-700" : "text-console-muted hover:bg-white/60",
               )}
             >
+              {isActive && (
+                <motion.span
+                  layoutId="architect-dashboard-tab-pill"
+                  className="absolute inset-0 -z-10 rounded-lg bg-white shadow-console"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
               <Icon size={15} />
               <span>{tab.name}</span>
             </button>
@@ -287,171 +298,178 @@ const ArchitectDashboard: React.FC = () => {
         })}
       </div>
 
-      {activeTab === "overview" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <DashStatCard title="Total Sites" value={sites.length} icon={Building2} subtitle="Active projects" />
-            <DashStatCard title="Total Documents" value={totalDocuments} icon={FileText} subtitle="Across all sites" />
-            <DashStatCard title="My Uploads" value={myDocuments.length} icon={Upload} subtitle="Documents uploaded" />
-            <DashStatCard
-              title="Verified Salary"
-              value={`₹${verifiedSalary.toLocaleString()}`}
-              icon={CheckCircle}
-              subtitle="Confirmed payments"
-            />
-          </div>
-
-          <Card title="Recent activity">
-            {myDocuments.length === 0 ? (
-              <p className="py-8 text-center text-sm text-console-muted">No recent activity</p>
-            ) : (
-              <div className="space-y-2.5">
-                {myDocuments.slice(0, 3).map((doc) => (
-                  <div key={doc.id} className="flex items-center gap-3 rounded-lg bg-console-bg p-3">
-                    <FileText size={18} className="text-brand-600" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-console-text">{doc.name}</p>
-                      <p className="text-xs text-console-muted">
-                        Uploaded {new Date(doc.uploadDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {activeTab === "overview" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <DashStatCard title="Total Sites" value={sites.length} icon={Building2} subtitle="Active projects" />
+                <DashStatCard title="Total Documents" value={totalDocuments} icon={FileText} subtitle="Across all sites" />
+                <DashStatCard title="My Uploads" value={myDocuments.length} icon={Upload} subtitle="Documents uploaded" />
+                <GradientStatCard label="Verified Salary" value={verifiedSalary} prefix="₹" icon={CheckCircle} helperText="Confirmed payments" />
               </div>
-            )}
-          </Card>
-        </div>
-      )}
 
-      {activeTab === "sites" && (
-        <div className="space-y-6">
-          {sites.length === 0 ? (
-            <Card>
-              <EmptyState icon={Building2} title="No sites assigned" description="You don't have any sites assigned yet." />
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              {sites.map((site) => (
-                <SiteCard key={site.id} site={site} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {activeTab === "documents" && (
-        <Card title="My uploaded documents">
-          {myDocuments.length === 0 ? (
-            <EmptyState icon={FileText} title="No documents yet" description="You haven't uploaded any documents yet." />
-          ) : (
-            <div className="space-y-2.5">
-              {myDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="flex items-center justify-between rounded-lg bg-console-bg p-4 transition-colors hover:bg-slate-100"
-                >
-                  <div className="flex min-w-0 flex-1 items-center gap-4">
-                    <FileText size={18} className="shrink-0 text-brand-600" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-console-text">
-                        {doc.name} <span className="text-xs text-console-muted">({doc.category})</span>
-                      </p>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-console-muted">
-                        <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                        <span>
-                          Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
-                        </span>
-                        <span>Uploaded {new Date(doc.uploadDate).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <a
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800"
-                  >
-                    <Download size={14} />
-                    <span>Download</span>
-                  </a>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      )}
-
-      {activeTab === "salary" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <DashStatCard
-              title="Total Salary"
-              value={`₹${currentUser.totalSalary?.toLocaleString() || "0"}`}
-              icon={DollarSign}
-              subtitle="All time earnings"
-            />
-            <DashStatCard
-              title="Verified Amount"
-              value={`₹${verifiedSalary.toLocaleString()}`}
-              icon={CheckCircle}
-              subtitle="Confirmed payments"
-            />
-            <DashStatCard
-              title="Pending Verification"
-              value={`₹${((currentUser.totalSalary || 0) - verifiedSalary).toLocaleString()}`}
-              icon={XCircle}
-              subtitle="Awaiting confirmation"
-            />
-          </div>
-
-          <Card title="Salary transactions">
-            {!currentUser.salaryAssignments || currentUser.salaryAssignments.length === 0 ? (
-              <EmptyState icon={DollarSign} title="No transactions yet" description="No salary transactions have been recorded." />
-            ) : (
-              <div className="space-y-2.5">
-                {currentUser.salaryAssignments
-                  .slice()
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((assignment) => (
-                    <div
-                      key={assignment._id}
-                      className="flex items-center justify-between rounded-lg bg-console-bg p-4"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div
-                          className={cn(
-                            "flex h-9 w-9 items-center justify-center rounded-full",
-                            assignment.isVerified ? "bg-success-100 text-success-700" : "bg-warning-100 text-warning-700",
-                          )}
-                        >
-                          {assignment.isVerified ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-console-text">
-                            ₹{assignment.amount.toLocaleString()}
+              <Card title="Recent activity">
+                {myDocuments.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-console-muted">No recent activity</p>
+                ) : (
+                  <div className="space-y-2.5">
+                    {myDocuments.slice(0, 3).map((doc) => (
+                      <div key={doc.id} className="flex items-center gap-3 rounded-lg bg-console-bg p-3">
+                        <FileText size={18} className="text-brand-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-console-text">{doc.name}</p>
+                          <p className="text-xs text-console-muted">
+                            Uploaded {new Date(doc.uploadDate).toLocaleDateString()}
                           </p>
-                          <div className="mt-0.5 flex items-center gap-3 text-xs text-console-muted">
-                            <span className="flex items-center gap-1">
-                              <Calendar size={11} />
-                              {new Date(assignment.date).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "sites" && (
+            <div className="space-y-6">
+              {sites.length === 0 ? (
+                <Card>
+                  <EmptyState icon={Building2} title="No sites assigned" description="You don't have any sites assigned yet." />
+                </Card>
+              ) : (
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  {sites.map((site) => (
+                    <SiteCard key={site.id} site={site} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "documents" && (
+            <Card title="My uploaded documents">
+              {myDocuments.length === 0 ? (
+                <EmptyState icon={FileText} title="No documents yet" description="You haven't uploaded any documents yet." />
+              ) : (
+                <div className="space-y-2.5">
+                  {myDocuments.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between rounded-lg bg-console-bg p-4 transition-colors hover:bg-slate-100"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                        <FileText size={18} className="shrink-0 text-brand-600" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-console-text">
+                            {doc.name} <span className="text-xs text-console-muted">({doc.category})</span>
+                          </p>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-console-muted">
+                            <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                            <span>
+                              Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
                             </span>
-                            <span className="flex items-center gap-1">
-                              <User size={11} />
-                              {assignment.givenBy?.name || "auto"}
-                            </span>
+                            <span>Uploaded {new Date(doc.uploadDate).toLocaleDateString()}</span>
                           </div>
                         </div>
                       </div>
-                      <Badge variant={assignment.isVerified ? "success" : "warning"}>
-                        {assignment.isVerified ? "Verified" : "Pending"}
-                      </Badge>
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800"
+                      >
+                        <Download size={14} />
+                        <span>Download</span>
+                      </a>
                     </div>
                   ))}
+                </div>
+              )}
+            </Card>
+          )}
+
+          {activeTab === "salary" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <GradientStatCard
+                  label="Total Salary"
+                  value={currentUser.totalSalary || 0}
+                  prefix="₹"
+                  icon={DollarSign}
+                  helperText="All time earnings"
+                />
+                <GradientStatCard
+                  label="Verified Amount"
+                  value={verifiedSalary}
+                  prefix="₹"
+                  icon={CheckCircle}
+                  helperText="Confirmed payments"
+                />
+                <DashStatCard
+                  title="Pending Verification"
+                  value={`₹${((currentUser.totalSalary || 0) - verifiedSalary).toLocaleString()}`}
+                  icon={XCircle}
+                  subtitle="Awaiting confirmation"
+                />
               </div>
-            )}
-          </Card>
-        </div>
-      )}
+
+              <Card title="Salary transactions">
+                {!currentUser.salaryAssignments || currentUser.salaryAssignments.length === 0 ? (
+                  <EmptyState icon={DollarSign} title="No transactions yet" description="No salary transactions have been recorded." />
+                ) : (
+                  <div className="space-y-2.5">
+                    {currentUser.salaryAssignments
+                      .slice()
+                      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                      .map((assignment) => (
+                        <div
+                          key={assignment._id}
+                          className="flex items-center justify-between rounded-lg bg-console-bg p-4"
+                        >
+                          <div className="flex items-center gap-4">
+                            <div
+                              className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded-full",
+                                assignment.isVerified ? "bg-success-100 text-success-700" : "bg-warning-100 text-warning-700",
+                              )}
+                            >
+                              {assignment.isVerified ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-console-text">
+                                ₹{assignment.amount.toLocaleString()}
+                              </p>
+                              <div className="mt-0.5 flex items-center gap-3 text-xs text-console-muted">
+                                <span className="flex items-center gap-1">
+                                  <Calendar size={11} />
+                                  {new Date(assignment.date).toLocaleDateString()}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <User size={11} />
+                                  {assignment.givenBy?.name || "auto"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <Badge variant={assignment.isVerified ? "success" : "warning"}>
+                            {assignment.isVerified ? "Verified" : "Pending"}
+                          </Badge>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </Card>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

@@ -20,7 +20,6 @@ import {
   Mail,
   ShieldCheck,
   ShieldX,
-  Copy,
   Trash2,
   Plus,
   Loader2,
@@ -34,6 +33,8 @@ import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import Tooltip from "@/components/ui/Tooltip";
+import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
 
 export interface Architect {
@@ -127,13 +128,6 @@ const Architects: React.FC = () => {
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => toast.success(`${label} copied to clipboard!`))
-      .catch(() => toast.error(`Failed to copy ${label}`));
   };
 
   const handleToggleStatus = (architect: Architect) => {
@@ -378,14 +372,16 @@ const Architects: React.FC = () => {
                                     className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
                                   >
                                     {site.name}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveSite(architect.id, site.id)}
-                                      className="text-brand-600 transition-colors hover:text-danger-600"
-                                      aria-label={`Remove ${site.name}`}
-                                    >
-                                      <Trash2 size={11} />
-                                    </button>
+                                    <Tooltip label={`Remove ${site.name}`}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSite(architect.id, site.id)}
+                                        className="text-brand-600 transition-colors hover:text-danger-600"
+                                        aria-label={`Remove ${site.name}`}
+                                      >
+                                        <Trash2 size={11} />
+                                      </button>
+                                    </Tooltip>
                                   </span>
                                 ))}
                                 {architect.sites.length > 2 && (
@@ -395,31 +391,26 @@ const Architects: React.FC = () => {
                                 )}
                               </>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedArchitect(architect);
-                                setIsAssignModalOpen(true);
-                              }}
-                              aria-label="Assign site"
-                              className="flex h-6 w-6 items-center justify-center rounded-full bg-success-600 text-white transition-colors hover:bg-success-700"
-                            >
-                              <Plus size={12} />
-                            </button>
+                            <Tooltip label="Assign site">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedArchitect(architect);
+                                  setIsAssignModalOpen(true);
+                                }}
+                                aria-label="Assign site"
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-success-600 text-white transition-colors hover:bg-success-700"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </Tooltip>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Mail size={13} className="text-console-muted" />
                             <span className="text-sm text-console-text">{architect.email}</span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(architect.email, "Email")}
-                              aria-label="Copy email"
-                              className="text-console-muted transition-colors hover:text-brand-700"
-                            >
-                              <Copy size={12} />
-                            </button>
+                            <CopyButton value={architect.email} label="Email" />
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
@@ -464,30 +455,34 @@ const Architects: React.FC = () => {
                                 "Block"
                               )}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedArchitect(architect);
-                                setIsEditModalOpen(true);
-                              }}
-                              aria-label="Edit architect"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleRegeneratePassword(architect)}
-                              disabled={isRegenerating[architect.id]}
-                              aria-label="Regenerate password"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              {isRegenerating[architect.id] ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <RefreshCw size={14} />
-                              )}
-                            </button>
+                            <Tooltip label="Edit architect">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedArchitect(architect);
+                                  setIsEditModalOpen(true);
+                                }}
+                                aria-label="Edit architect"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Regenerate password">
+                              <button
+                                type="button"
+                                onClick={() => handleRegeneratePassword(architect)}
+                                disabled={isRegenerating[architect.id]}
+                                aria-label="Regenerate password"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {isRegenerating[architect.id] ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <RefreshCw size={14} />
+                                )}
+                              </button>
+                            </Tooltip>
                           </div>
                         </td>
                       </tr>

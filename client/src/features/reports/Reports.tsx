@@ -27,6 +27,7 @@ import { Card } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 interface ReportSite {
@@ -578,14 +579,16 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
                 <p className="text-sm text-console-muted">Balance</p>
                 <div className="flex items-center gap-2">
                   {balanceOverride !== null && (
-                    <button
-                      type="button"
-                      title="Reset to computed balance"
-                      onClick={() => setBalanceOverride(null)}
-                      className="text-console-muted hover:text-console-text"
-                    >
-                      <RotateCcw size={13} />
-                    </button>
+                    <Tooltip label="Reset to computed balance">
+                      <button
+                        type="button"
+                        onClick={() => setBalanceOverride(null)}
+                        aria-label="Reset to computed balance"
+                        className="text-console-muted hover:text-console-text"
+                      >
+                        <RotateCcw size={13} />
+                      </button>
+                    </Tooltip>
                   )}
                   <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-console-muted">
                     <input

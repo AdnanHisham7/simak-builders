@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface InputProps {
   type?: string;
@@ -8,7 +9,7 @@ interface InputProps {
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   icon?: React.ReactNode;
-  showToggle?: boolean; // <- new prop
+  showToggle?: boolean;
 }
 
 const Input: React.FC<InputProps> = ({
@@ -26,9 +27,9 @@ const Input: React.FC<InputProps> = ({
   const inputType = showPassword && isPasswordType ? "text" : type;
 
   return (
-    <div className="relative rounded-md shadow-sm">
+    <div className="relative">
       {icon && (
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-console-muted">
           {icon}
         </div>
       )}
@@ -38,21 +39,23 @@ const Input: React.FC<InputProps> = ({
         name={name}
         value={value}
         onChange={onChange}
-        className={`w-full py-3 pl-10 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200`}
+        className="w-full rounded-lg border border-console-border bg-white py-3 pl-10 pr-10 text-sm text-console-text transition-colors duration-200 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
       />
       {showToggle && isPasswordType && (
-        <button
-          type="button"
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute inset-y-0 right-0 pr-3 flex items-center"
-          aria-label={showPassword ? "Hide password" : "Show password"}
-        >
-          {showPassword ? (
-            <EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-          ) : (
-            <EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600" />
-          )}
-        </button>
+        <Tooltip label={showPassword ? "Hide password" : "Show password"}>
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-console-muted transition-colors hover:text-brand-700"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+          >
+            {showPassword ? (
+              <EyeSlashIcon className="h-5 w-5" />
+            ) : (
+              <EyeIcon className="h-5 w-5" />
+            )}
+          </button>
+        </Tooltip>
       )}
     </div>
   );

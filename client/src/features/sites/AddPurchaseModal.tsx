@@ -19,6 +19,7 @@ import { searchItems, ItemSuggestion } from "@/services/itemService";
 import { PURCHASE_CATEGORIES, PURCHASE_UNITS } from "@/constants/purchaseOptions";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 interface AddPurchaseModalProps {
@@ -531,14 +532,16 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({ siteId, isAdmin = f
             {items.map((item, index) => (
               <div key={index} className="relative rounded-lg border border-console-border bg-white p-4">
                 {items.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeItem(index)}
-                    aria-label="Remove item"
-                    className="absolute right-2 top-2 rounded p-1 text-danger-600 transition-colors hover:bg-danger-50"
-                  >
-                    <Trash2 size={15} />
-                  </button>
+                  <Tooltip label="Remove item">
+                    <button
+                      type="button"
+                      onClick={() => removeItem(index)}
+                      aria-label="Remove item"
+                      className="absolute right-2 top-2 rounded p-1 text-danger-600 transition-colors hover:bg-danger-50"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </Tooltip>
                 )}
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-6">
                   <div className="relative">

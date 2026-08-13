@@ -31,12 +31,16 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  Boxes,
+  DollarSign,
 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import Tooltip from "@/components/ui/Tooltip";
+import GradientStatCard from "@/components/ui/GradientStatCard";
 import { cn } from "@/lib/cn";
 
 const getStockStatusVariant = (
@@ -355,6 +359,23 @@ const Stocks: React.FC = () => {
         </div>
       ) : (
         <>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <StatCard
+              label="Total Stock Items"
+              value={filteredStocks.length}
+              icon={Boxes}
+            />
+            <GradientStatCard
+              label="Total Inventory Value"
+              value={filteredStocks.reduce(
+                (sum, s) => sum + (s.quantity || 0) * (s.averagePrice || 0),
+                0,
+              )}
+              prefix="₹"
+              icon={DollarSign}
+            />
+          </div>
+
           <Card>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="relative max-w-md flex-1">
@@ -382,28 +403,32 @@ const Stocks: React.FC = () => {
                   ))}
                 </select>
                 <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("grid")}
-                    aria-label="Grid view"
-                    className={cn(
-                      "rounded-md p-1.5 transition-colors",
-                      viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                    )}
-                  >
-                    <GridIcon size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("table")}
-                    aria-label="Table view"
-                    className={cn(
-                      "rounded-md p-1.5 transition-colors",
-                      viewMode === "table" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                    )}
-                  >
-                    <List size={16} />
-                  </button>
+                  <Tooltip label="Grid view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      aria-label="Grid view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <GridIcon size={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Table view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("table")}
+                      aria-label="Table view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "table" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <List size={16} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             </div>

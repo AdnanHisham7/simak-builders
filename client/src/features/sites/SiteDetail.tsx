@@ -84,12 +84,14 @@ import CompleteSiteModal from "./CompleteSiteModal";
 import ClientPaymentsModal from "./ClientPaymentsModal";
 import SiteContractorsManager from "../contractors/SiteContractorsManager";
 import { Card } from "@/components/ui/Card";
+import GradientStatCard from "@/components/ui/GradientStatCard";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 interface SiteTransaction {
@@ -764,10 +766,10 @@ const SiteDetail: React.FC = () => {
 
   const getAttendanceColor = (level: number) => {
     const colors = [
-      "bg-slate-100",
-      "bg-success-200",
-      "bg-success-300",
+      "bg-success-50",
+      "bg-success-100",
       "bg-success-500",
+      "bg-success-600",
       "bg-success-700",
     ];
     return colors[level] || colors[0];
@@ -992,61 +994,34 @@ const SiteDetail: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <button
-          type="button"
+        <GradientStatCard
+          label="Received from client"
+          value={site.budget}
+          prefix="₹"
+          tone="success"
+          icon={DollarSign}
+          helperText={`Balance: ₹${(site.budget - (site.expenses || 0)).toLocaleString("en-IN")}`}
           onClick={() => setIsClientPaymentsModalOpen(true)}
-          className="rounded-console border border-console-border bg-white p-5 text-left transition-shadow hover:shadow-console-lg"
-        >
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">
-                Received from client
-              </p>
-              <p className="mt-1 text-xl font-semibold text-console-text">
-                ₹{site.budget.toLocaleString("en-IN")}
-              </p>
-              <p className="mt-1 text-xs font-medium text-success-700">
-                Balance: ₹{(site.budget - (site.expenses || 0)).toLocaleString("en-IN")}
-              </p>
-            </div>
-            <div className="flex flex-col items-end gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success-50 text-success-700">
-                <DollarSign size={18} />
-              </div>
-              {(userType === "admin" || userType === "siteManager") && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsManualPaymentModalOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1 rounded-md bg-success-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-success-700"
-                >
-                  <Plus size={12} /> Add
-                </span>
-              )}
-            </div>
-          </div>
-        </button>
+          action={
+            userType === "admin" || userType === "siteManager"
+              ? {
+                  label: "Add payment",
+                  onClick: () => setIsManualPaymentModalOpen(true),
+                }
+              : undefined
+          }
+        />
 
-        <button
-          type="button"
+        <GradientStatCard
+          label="Expenses"
+          value={site.expenses}
+          prefix="₹"
+          tone="danger"
+          icon={TrendingUp}
           onClick={() => setIsTransactionsModalOpen(true)}
-          className="rounded-console border border-console-border bg-white p-5 text-left transition-shadow hover:shadow-console-lg"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Expenses</p>
-              <p className="mt-1 text-xl font-semibold text-console-text">
-                ₹{site.expenses.toLocaleString()}
-              </p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-danger-50 text-danger-600">
-              <TrendingUp size={18} />
-            </div>
-          </div>
-        </button>
+        />
 
-        <div className="rounded-console border border-console-border bg-white p-5">
+        <div className="rounded-glass border border-console-border bg-white p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Progress</p>
@@ -1060,7 +1035,7 @@ const SiteDetail: React.FC = () => {
           </div>
         </div>
 
-        <div className="rounded-console border border-console-border bg-white p-5">
+        <div className="rounded-glass border border-console-border bg-white p-5">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Team size</p>
@@ -1228,14 +1203,16 @@ const SiteDetail: React.FC = () => {
                         <span className="text-sm font-medium text-console-text">{member.name}</span>
                       </div>
                       {userType === "admin" && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTeamMember(member.id, group.role)}
-                          aria-label="Remove member"
-                          className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
-                        >
-                          <UserX size={16} />
-                        </button>
+                        <Tooltip label="Remove member">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTeamMember(member.id, group.role)}
+                            aria-label="Remove member"
+                            className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                          >
+                            <UserX size={16} />
+                          </button>
+                        </Tooltip>
                       )}
                     </div>
                   ))}
@@ -2080,23 +2057,21 @@ const SiteDetail: React.FC = () => {
         />
       )}
 
-      {isAddMiscellaneousModalOpen && (
-        <AddMiscellaneousExpenseModal
-          siteId={siteId!}
-          isAdmin={userType === "admin"}
-          onClose={() => {
-            setIsAddMiscellaneousModalOpen(false);
-            if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();
-          }}
-        />
-      )}
+      <AddMiscellaneousExpenseModal
+        isOpen={isAddMiscellaneousModalOpen}
+        siteId={siteId!}
+        isAdmin={userType === "admin"}
+        onClose={() => {
+          setIsAddMiscellaneousModalOpen(false);
+          if (selectedTab === "miscellaneous") fetchMiscellaneousExpenses();
+        }}
+      />
 
-      {isTransactionsModalOpen && site.transactions && (
-        <TransactionsModal
-          transactions={site.transactions}
-          onClose={() => setIsTransactionsModalOpen(false)}
-        />
-      )}
+      <TransactionsModal
+        isOpen={isTransactionsModalOpen}
+        transactions={site.transactions || []}
+        onClose={() => setIsTransactionsModalOpen(false)}
+      />
 
       {isCompleteModalOpen && (
         <CompleteSiteModal

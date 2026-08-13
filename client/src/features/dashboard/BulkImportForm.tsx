@@ -13,6 +13,7 @@ import {
   Wrench,
 } from "lucide-react";
 import Button from "@/components/ui/Button";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 const defaultPhases = [
@@ -664,14 +665,16 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({ clients, vendors }) => 
                 <div key={index} className="space-y-5 rounded-console border border-console-border bg-console-bg p-5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-console-text">Purchase #{index + 1}</h4>
-                    <button
-                      type="button"
-                      onClick={() => removeArrayItem("purchases", index)}
-                      aria-label="Remove purchase"
-                      className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <Tooltip label="Remove purchase">
+                      <button
+                        type="button"
+                        onClick={() => removeArrayItem("purchases", index)}
+                        aria-label="Remove purchase"
+                        className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -824,14 +827,16 @@ const BulkImportForm: React.FC<BulkImportFormProps> = ({ clients, vendors }) => 
                 <div key={index} className="space-y-4 rounded-console border border-console-border bg-console-bg p-5">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-semibold text-console-text">Expense #{index + 1}</h4>
-                    <button
-                      type="button"
-                      onClick={() => removeArrayItem("miscellaneousExpenses", index)}
-                      aria-label="Remove expense"
-                      className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <Tooltip label="Remove expense">
+                      <button
+                        type="button"
+                        onClick={() => removeArrayItem("miscellaneousExpenses", index)}
+                        aria-label="Remove expense"
+                        className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </Tooltip>
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

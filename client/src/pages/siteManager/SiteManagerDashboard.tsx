@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { getCurrentUser, getUserById } from "@/services/userService";
 import {
   DollarSign,
@@ -11,10 +12,12 @@ import {
   Clock,
   ChevronLeft,
 } from "lucide-react";
-import { Card, StatCard } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
 
 const ITEMS_PER_PAGE = 10;
@@ -118,13 +121,15 @@ const SiteManagerDashboard: React.FC = () => {
       <Card
         title={title}
         action={
-          <button
-            type="button"
-            onClick={() => setActiveTable(null)}
-            className="rounded-lg p-1.5 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
-          >
-            Close
-          </button>
+          <Tooltip label="Close this table">
+            <button
+              type="button"
+              onClick={() => setActiveTable(null)}
+              className="rounded-lg p-1.5 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
+            >
+              Close
+            </button>
+          </Tooltip>
         }
       >
         {transactions.length === 0 ? (
@@ -154,7 +159,13 @@ const SiteManagerDashboard: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-console-border bg-white">
                   {paginated.map((transaction: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-console-bg">
+                    <motion.tr
+                      key={`${currentPage}-${idx}`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.18, delay: idx * 0.02 }}
+                      className="hover:bg-console-bg"
+                    >
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
                         {transaction.date ? new Date(transaction.date).toLocaleDateString() : "-"}
                       </td>
@@ -189,7 +200,7 @@ const SiteManagerDashboard: React.FC = () => {
                           </td>
                         </>
                       )}
-                    </tr>
+                    </motion.tr>
                   ))}
                 </tbody>
               </table>
@@ -202,14 +213,16 @@ const SiteManagerDashboard: React.FC = () => {
                   {transactions.length} results
                 </p>
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
+                  <Tooltip label="Previous page">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                  </Tooltip>
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                     <button
                       type="button"
@@ -223,14 +236,16 @@ const SiteManagerDashboard: React.FC = () => {
                       {p}
                     </button>
                   ))}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
-                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                  <Tooltip label="Next page">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             )}
@@ -256,43 +271,63 @@ const SiteManagerDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <button type="button" onClick={() => handleStatCardClick("salary")} className="text-left">
-          <StatCard
-            label="Total Salary Account"
-            value={`₹${totalSalary.toLocaleString()}`}
-            icon={DollarSign}
-            className={cn(activeTable === "salary" && "ring-2 ring-brand-300")}
-          />
-        </button>
-        <button type="button" onClick={() => handleStatCardClick("expense")} className="text-left">
-          <StatCard
-            label="In-Site Expenses Balance"
-            value={`₹${siteExpensesBalance.toLocaleString()}`}
-            icon={CreditCard}
-            className={cn(activeTable === "expense" && "ring-2 ring-brand-300")}
-          />
-        </button>
+        <GradientStatCard
+          label="Total Salary Account"
+          value={totalSalary}
+          prefix="₹"
+          icon={DollarSign}
+          onClick={() => handleStatCardClick("salary")}
+          className={cn(activeTable === "salary" && "ring-2 ring-brand-300")}
+        />
+        <GradientStatCard
+          label="In-Site Expenses Balance"
+          value={siteExpensesBalance}
+          prefix="₹"
+          icon={CreditCard}
+          onClick={() => handleStatCardClick("expense")}
+          className={cn(activeTable === "expense" && "ring-2 ring-brand-300")}
+        />
       </div>
 
-      {activeTable === "salary" && (
-        <TransactionTable
-          title="Salary Transaction History"
-          transactions={salaryAssignments}
-          type="salary"
-          currentPage={salaryPage}
-          setCurrentPage={setSalaryPage}
-        />
-      )}
+      <AnimatePresence mode="wait">
+        {activeTable === "salary" && (
+          <motion.div
+            key="salary-table"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <TransactionTable
+              title="Salary Transaction History"
+              transactions={salaryAssignments}
+              type="salary"
+              currentPage={salaryPage}
+              setCurrentPage={setSalaryPage}
+            />
+          </motion.div>
+        )}
 
-      {activeTable === "expense" && (
-        <TransactionTable
-          title="Site Expenses Transaction History"
-          transactions={siteExpensesTransactions}
-          type="expense"
-          currentPage={expensePage}
-          setCurrentPage={setExpensePage}
-        />
-      )}
+        {activeTable === "expense" && (
+          <motion.div
+            key="expense-table"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <TransactionTable
+              title="Site Expenses Transaction History"
+              transactions={siteExpensesTransactions}
+              type="expense"
+              currentPage={expensePage}
+              setCurrentPage={setExpensePage}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div>
         <h2 className="mb-4 flex items-center gap-2.5 text-base font-semibold text-console-text">

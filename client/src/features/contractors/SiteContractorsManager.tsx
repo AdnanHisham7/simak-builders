@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Search, Plus, Users, Eye, DollarSign, Trash2, Edit, UserPlus } from "lucide-react";
+import { Search, Plus, Users, Eye, DollarSign, Trash2, Edit, UserPlus, UserMinus } from "lucide-react";
 import {
   getAllContractors,
   createContractor,
@@ -22,6 +22,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface Contractor {
   id: string;
@@ -353,68 +354,79 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1">
                 {canAddTransaction && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedContractor(contractor);
-                      setIsAddTransactionModalOpen(true);
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-success-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-success-700"
-                  >
-                    <DollarSign size={13} />
-                    <span className="hidden sm:inline">Add Tx</span>
-                  </button>
+                  <Tooltip label="Add transaction">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedContractor(contractor);
+                        setIsAddTransactionModalOpen(true);
+                      }}
+                      aria-label="Add transaction"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                    >
+                      <DollarSign size={16} />
+                    </button>
+                  </Tooltip>
                 )}
-                <button
-                  type="button"
-                  onClick={() => handleViewTransactions(contractor)}
-                  className="flex items-center gap-1.5 rounded-lg bg-info-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-info-700"
-                >
-                  <Eye size={13} />
-                  <span className="hidden sm:inline">Txns</span>
-                </button>
-                {canEdit && (
+                <Tooltip label="View transactions">
                   <button
                     type="button"
-                    onClick={() => {
-                      setContractorToEdit(contractor);
-                      setNewContractorForm({
-                        name: contractor.name,
-                        email: contractor.email,
-                        phone: contractor.phone,
-                        company: contractor.company,
-                      });
-                      setIsEditModalOpen(true);
-                    }}
-                    aria-label="Edit contractor"
-                    className="rounded-lg bg-warning-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-warning-600"
+                    onClick={() => handleViewTransactions(contractor)}
+                    aria-label="View transactions"
+                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
                   >
-                    <Edit size={13} />
+                    <Eye size={16} />
                   </button>
+                </Tooltip>
+                {canEdit && (
+                  <Tooltip label="Edit contractor">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContractorToEdit(contractor);
+                        setNewContractorForm({
+                          name: contractor.name,
+                          email: contractor.email,
+                          phone: contractor.phone,
+                          company: contractor.company,
+                        });
+                        setIsEditModalOpen(true);
+                      }}
+                      aria-label="Edit contractor"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                    >
+                      <Edit size={16} />
+                    </button>
+                  </Tooltip>
                 )}
                 {canAssign && (
-                  <button
-                    type="button"
-                    onClick={() => setRemoveTarget(contractor)}
-                    className="rounded-lg bg-danger-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-danger-600"
-                  >
-                    Remove
-                  </button>
+                  <Tooltip label="Remove from site">
+                    <button
+                      type="button"
+                      onClick={() => setRemoveTarget(contractor)}
+                      aria-label="Remove from site"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                    >
+                      <UserMinus size={16} />
+                    </button>
+                  </Tooltip>
                 )}
                 {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setContractorToDelete(contractor);
-                      setIsDeleteModalOpen(true);
-                    }}
-                    aria-label="Delete contractor"
-                    className="rounded-lg bg-slate-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-slate-700"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <Tooltip label="Delete contractor">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContractorToDelete(contractor);
+                        setIsDeleteModalOpen(true);
+                      }}
+                      aria-label="Delete contractor"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </Tooltip>
                 )}
               </div>
             </div>
@@ -524,14 +536,16 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                         {new Date(tx.date).toLocaleDateString()}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTransaction(tx.id)}
-                          aria-label="Delete transaction"
-                          className="rounded-lg p-1.5 text-danger-600 transition-colors hover:bg-danger-50"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <Tooltip label="Delete transaction">
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTransaction(tx.id)}
+                            aria-label="Delete transaction"
+                            className="rounded-lg p-1.5 text-danger-600 transition-colors hover:bg-danger-50"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </Tooltip>
                       </td>
                     </tr>
                   ))}

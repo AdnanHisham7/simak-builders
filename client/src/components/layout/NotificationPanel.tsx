@@ -402,7 +402,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                                 disabled={
                                   actionLoading === `${notif._id}-verify`
                                 }
-                                className="flex items-center space-x-1 px-3 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex items-center space-x-1 px-3 py-2 bg-brand-700 text-white text-xs rounded-lg hover:bg-brand-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 {actionLoading === `${notif._id}-verify` ? (
                                   <RefreshCw className="w-3 h-3 animate-spin" />

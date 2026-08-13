@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import Tooltip from "@/components/ui/Tooltip";
 
 type ModalSize = "sm" | "md" | "lg" | "xl" | "full";
 
@@ -66,8 +68,6 @@ const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen, onClose, disableClose]);
 
-  if (!isOpen) return null;
-
   const handleOverlayMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!closeOnOverlayClick || disableClose) return;
     if (event.target === event.currentTarget) {
@@ -76,60 +76,75 @@ const Modal: React.FC<ModalProps> = ({
   };
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      onMouseDown={handleOverlayMouseDown}
-      role="presentation"
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? "console-modal-title" : undefined}
-        className={cn(
-          "w-full rounded-console bg-console-surface shadow-console-lg border border-console-border flex flex-col max-h-[90vh]",
-          sizeClasses[size],
-          className,
-        )}
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        {(title || !disableClose) && (
-          <div className="flex items-start justify-between gap-4 border-b border-console-border px-6 py-4 shrink-0">
-            <div>
-              {title && (
-                <h2
-                  id="console-modal-title"
-                  className="text-base font-semibold text-console-text"
-                >
-                  {title}
-                </h2>
-              )}
-              {description && (
-                <p className="mt-1 text-sm text-console-muted">{description}</p>
-              )}
-            </div>
-            {!disableClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close dialog"
-                className="rounded-md p-1.5 text-console-muted hover:bg-console-bg hover:text-console-text transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          key="modal-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+          onMouseDown={handleOverlayMouseDown}
+          role="presentation"
+        >
+          <motion.div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? "console-modal-title" : undefined}
+            initial={{ opacity: 0, scale: 0.94, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 10 }}
+            transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+            className={cn(
+              "glass-panel flex w-full max-h-[90vh] flex-col overflow-hidden rounded-glass shadow-glass-lg",
+              sizeClasses[size],
+              className,
             )}
-          </div>
-        )}
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            {(title || !disableClose) && (
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/50 px-6 py-4">
+                <div>
+                  {title && (
+                    <h2
+                      id="console-modal-title"
+                      className="text-base font-semibold text-console-text"
+                    >
+                      {title}
+                    </h2>
+                  )}
+                  {description && (
+                    <p className="mt-1 text-sm text-console-muted">{description}</p>
+                  )}
+                </div>
+                {!disableClose && (
+                  <Tooltip label="Close">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      aria-label="Close dialog"
+                      className="rounded-md p-1.5 text-console-muted transition-colors hover:bg-white/70 hover:text-console-text"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+            )}
 
-        <div className="overflow-y-auto px-6 py-5">{children}</div>
+            <div className="overflow-y-auto px-6 py-5">{children}</div>
 
-        {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-console-border px-6 py-4 shrink-0">
-            {footer}
-          </div>
-        )}
-      </div>
-    </div>,
+            {footer && (
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/50 px-6 py-4">
+                {footer}
+              </div>
+            )}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 };

@@ -21,6 +21,7 @@ import {
   ArrowDown,
   ArrowUpDown,
   Inbox,
+  Wallet,
 } from "lucide-react";
 import {
   getAllContractors,
@@ -45,6 +46,9 @@ import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Tooltip from "@/components/ui/Tooltip";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
 
 interface Contractor {
@@ -420,11 +424,13 @@ const Contractors: React.FC = () => {
           <div className="flex items-center gap-2 text-sm text-console-muted">
             <Mail size={13} />
             {contractor.email}
+            <CopyButton value={contractor.email} label="Email" />
           </div>
           {contractor.phone && (
             <div className="flex items-center gap-2 text-sm text-console-muted">
               <Phone size={13} />
               {contractor.phone}
+              <CopyButton value={contractor.phone} label="Phone" />
             </div>
           )}
           <div className="flex items-center gap-2 text-sm text-console-muted">
@@ -440,30 +446,36 @@ const Contractors: React.FC = () => {
             </span>
           </div>
           <div className="flex gap-1">
-            <button
-              type="button"
-              onClick={() => openEditModal(contractor)}
-              aria-label="Edit contractor"
-              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => openDeleteModal(contractor)}
-              aria-label="Delete contractor"
-              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
-            >
-              <Trash2 size={15} />
-            </button>
-            <button
-              type="button"
-              onClick={() => openDetails(contractor)}
-              aria-label="View contractor"
-              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
-            >
-              <Eye size={15} />
-            </button>
+            <Tooltip label="Edit contractor">
+              <button
+                type="button"
+                onClick={() => openEditModal(contractor)}
+                aria-label="Edit contractor"
+                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+              >
+                <Pencil size={15} />
+              </button>
+            </Tooltip>
+            <Tooltip label="Delete contractor">
+              <button
+                type="button"
+                onClick={() => openDeleteModal(contractor)}
+                aria-label="Delete contractor"
+                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+              >
+                <Trash2 size={15} />
+              </button>
+            </Tooltip>
+            <Tooltip label="View contractor details">
+              <button
+                type="button"
+                onClick={() => openDetails(contractor)}
+                aria-label="View contractor"
+                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+              >
+                <Eye size={15} />
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Card>
@@ -515,7 +527,7 @@ const Contractors: React.FC = () => {
       ) : (
         <>
           {(viewMode === "list" || viewMode === "grid") && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
               <StatCard label="Total Contractors" value={contractors.length} icon={Users} />
               <StatCard
                 label="Active Contractors"
@@ -526,6 +538,15 @@ const Contractors: React.FC = () => {
                 label="Blocked Contractors"
                 value={contractors.filter((c) => c.status === "blocked").length}
                 icon={AlertCircle}
+              />
+              <GradientStatCard
+                label="Total Balance"
+                value={contractors.reduce(
+                  (sum, c) => sum + c.siteAssignments.reduce((s, a) => s + a.totalAmount, 0),
+                  0,
+                )}
+                prefix="₹"
+                icon={Wallet}
               />
             </div>
           )}
@@ -703,15 +724,17 @@ const Contractors: React.FC = () => {
                                 {new Date(tx.date).toLocaleDateString()}
                               </td>
                               <td className="px-4 py-3 text-right">
-                                <button
-                                  type="button"
-                                  onClick={() => setDeleteTxTarget(tx.id)}
-                                  disabled={deletingTxId === tx.id}
-                                  aria-label="Delete transaction"
-                                  className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                                <Tooltip label="Delete transaction">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeleteTxTarget(tx.id)}
+                                    disabled={deletingTxId === tx.id}
+                                    aria-label="Delete transaction"
+                                    className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </Tooltip>
                               </td>
                             </tr>
                           ))}
@@ -789,28 +812,32 @@ const Contractors: React.FC = () => {
 
                   <div className="flex items-end gap-2">
                     <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
-                      <button
-                        type="button"
-                        onClick={() => setViewMode("list")}
-                        aria-label="List view"
-                        className={cn(
-                          "rounded-md p-1.5 transition-colors",
-                          viewMode === "list" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                        )}
-                      >
-                        <AlignJustify size={16} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setViewMode("grid")}
-                        aria-label="Grid view"
-                        className={cn(
-                          "rounded-md p-1.5 transition-colors",
-                          viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                        )}
-                      >
-                        <GridIcon size={16} />
-                      </button>
+                      <Tooltip label="List view">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("list")}
+                          aria-label="List view"
+                          className={cn(
+                            "rounded-md p-1.5 transition-colors",
+                            viewMode === "list" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                          )}
+                        >
+                          <AlignJustify size={16} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="Grid view">
+                        <button
+                          type="button"
+                          onClick={() => setViewMode("grid")}
+                          aria-label="Grid view"
+                          className={cn(
+                            "rounded-md p-1.5 transition-colors",
+                            viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                          )}
+                        >
+                          <GridIcon size={16} />
+                        </button>
+                      </Tooltip>
                     </div>
                     <Button
                       variant="secondary"
@@ -888,8 +915,22 @@ const Contractors: React.FC = () => {
                             <td className="px-4 py-3.5">
                               <Badge variant="info">{contractor.company || "N/A"}</Badge>
                             </td>
-                            <td className="px-4 py-3.5 text-sm text-console-muted">{contractor.email}</td>
-                            <td className="px-4 py-3.5 text-sm text-console-muted">{contractor.phone || "-"}</td>
+                            <td className="px-4 py-3.5 text-sm text-console-muted">
+                              <div className="flex items-center gap-2">
+                                <span>{contractor.email}</span>
+                                <CopyButton value={contractor.email} label="Email" />
+                              </div>
+                            </td>
+                            <td className="px-4 py-3.5 text-sm text-console-muted">
+                              {contractor.phone ? (
+                                <div className="flex items-center gap-2">
+                                  <span>{contractor.phone}</span>
+                                  <CopyButton value={contractor.phone} label="Phone" />
+                                </div>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
                             <td className="px-4 py-3.5">
                               <Badge variant={contractor.status === "active" ? "success" : "error"}>
                                 {contractor.status}
@@ -897,30 +938,36 @@ const Contractors: React.FC = () => {
                             </td>
                             <td className="px-4 py-3.5">
                               <div className="flex items-center justify-center gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => openDetails(contractor)}
-                                  aria-label="View contractor"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
-                                >
-                                  <Eye size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(contractor)}
-                                  aria-label="Edit contractor"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                                >
-                                  <Pencil size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => openDeleteModal(contractor)}
-                                  aria-label="Delete contractor"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
-                                >
-                                  <Trash2 size={16} />
-                                </button>
+                                <Tooltip label="View contractor details">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDetails(contractor)}
+                                    aria-label="View contractor"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Edit contractor">
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditModal(contractor)}
+                                    aria-label="Edit contractor"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Delete contractor">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeleteModal(contractor)}
+                                    aria-label="Delete contractor"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </Tooltip>
                               </div>
                             </td>
                           </tr>

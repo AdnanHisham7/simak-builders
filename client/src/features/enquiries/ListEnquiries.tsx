@@ -19,6 +19,7 @@ import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface Enquiry {
   _id: string;
@@ -169,14 +170,16 @@ const ListEnquiries: React.FC = () => {
                   <option value="name">Sort by Name</option>
                   <option value="subject">Sort by Subject</option>
                 </select>
-                <button
-                  type="button"
-                  onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
-                  aria-label="Toggle sort order"
-                  className="rounded-lg border border-console-border p-2.5 text-console-muted transition-colors hover:bg-console-bg"
-                >
-                  {sortOrder === "asc" ? <SortAsc size={17} /> : <SortDesc size={17} />}
-                </button>
+                <Tooltip label={sortOrder === "asc" ? "Sort descending" : "Sort ascending"}>
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder(sortOrder === "asc" ? "desc" : "asc")}
+                    aria-label="Toggle sort order"
+                    className="rounded-lg border border-console-border p-2.5 text-console-muted transition-colors hover:bg-console-bg"
+                  >
+                    {sortOrder === "asc" ? <SortAsc size={17} /> : <SortDesc size={17} />}
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </Card>

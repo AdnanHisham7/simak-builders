@@ -3,6 +3,7 @@ import { Menu, PanelLeftClose, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/Button";
 import NotificationBell from "@/components/ui/NotificationBell";
+import Tooltip from "@/components/ui/Tooltip";
 import ProfileDropdown from "@/components/layout/ProfileDropDown";
 import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
@@ -64,25 +65,32 @@ export default function Header({
   const pendingCount = notifications.filter((n) => n.status === "pending").length;
 
   return (
-    <header className="flex items-center justify-between border-b border-console-border bg-white px-4 py-3 sm:px-6">
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label={isMobile ? "Toggle navigation" : "Collapse sidebar"}
-        className="flex h-9 w-9 items-center justify-center rounded-lg text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
-      >
-        {isMobile ? (
-          sidebarOpen ? <X size={19} /> : <Menu size={19} />
-        ) : (
-          <PanelLeftClose size={19} className={sidebarCollapsed ? "rotate-180" : ""} />
-        )}
-      </button>
+    <header className="glass-surface flex items-center justify-between px-4 py-3 sm:px-6">
+      <Tooltip label={isMobile ? (sidebarOpen ? "Close menu" : "Open menu") : (sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")}>
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label={isMobile ? "Toggle navigation" : "Collapse sidebar"}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
+        >
+          {isMobile ? (
+            sidebarOpen ? <X size={19} /> : <Menu size={19} />
+          ) : (
+            <PanelLeftClose
+              size={19}
+              className={`transition-transform duration-300 ease-apple ${sidebarCollapsed ? "rotate-180" : ""}`}
+            />
+          )}
+        </button>
+      </Tooltip>
 
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           Back to site
         </Button>
-        <NotificationBell count={pendingCount} onClick={() => setIsNotificationOpen(true)} />
+        <Tooltip label="Notifications">
+          <NotificationBell count={pendingCount} onClick={() => setIsNotificationOpen(true)} />
+        </Tooltip>
         <div className="h-6 w-px bg-console-border" />
         <ProfileDropdown />
       </div>

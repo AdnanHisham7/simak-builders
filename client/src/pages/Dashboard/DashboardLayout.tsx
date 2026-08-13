@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import { useSelector } from "react-redux";
@@ -68,29 +69,39 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   };
 
   const sidebarWidth = sidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+  const springTransition = { type: "spring" as const, stiffness: 320, damping: 34 };
 
   return (
     <DashboardContext.Provider value={{ unseenCount, setUnseenCount }}>
-      <div className="flex h-screen overflow-hidden bg-console-bg">
-        {isMobile && sidebarOpen && (
-          <div
-            className="fixed inset-0 z-20 bg-slate-900/40"
-            onClick={() => setSidebarOpen(false)}
-            aria-hidden="true"
-          />
-        )}
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-console-bg via-console-bg to-brand-50/40">
+        <AnimatePresence>
+          {isMobile && sidebarOpen && (
+            <motion.div
+              key="sidebar-overlay"
+              className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-[1px]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+        </AnimatePresence>
 
-        <aside
+        <motion.aside
           className={`${
             isMobile ? "fixed inset-y-0 left-0 z-30" : "relative"
-          } h-full shrink-0 border-r border-console-border bg-white shadow-console transition-transform duration-200 ease-out`}
-          style={{
+          } h-full shrink-0 overflow-hidden border-r border-console-border shadow-console`}
+          initial={false}
+          animate={{
             width: isMobile ? 256 : sidebarWidth,
-            transform: isMobile && !sidebarOpen ? "translateX(-100%)" : "translateX(0)",
+            x: isMobile && !sidebarOpen ? -256 : 0,
           }}
+          transition={springTransition}
         >
           <Sidebar collapsed={!isMobile && sidebarCollapsed} menus={memoizedMenus} unseenCount={unseenCount} />
-        </aside>
+        </motion.aside>
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header
@@ -99,7 +110,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
             isMobile={isMobile}
             sidebarOpen={sidebarOpen}
           />
-          <main className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+          <main className="no-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
         </div>
       </div>
     </DashboardContext.Provider>

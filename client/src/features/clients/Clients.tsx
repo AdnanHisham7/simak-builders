@@ -22,7 +22,6 @@ import {
   Mail,
   ShieldCheck,
   ShieldX,
-  Copy,
   Trash2,
   RotateCcw,
   Plus,
@@ -37,6 +36,8 @@ import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import Tooltip from "@/components/ui/Tooltip";
+import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
 
 interface Client {
@@ -139,13 +140,6 @@ const Clients: React.FC = () => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
       setCurrentPage(pageNumber);
     }
-  };
-
-  const copyToClipboard = (text: string, label: string) => {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => toast.success(`${label} copied to clipboard!`))
-      .catch(() => toast.error(`Failed to copy ${label}`));
   };
 
   const handleToggleStatus = (client: Client) => {
@@ -461,14 +455,16 @@ const Clients: React.FC = () => {
                                     className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700"
                                   >
                                     {site.name}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleRemoveSite(client.id, site.id)}
-                                      className="text-brand-600 transition-colors hover:text-danger-600"
-                                      aria-label={`Remove ${site.name}`}
-                                    >
-                                      <Trash2 size={11} />
-                                    </button>
+                                    <Tooltip label={`Remove ${site.name}`}>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveSite(client.id, site.id)}
+                                        className="text-brand-600 transition-colors hover:text-danger-600"
+                                        aria-label={`Remove ${site.name}`}
+                                      >
+                                        <Trash2 size={11} />
+                                      </button>
+                                    </Tooltip>
                                   </span>
                                 ))}
                                 {client.assignedSites.length > 2 && (
@@ -478,31 +474,26 @@ const Clients: React.FC = () => {
                                 )}
                               </>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedClient(client);
-                                setIsAssignModalOpen(true);
-                              }}
-                              aria-label="Assign site"
-                              className="flex h-6 w-6 items-center justify-center rounded-full bg-success-600 text-white transition-colors hover:bg-success-700"
-                            >
-                              <Plus size={12} />
-                            </button>
+                            <Tooltip label="Assign site">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedClient(client);
+                                  setIsAssignModalOpen(true);
+                                }}
+                                aria-label="Assign site"
+                                className="flex h-6 w-6 items-center justify-center rounded-full bg-success-600 text-white transition-colors hover:bg-success-700"
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </Tooltip>
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-2">
                             <Mail size={13} className="text-console-muted" />
                             <span className="text-sm text-console-text">{client.email}</span>
-                            <button
-                              type="button"
-                              onClick={() => copyToClipboard(client.email, "Email")}
-                              aria-label="Copy email"
-                              className="text-console-muted transition-colors hover:text-brand-700"
-                            >
-                              <Copy size={12} />
-                            </button>
+                            <CopyButton value={client.email} label="Email" />
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
@@ -569,44 +560,49 @@ const Clients: React.FC = () => {
                                     "Block"
                                   )}
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedClient(client);
-                                    setIsEditModalOpen(true);
-                                  }}
-                                  aria-label="Edit client"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                                >
-                                  <Pencil size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRegeneratePassword(client)}
-                                  disabled={isRegenerating[client.id]}
-                                  aria-label="Regenerate password"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isRegenerating[client.id] ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    <RefreshCw size={14} />
-                                  )}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteClient(client)}
-                                  disabled={isDeleting[client.id]}
-                                  aria-label="Delete client"
-                                  title="Delete client"
-                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isDeleting[client.id] ? (
-                                    <Loader2 size={14} className="animate-spin" />
-                                  ) : (
-                                    <Trash2 size={14} />
-                                  )}
-                                </button>
+                                <Tooltip label="Edit client">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedClient(client);
+                                      setIsEditModalOpen(true);
+                                    }}
+                                    aria-label="Edit client"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Regenerate password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegeneratePassword(client)}
+                                    disabled={isRegenerating[client.id]}
+                                    aria-label="Regenerate password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isRegenerating[client.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Delete client">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteClient(client)}
+                                    disabled={isDeleting[client.id]}
+                                    aria-label="Delete client"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isDeleting[client.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
                               </>
                             )}
                           </div>

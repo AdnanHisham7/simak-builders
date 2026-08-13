@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   getClientDashboard,
   getClientSites,
@@ -23,6 +24,7 @@ import { Card, StatCard } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
+import GradientStatCard from "@/components/ui/GradientStatCard";
 import { cn } from "@/lib/cn";
 
 interface SectionState {
@@ -308,25 +310,31 @@ const ClientDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <DashStatCard title="Site Name" value={site?.name || "N/A"} icon={Building} />
-        <DashStatCard title="Budget" value={`₹${site?.budget?.toLocaleString() || 0}`} icon={Wallet} />
-        <DashStatCard title="Expenses" value={`₹${site?.expenses?.toLocaleString() || 0}`} icon={BarChart} />
+        <GradientStatCard label="Budget" value={site?.budget || 0} prefix="₹" icon={Wallet} />
+        <GradientStatCard label="Expenses" value={site?.expenses || 0} prefix="₹" icon={BarChart} />
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div className="relative flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
         {TABS.map((tab) => {
           const Icon = tab.icon;
+          const isActive = activeTab === tab.id;
           return (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
-                activeTab === tab.id
-                  ? "bg-white text-brand-700 shadow-console"
-                  : "text-console-muted hover:bg-white/60",
+                "relative z-10 flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
+                isActive ? "text-brand-700" : "text-console-muted hover:bg-white/60",
               )}
             >
+              {isActive && (
+                <motion.span
+                  layoutId="client-dashboard-tab-pill"
+                  className="absolute inset-0 -z-10 rounded-lg bg-white shadow-console"
+                  transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
               <Icon size={15} />
               <span>{tab.label}</span>
             </button>
@@ -334,171 +342,181 @@ const ClientDashboard: React.FC = () => {
         })}
       </div>
 
-      {activeTab === "overview" && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <SendMoneyCard
-            amountStr={amountStr}
-            setAmountStr={setAmountStr}
-            onSendMoneyRequest={handleSendMoneyRequest}
-          />
-          <TableCard title="Quick Statistics" icon={TrendingUp} section="overview">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded-console bg-console-bg p-4 text-center">
-                <div className="text-2xl font-semibold text-brand-700">{purchases.total || 0}</div>
-                <div className="text-sm text-console-muted">Total purchases</div>
-              </div>
-              <div className="rounded-console bg-console-bg p-4 text-center">
-                <div className="text-2xl font-semibold text-brand-700">{stocks.total || 0}</div>
-                <div className="text-sm text-console-muted">Stock items</div>
-              </div>
-              <div className="rounded-console bg-console-bg p-4 text-center">
-                <div className="text-2xl font-semibold text-brand-700">
-                  {miscellaneousExpenses.total || 0}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        >
+          {activeTab === "overview" && (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+              <SendMoneyCard
+                amountStr={amountStr}
+                setAmountStr={setAmountStr}
+                onSendMoneyRequest={handleSendMoneyRequest}
+              />
+              <TableCard title="Quick Statistics" icon={TrendingUp} section="overview">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-console bg-console-bg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-700">{purchases.total || 0}</div>
+                    <div className="text-sm text-console-muted">Total purchases</div>
+                  </div>
+                  <div className="rounded-console bg-console-bg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-700">{stocks.total || 0}</div>
+                    <div className="text-sm text-console-muted">Stock items</div>
+                  </div>
+                  <div className="rounded-console bg-console-bg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-700">
+                      {miscellaneousExpenses.total || 0}
+                    </div>
+                    <div className="text-sm text-console-muted">Miscellaneous expenses</div>
+                  </div>
+                  <div className="rounded-console bg-console-bg p-4 text-center">
+                    <div className="text-2xl font-semibold text-brand-700">{transactions.total || 0}</div>
+                    <div className="text-sm text-console-muted">Transactions</div>
+                  </div>
                 </div>
-                <div className="text-sm text-console-muted">Miscellaneous expenses</div>
-              </div>
-              <div className="rounded-console bg-console-bg p-4 text-center">
-                <div className="text-2xl font-semibold text-brand-700">{transactions.total || 0}</div>
-                <div className="text-sm text-console-muted">Transactions</div>
-              </div>
-            </div>
-          </TableCard>
-        </div>
-      )}
-
-      {activeTab === "purchases" && (
-        <TableCard title="Purchase Orders" icon={ShoppingCart} section="purchases">
-          {purchases.data?.length === 0 ? (
-            <EmptyState icon={ShoppingCart} title="No purchases found" />
-          ) : (
-            <div className="overflow-x-auto rounded-console border border-console-border">
-              <table className="min-w-full divide-y divide-console-border">
-                <thead className="bg-console-bg">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total amount</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-console-border bg-white">
-                  {purchases.data?.map((pur: any) => (
-                    <tr key={pur._id}>
-                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">
-                        {pur.vendor?.name || "N/A"}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                        ₹{pur.totalAmount?.toLocaleString() || 0}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              </TableCard>
             </div>
           )}
-        </TableCard>
-      )}
 
-      {activeTab === "stocks" && (
-        <TableCard title="Inventory Management" icon={PackageIcon} section="stocks">
-          {stocks.data?.length === 0 ? (
-            <EmptyState icon={PackageIcon} title="No stock items found" />
-          ) : (
-            <div className="overflow-x-auto rounded-console border border-console-border">
-              <table className="min-w-full divide-y divide-console-border">
-                <thead className="bg-console-bg">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item name</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Unit</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-console-border bg-white">
-                  {stocks.data?.map((stock: any) => (
-                    <tr key={stock._id}>
-                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">{stock.name || "N/A"}</td>
-                      <td className="px-4 py-3.5 text-sm text-info-700">{stock.quantity || 0}</td>
-                      <td className="px-4 py-3.5 text-sm text-console-muted">{stock.unit || "N/A"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {activeTab === "purchases" && (
+            <TableCard title="Purchase Orders" icon={ShoppingCart} section="purchases">
+              {purchases.data?.length === 0 ? (
+                <EmptyState icon={ShoppingCart} title="No purchases found" />
+              ) : (
+                <div className="overflow-x-auto rounded-console border border-console-border">
+                  <table className="min-w-full divide-y divide-console-border">
+                    <thead className="bg-console-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-console-border bg-white">
+                      {purchases.data?.map((pur: any) => (
+                        <tr key={pur._id}>
+                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                            {pur.vendor?.name || "N/A"}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                            ₹{pur.totalAmount?.toLocaleString() || 0}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TableCard>
           )}
-        </TableCard>
-      )}
 
-      {activeTab === "miscellaneous" && (
-        <TableCard title="Miscellaneous Expenses" icon={Construction} section="miscellaneous">
-          {miscellaneousExpenses.data?.length === 0 ? (
-            <EmptyState icon={Construction} title="No miscellaneous expenses found" />
-          ) : (
-            <div className="overflow-x-auto rounded-console border border-console-border">
-              <table className="min-w-full divide-y divide-console-border">
-                <thead className="bg-console-bg">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-console-border bg-white">
-                  {miscellaneousExpenses.data?.map((expense: any) => (
-                    <tr key={expense._id}>
-                      <td className="px-4 py-3.5 text-sm font-medium text-console-text">
-                        {expense.description || "N/A"}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                        ₹{expense.amount?.toLocaleString() || 0}
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-console-muted">
-                        {expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {activeTab === "stocks" && (
+            <TableCard title="Inventory Management" icon={PackageIcon} section="stocks">
+              {stocks.data?.length === 0 ? (
+                <EmptyState icon={PackageIcon} title="No stock items found" />
+              ) : (
+                <div className="overflow-x-auto rounded-console border border-console-border">
+                  <table className="min-w-full divide-y divide-console-border">
+                    <thead className="bg-console-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item name</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-console-border bg-white">
+                      {stocks.data?.map((stock: any) => (
+                        <tr key={stock._id}>
+                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">{stock.name || "N/A"}</td>
+                          <td className="px-4 py-3.5 text-sm text-info-700">{stock.quantity || 0}</td>
+                          <td className="px-4 py-3.5 text-sm text-console-muted">{stock.unit || "N/A"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TableCard>
           )}
-        </TableCard>
-      )}
 
-      {activeTab === "transactions" && (
-        <TableCard title="Transaction History" icon={DollarSign} section="transactions">
-          {transactions.data?.length === 0 ? (
-            <EmptyState icon={DollarSign} title="No transactions found" />
-          ) : (
-            <div className="overflow-x-auto rounded-console border border-console-border">
-              <table className="min-w-full divide-y divide-console-border">
-                <thead className="bg-console-bg">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-console-border bg-white">
-                  {transactions.data?.map((trans: any) => (
-                    <tr key={trans._id}>
-                      <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                        ₹{trans.amount?.toLocaleString() || 0}
-                      </td>
-                      <td className="px-4 py-3.5">
-                        <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
-                      </td>
-                      <td className="px-4 py-3.5 text-sm text-console-muted">
-                        {trans.createdAt ? new Date(trans.createdAt).toLocaleDateString() : "N/A"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          {activeTab === "miscellaneous" && (
+            <TableCard title="Miscellaneous Expenses" icon={Construction} section="miscellaneous">
+              {miscellaneousExpenses.data?.length === 0 ? (
+                <EmptyState icon={Construction} title="No miscellaneous expenses found" />
+              ) : (
+                <div className="overflow-x-auto rounded-console border border-console-border">
+                  <table className="min-w-full divide-y divide-console-border">
+                    <thead className="bg-console-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-console-border bg-white">
+                      {miscellaneousExpenses.data?.map((expense: any) => (
+                        <tr key={expense._id}>
+                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                            {expense.description || "N/A"}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                            ₹{expense.amount?.toLocaleString() || 0}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-console-muted">
+                            {expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TableCard>
           )}
-        </TableCard>
-      )}
+
+          {activeTab === "transactions" && (
+            <TableCard title="Transaction History" icon={DollarSign} section="transactions">
+              {transactions.data?.length === 0 ? (
+                <EmptyState icon={DollarSign} title="No transactions found" />
+              ) : (
+                <div className="overflow-x-auto rounded-console border border-console-border">
+                  <table className="min-w-full divide-y divide-console-border">
+                    <thead className="bg-console-bg">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-console-border bg-white">
+                      {transactions.data?.map((trans: any) => (
+                        <tr key={trans._id}>
+                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                            ₹{trans.amount?.toLocaleString() || 0}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-console-muted">
+                            {trans.createdAt ? new Date(trans.createdAt).toLocaleDateString() : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </TableCard>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
       <ConfirmationModal
         isOpen={isModalOpen}

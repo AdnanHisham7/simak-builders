@@ -7,6 +7,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import Badge from "@/components/ui/Badge";
+import Tooltip from "@/components/ui/Tooltip";
 
 interface ClientPayment {
   _id: string;
@@ -120,25 +121,27 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
                     <td className="whitespace-nowrap px-4 py-3.5">
                       {payment.status === "pending" && (
                         <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => handleVerify(payment._id)}
-                            disabled={verifyingId === payment._id}
-                            aria-label="Verify payment"
-                            title="Verify payment"
-                            className="rounded-lg p-2 text-success-600 transition-colors hover:bg-success-50 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <CheckCircle size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteTarget(payment)}
-                            aria-label="Delete payment"
-                            title="Delete payment"
-                            className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
-                          >
-                            <Trash2 size={16} />
-                          </button>
+                          <Tooltip label="Verify payment">
+                            <button
+                              type="button"
+                              onClick={() => handleVerify(payment._id)}
+                              disabled={verifyingId === payment._id}
+                              aria-label="Verify payment"
+                              className="rounded-lg p-2 text-success-600 transition-colors hover:bg-success-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <CheckCircle size={16} />
+                            </button>
+                          </Tooltip>
+                          <Tooltip label="Delete payment">
+                            <button
+                              type="button"
+                              onClick={() => setDeleteTarget(payment)}
+                              aria-label="Delete payment"
+                              className="rounded-lg p-2 text-danger-600 transition-colors hover:bg-danger-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </Tooltip>
                         </div>
                       )}
                     </td>

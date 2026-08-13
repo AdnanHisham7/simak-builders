@@ -2,6 +2,7 @@ import {
   EnvelopeIcon,
   LockClosedIcon,
 } from "@heroicons/react/24/solid";
+import { AlertCircle } from "lucide-react";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Spinner from "../ui/Spinner";
@@ -26,7 +27,6 @@ const LoginForm: React.FC<LoginFormProps> = ({
   setEmail,
   password,
   setPassword,
-  showPassword,
   isLoading,
   handleSubmit,
   isEmailNotVerified,
@@ -35,71 +35,71 @@ const LoginForm: React.FC<LoginFormProps> = ({
   navigate,
 }) => (
   <div className="space-y-6">
-    {/* Email Input */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">Email</label>
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">Email</label>
       <Input
         type="email"
         name="email"
         placeholder="Enter your email address"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
+        icon={<EnvelopeIcon className="h-5 w-5" />}
       />
     </div>
 
-    {/* Password Input */}
-    <div className="space-y-1">
-      <div className="flex justify-between items-center">
-        <label className="block text-sm font-medium text-gray-700">
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between">
+        <label className="block text-sm font-medium text-console-text">
           Password
         </label>
         {navigate && (
           <button
             type="button"
             onClick={() => navigate("/forgot-password")}
-            className="text-xs text-yellow-600 hover:text-yellow-800 hover:underline transition-colors"
+            className="text-xs font-medium text-brand-700 transition-colors hover:text-brand-800 hover:underline"
           >
             Forgot password?
           </button>
         )}
       </div>
       <Input
-        type={showPassword ? "text" : "password"}
+        type="password"
         name="password"
         placeholder="Enter your password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+        icon={<LockClosedIcon className="h-5 w-5" />}
         showToggle
       />
     </div>
 
-    {/* Email Not Verified Alert */}
     {isEmailNotVerified && handleResendVerification && (
-      <div className="p-4 bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg">
-        <p className="text-sm">Your email is not verified.</p>
-        <button
-          type="button"
-          onClick={handleResendVerification}
-          disabled={resendVerificationLoading}
-          className="mt-2 text-sm text-yellow-600 hover:text-yellow-800 font-medium flex items-center gap-2"
-        >
-          {resendVerificationLoading && <Spinner className="w-4 h-4" />}
-          Send Verification Email
-        </button>
+      <div className="flex items-start gap-2.5 rounded-lg border border-warning-200 bg-warning-50 p-4 text-warning-800">
+        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <p className="text-sm">Your email is not verified.</p>
+          <button
+            type="button"
+            onClick={handleResendVerification}
+            disabled={resendVerificationLoading}
+            className="mt-2 flex items-center gap-2 text-sm font-medium text-warning-700 transition-colors hover:text-warning-900 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {resendVerificationLoading && <Spinner className="h-4 w-4" />}
+            Send verification email
+          </button>
+        </div>
       </div>
     )}
 
-    {/* Submit Button */}
     <Button
       type="button"
       loading={isLoading}
       disabled={isLoading}
       onClick={handleSubmit}
-      className="w-full py-3 px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg"
+      className="w-full"
+      size="lg"
     >
-      {isLoading ? "Signing In..." : "Sign In"}
+      {isLoading ? "Signing in..." : "Sign in"}
     </Button>
   </div>
 );

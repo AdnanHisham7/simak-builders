@@ -33,6 +33,9 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import Tooltip from "@/components/ui/Tooltip";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
 
 interface Vendor {
@@ -288,8 +291,8 @@ const Vendors: React.FC = () => {
                 <StatCard label="Total Vendors" value={stats.total} icon={Users} />
                 <StatCard label="Active Vendors" value={stats.active} icon={Users} />
                 <StatCard label="Total Purchases" value={stats.totalPurchases} icon={Package} />
-                <StatCard label="Total Value" value={formatCurrency(stats.totalAmount)} icon={DollarSign} />
-                <StatCard label="Total Outstanding" value={formatCurrency(stats.totalOutstanding)} icon={DollarSign} />
+                <GradientStatCard label="Total Value" value={stats.totalAmount} prefix="₹" icon={DollarSign} />
+                <GradientStatCard label="Total Outstanding" value={stats.totalOutstanding} prefix="₹" icon={DollarSign} />
               </div>
             )}
           </Card>
@@ -323,28 +326,32 @@ const Vendors: React.FC = () => {
               </div>
               <div className="flex items-end">
                 <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("grid")}
-                    aria-label="Grid view"
-                    className={cn(
-                      "rounded-md p-1.5 transition-colors",
-                      viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                    )}
-                  >
-                    <GridIcon size={16} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("list")}
-                    aria-label="List view"
-                    className={cn(
-                      "rounded-md p-1.5 transition-colors",
-                      viewMode === "list" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
-                    )}
-                  >
-                    <List size={16} />
-                  </button>
+                  <Tooltip label="Grid view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      aria-label="Grid view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <GridIcon size={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="List view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      aria-label="List view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "list" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <List size={16} />
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             </div>
@@ -374,9 +381,11 @@ const Vendors: React.FC = () => {
                   <div className="mb-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm text-console-muted">
                       <Mail size={13} /> {vendor.email}
+                      <CopyButton value={vendor.email} label="Email" />
                     </div>
                     <div className="flex items-center gap-2 text-sm text-console-muted">
                       <Phone size={13} /> {vendor.phone}
+                      <CopyButton value={vendor.phone} label="Phone" />
                     </div>
                     <div className="flex items-center gap-2 text-sm text-console-muted">
                       <Calendar size={13} /> Since {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : "N/A"}
@@ -404,22 +413,26 @@ const Vendors: React.FC = () => {
                     >
                       <Eye size={14} /> Purchases
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(vendor)}
-                      aria-label="Edit vendor"
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeleteTarget(vendor)}
-                      aria-label="Delete vendor"
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <Tooltip label="Edit vendor">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(vendor)}
+                        aria-label="Edit vendor"
+                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                      >
+                        <Pencil size={16} />
+                      </button>
+                    </Tooltip>
+                    <Tooltip label="Delete vendor">
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(vendor)}
+                        aria-label="Delete vendor"
+                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </Tooltip>
                     {(vendor.outstandingAmount || 0) > 0 && (
                       <Button size="sm" onClick={() => openSettleModal(vendor)}>
                         Settle {formatCurrency(vendor.outstandingAmount)}
@@ -459,8 +472,14 @@ const Vendors: React.FC = () => {
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
-                          <div className="text-sm text-console-text">{vendor.email}</div>
-                          <div className="text-xs text-console-muted">{vendor.phone}</div>
+                          <div className="flex items-center gap-2 text-sm text-console-text">
+                            {vendor.email}
+                            <CopyButton value={vendor.email} label="Email" />
+                          </div>
+                          <div className="mt-0.5 flex items-center gap-2 text-xs text-console-muted">
+                            {vendor.phone}
+                            <CopyButton value={vendor.phone} label="Phone" />
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <Badge variant={vendor.status === "active" ? "success" : "error"}>
@@ -474,30 +493,36 @@ const Vendors: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => openPurchaseModal(vendor.id)}
-                              aria-label="View purchases"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openEditModal(vendor)}
-                              aria-label="Edit vendor"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                            >
-                              <Pencil size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(vendor)}
-                              aria-label="Delete vendor"
-                              className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            <Tooltip label="View purchases">
+                              <button
+                                type="button"
+                                onClick={() => openPurchaseModal(vendor.id)}
+                                aria-label="View purchases"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                              >
+                                <Eye size={16} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Edit vendor">
+                              <button
+                                type="button"
+                                onClick={() => openEditModal(vendor)}
+                                aria-label="Edit vendor"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                            </Tooltip>
+                            <Tooltip label="Delete vendor">
+                              <button
+                                type="button"
+                                onClick={() => setDeleteTarget(vendor)}
+                                aria-label="Delete vendor"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </Tooltip>
                             {(vendor.outstandingAmount || 0) > 0 && (
                               <button
                                 type="button"

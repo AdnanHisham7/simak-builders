@@ -43,13 +43,13 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
   const displayRole = userType ? formatRoleName(userType) : "";
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    <div className="flex h-full flex-col bg-white/90 backdrop-blur-xl">
       <div
         className={`flex items-center border-b border-console-border py-4 ${
           collapsed ? "justify-center" : "px-4"
         }`}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-800 text-sm font-bold tracking-wide text-white">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-900 text-sm font-bold tracking-wide text-white shadow-glow-brand">
           SB
         </div>
         {!collapsed && (
@@ -62,7 +62,7 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-4">
+      <nav className="no-scrollbar flex-1 overflow-y-auto overflow-x-hidden py-4">
         {menus.map((menu, index) => (
           <div className="mb-5" key={menu.title ?? `section-${index}`}>
             {menu.title && !collapsed && (
@@ -79,6 +79,7 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
                 collapsed={collapsed}
                 onClick={() => handleItemClick(item)}
                 badge={item.name === "Enquiries" && unseenCount > 0 ? unseenCount : undefined}
+                layoutId="sidebar-active-pill"
               />
             ))}
           </div>

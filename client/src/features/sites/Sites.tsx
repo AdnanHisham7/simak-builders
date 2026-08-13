@@ -36,6 +36,8 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
+import Tooltip from "@/components/ui/Tooltip";
+import GradientStatCard from "@/components/ui/GradientStatCard";
 import { cn } from "@/lib/cn";
 
 interface User {
@@ -286,11 +288,7 @@ const Sites: React.FC = () => {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Total Sites" value={sites.length} icon={Building2} />
             <StatCard label="Active Sites" value={activeSites} icon={TrendingUp} />
-            <StatCard
-              label="Total Budget"
-              value={`₹${(totalBudget / 1000000).toFixed(1)}M`}
-              icon={DollarSign}
-            />
+            <GradientStatCard label="Total Budget" value={totalBudget} prefix="₹" icon={DollarSign} />
             <StatCard label="Completed" value={completedSites} icon={CheckCircle2} />
           </div>
 
@@ -467,43 +465,51 @@ const Sites: React.FC = () => {
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <div className="flex gap-1">
-                                  <button
-                                    type="button"
-                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
-                                    onClick={() => handleViewSite(site.id)}
-                                    aria-label="View site"
-                                  >
-                                    <Eye size={16} />
-                                  </button>
-                                  {actions.includes("addPurchase") && (
+                                  <Tooltip label="View site">
                                     <button
                                       type="button"
-                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
-                                      onClick={() => handleAddPurchase(site.id)}
-                                      aria-label="Add purchase"
+                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                      onClick={() => handleViewSite(site.id)}
+                                      aria-label="View site"
                                     >
-                                      <ShoppingCart size={16} />
+                                      <Eye size={16} />
                                     </button>
+                                  </Tooltip>
+                                  {actions.includes("addPurchase") && (
+                                    <Tooltip label="Add purchase">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                        onClick={() => handleAddPurchase(site.id)}
+                                        aria-label="Add purchase"
+                                      >
+                                        <ShoppingCart size={16} />
+                                      </button>
+                                    </Tooltip>
                                   )}
                                   {actions.includes("uploadDocuments") && (
-                                    <button
-                                      type="button"
-                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
-                                      onClick={() => handleUploadDocuments(site.id)}
-                                      aria-label="Upload documents"
-                                    >
-                                      <Upload size={16} />
-                                    </button>
+                                    <Tooltip label="Upload documents">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                                        onClick={() => handleUploadDocuments(site.id)}
+                                        aria-label="Upload documents"
+                                      >
+                                        <Upload size={16} />
+                                      </button>
+                                    </Tooltip>
                                   )}
                                   {actions.includes("viewProgress") && (
-                                    <button
-                                      type="button"
-                                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
-                                      onClick={() => handleViewProgress(site.id)}
-                                      aria-label="View progress"
-                                    >
-                                      <TrendingUp size={16} />
-                                    </button>
+                                    <Tooltip label="View progress">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700"
+                                        onClick={() => handleViewProgress(site.id)}
+                                        aria-label="View progress"
+                                      >
+                                        <TrendingUp size={16} />
+                                      </button>
+                                    </Tooltip>
                                   )}
                                 </div>
                               </td>

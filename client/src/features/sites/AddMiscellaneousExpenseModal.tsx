@@ -1,16 +1,24 @@
 import React, { useState, useEffect } from "react";
-import { X, Plus, AlertCircle, DollarSign } from "lucide-react";
+import { AlertCircle, DollarSign, ReceiptText } from "lucide-react";
 import { addMiscellaneousExpense } from "@/services/miscellaneousExpenseService";
 import { privateClient } from "@/api";
 import { getSiteDetails } from "@/services/siteService";
+import Modal from "@/components/ui/Modal";
+import Button from "@/components/ui/Button";
 
 interface Props {
+  isOpen: boolean;
   siteId: string;
   isAdmin?: boolean;
   onClose: () => void;
 }
 
+const fieldClass =
+  "w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100";
+const labelClass = "mb-1.5 block text-sm font-medium text-console-text";
+
 const AddMiscellaneousExpenseModal: React.FC<Props> = ({
+  isOpen,
   siteId,
   isAdmin = false,
   onClose,
@@ -37,7 +45,21 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Fetch site managers if admin
+    if (!isOpen) return;
+    setCategory("machinery");
+    setName("");
+    setAmount("");
+    setTip("");
+    setNotes("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setSourceOfFunds("company");
+    setSelectedSiteManagerId("");
+    setPaymentMethod("cash");
+    setSelectedVendorId("");
+    setErrors({});
+  }, [isOpen]);
+
+  useEffect(() => {
     if (isAdmin && siteId) {
       const fetchManagers = async () => {
         const site = await getSiteDetails(siteId);
@@ -45,7 +67,6 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
       };
       fetchManagers();
     }
-    // Fetch vendors list
     const fetchVendors = async () => {
       try {
         const { data } = await privateClient.get("/vendors");
@@ -108,247 +129,207 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
     }
   };
 
+  const handleClose = () => {
+    if (loading) return;
+    onClose();
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold flex items-center space-x-2">
-            <Plus className="w-6 h-6 text-blue-600" />
-            <span>Add Miscellaneous Expense</span>
-          </h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded">
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Add miscellaneous expense"
+      size="md"
+      disableClose={loading}
+      closeOnOverlayClick={!loading}
+      footer={
+        <>
+          <Button variant="secondary" onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={handleSubmit} loading={loading}>
+            {!loading && <ReceiptText className="h-4 w-4" />}
+            Add expense
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <div>
+          <label className={labelClass}>Category *</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as any)}
+            className={fieldClass}
+          >
+            <option value="machinery">Machinery</option>
+            <option value="rental">Rental</option>
+            <option value="material">Material</option>
+            <option value="service">Service</option>
+          </select>
         </div>
 
-        <div className="space-y-4">
-          {/* Category */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Category *
-            </label>
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value as any)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-            >
-              <option value="machinery">Machinery</option>
-              <option value="rental">Rental</option>
-              <option value="material">Material</option>
-              <option value="service">Service</option>
-            </select>
-          </div>
+        <div>
+          <label className={labelClass}>Name / Description *</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className={`${fieldClass} ${errors.name ? "border-danger-300" : ""}`}
+            placeholder="e.g., JCB Hire, Generator Service"
+          />
+          {errors.name && (
+            <p className="mt-1.5 text-sm text-danger-600">{errors.name}</p>
+          )}
+        </div>
 
-          {/* Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Name / Description *
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg ${errors.name ? "border-red-300" : "border-gray-200"}`}
-              placeholder="e.g., JCB Hire, Generator Service"
-            />
-            {errors.name && (
-              <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-            )}
-          </div>
+        <div>
+          <label className={labelClass}>Payment method *</label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => {
+              setPaymentMethod(e.target.value as "cash" | "credit");
+              setSelectedVendorId("");
+              setErrors((prev) => ({ ...prev, vendor: "" }));
+            }}
+            className={fieldClass}
+          >
+            <option value="cash">Cash</option>
+            <option value="credit">Credit</option>
+          </select>
+        </div>
 
+        {paymentMethod === "credit" && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Method *
-            </label>
+            <label className={labelClass}>Select vendor *</label>
             <select
-              value={paymentMethod}
+              value={selectedVendorId}
               onChange={(e) => {
-                setPaymentMethod(e.target.value as "cash" | "credit");
-                setSelectedVendorId("");
+                setSelectedVendorId(e.target.value);
                 setErrors((prev) => ({ ...prev, vendor: "" }));
               }}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+              className={`${fieldClass} ${errors.vendor ? "border-danger-300" : ""}`}
             >
-              <option value="cash">Cash</option>
-              <option value="credit">Credit</option>
+              <option value="">Select a vendor</option>
+              {vendors.map((vendor) => (
+                <option key={vendor._id} value={vendor._id}>
+                  {vendor.name}
+                </option>
+              ))}
             </select>
+            {errors.vendor && (
+              <p className="mt-1.5 text-sm text-danger-600">{errors.vendor}</p>
+            )}
           </div>
+        )}
 
-          {/* Vendor Selection (if credit) */}
-          {paymentMethod === "credit" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Vendor *
-              </label>
-              <select
-                value={selectedVendorId}
-                onChange={(e) => {
-                  setSelectedVendorId(e.target.value);
-                  setErrors((prev) => ({ ...prev, vendor: "" }));
-                }}
-                className={`w-full px-3 py-2 border rounded-lg ${errors.vendor ? "border-red-300" : "border-gray-200"}`}
-              >
-                <option value="">Select a vendor</option>
-                {vendors.map((vendor) => (
-                  <option key={vendor._id} value={vendor._id}>
-                    {vendor.name}
-                  </option>
-                ))}
-              </select>
-              {errors.vendor && (
-                <p className="text-red-500 text-sm mt-1">{errors.vendor}</p>
-              )}
+        {isAdmin && (
+          <div className="rounded-console border border-success-100 bg-success-50/60 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <DollarSign className="h-4 w-4 text-success-700" />
+              <h3 className="text-sm font-semibold text-console-text">Source of funds *</h3>
             </div>
-          )}
-
-          {/* Source of Funds (admin only) */}
-          {isAdmin && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <div className="flex items-center mb-3">
-                <DollarSign className="w-5 h-5 text-emerald-600 mr-2" />
-                <h3 className="font-semibold text-gray-900">
-                  Source of Funds *
-                </h3>
+            <select
+              value={sourceOfFunds}
+              onChange={(e) => {
+                setSourceOfFunds(e.target.value as "company" | "siteManager");
+                setSelectedSiteManagerId("");
+                setErrors((prev) => ({
+                  ...prev,
+                  sourceOfFunds: "",
+                  selectedSiteManager: "",
+                }));
+              }}
+              className={fieldClass}
+            >
+              <option value="company">Company funds</option>
+              <option value="siteManager">Site manager funds</option>
+            </select>
+            {errors.sourceOfFunds && (
+              <p className="mt-1.5 text-sm text-danger-600">{errors.sourceOfFunds}</p>
+            )}
+            {sourceOfFunds === "siteManager" && (
+              <div className="mt-4">
+                <label className={labelClass}>Select site manager *</label>
+                <select
+                  value={selectedSiteManagerId}
+                  onChange={(e) => {
+                    setSelectedSiteManagerId(e.target.value);
+                    setErrors((prev) => ({ ...prev, selectedSiteManager: "" }));
+                  }}
+                  className={fieldClass}
+                >
+                  <option value="">Select site manager</option>
+                  {siteManagers.map((mgr: any) => (
+                    <option key={mgr.id} value={mgr.id}>
+                      {mgr.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.selectedSiteManager && (
+                  <p className="mt-1.5 text-sm text-danger-600">{errors.selectedSiteManager}</p>
+                )}
               </div>
-              <select
-                value={sourceOfFunds}
-                onChange={(e) => {
-                  setSourceOfFunds(e.target.value as "company" | "siteManager");
-                  setSelectedSiteManagerId("");
-                  setErrors((prev) => ({
-                    ...prev,
-                    sourceOfFunds: "",
-                    selectedSiteManager: "",
-                  }));
-                }}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500"
-              >
-                <option value="company">Company Funds</option>
-                <option value="siteManager">Site Manager Funds</option>
-              </select>
-              {errors.sourceOfFunds && (
-                <p className="text-red-500 text-sm mt-1">
-                  {errors.sourceOfFunds}
-                </p>
-              )}
-              {sourceOfFunds === "siteManager" && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Select Site Manager *
-                  </label>
-                  <select
-                    value={selectedSiteManagerId}
-                    onChange={(e) => {
-                      setSelectedSiteManagerId(e.target.value);
-                      setErrors((prev) => ({
-                        ...prev,
-                        selectedSiteManager: "",
-                      }));
-                    }}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="">Select Site Manager</option>
-                    {siteManagers.map((mgr: any) => (
-                      <option key={mgr.id} value={mgr.id}>
-                        {mgr.name}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.selectedSiteManager && (
-                    <p className="text-red-500 text-sm mt-1">
-                      {errors.selectedSiteManager}
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Amount & Tip */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Amount (₹) *
-              </label>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg ${errors.amount ? "border-red-300" : "border-gray-200"}`}
-                placeholder="0.00"
-                step="0.01"
-              />
-              {errors.amount && (
-                <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Tip (₹) Optional
-              </label>
-              <input
-                type="number"
-                value={tip}
-                onChange={(e) => setTip(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg"
-                placeholder="0.00"
-                step="0.01"
-              />
-            </div>
+            )}
           </div>
+        )}
 
-          {/* Notes */}
+        <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes (Optional)
-            </label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg h-20"
-              placeholder="Any additional details..."
-            />
-          </div>
-
-          {/* Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Date *
-            </label>
+            <label className={labelClass}>Amount (₹) *</label>
             <input
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className={`${fieldClass} ${errors.amount ? "border-danger-300" : ""}`}
+              placeholder="0.00"
+              step="0.01"
+            />
+            {errors.amount && (
+              <p className="mt-1.5 text-sm text-danger-600">{errors.amount}</p>
+            )}
+          </div>
+          <div>
+            <label className={labelClass}>Tip (₹) optional</label>
+            <input
+              type="number"
+              value={tip}
+              onChange={(e) => setTip(e.target.value)}
+              className={fieldClass}
+              placeholder="0.00"
+              step="0.01"
             />
           </div>
+        </div>
+
+        <div>
+          <label className={labelClass}>Notes (optional)</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className={`${fieldClass} h-20`}
+            placeholder="Any additional details..."
+          />
+        </div>
+
+        <div>
+          <label className={labelClass}>Date *</label>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className={fieldClass}
+          />
         </div>
 
         {errors.submit && (
-          <p className="text-red-500 text-sm mt-4 flex items-center">
-            <AlertCircle className="w-4 h-4 mr-1" />
+          <p className="flex items-center gap-1.5 text-sm text-danger-600">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {errors.submit}
           </p>
         )}
-
-        <div className="mt-6 flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 text-gray-600 border rounded-lg hover:bg-gray-50"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-70"
-          >
-            {loading ? "Adding..." : "Add Expense"}
-          </button>
-        </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 

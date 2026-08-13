@@ -23,8 +23,6 @@ const ResetPasswordForm: React.FC<ResetPasswordFormProps> = ({
   setPassword,
   confirmPassword,
   setConfirmPassword,
-  showPassword,
-  showConfirmPassword,
   isLoading,
   handleSubmit,
 }) => (
@@ -32,50 +30,48 @@ const ResetPasswordForm: React.FC<ResetPasswordFormProps> = ({
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    transition={{ duration: 0.3 }}
+    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
     className="space-y-6"
   >
-    {/* New Password */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">
-        New Password
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">
+        New password
       </label>
       <Input
-        type={showPassword ? "text" : "password"}
+        type="password"
         name="password"
         placeholder="Enter your new password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+        icon={<LockClosedIcon className="h-5 w-5" />}
         showToggle
       />
     </div>
 
-    {/* Confirm New Password */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">
-        Confirm New Password
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">
+        Confirm new password
       </label>
       <Input
-        type={showConfirmPassword ? "text" : "password"}
+        type="password"
         name="confirmPassword"
         placeholder="Confirm your new password"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
-        icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+        icon={<LockClosedIcon className="h-5 w-5" />}
         showToggle
       />
     </div>
 
-    {/* Submit Button */}
     <Button
       type="button"
       loading={isLoading}
       disabled={isLoading}
       onClick={handleSubmit}
-      className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
+      className="w-full"
+      size="lg"
     >
-      {isLoading ? "Resetting..." : "Reset Password"}
+      {isLoading ? "Resetting..." : "Reset password"}
     </Button>
   </motion.div>
 );

@@ -10,7 +10,7 @@ export const Card: React.FC<{
 }> = ({ children, className, title, description, action }) => (
   <div
     className={cn(
-      "rounded-console border border-console-border bg-console-surface shadow-console",
+      "rounded-glass border border-console-border bg-console-surface shadow-console",
       className,
     )}
   >
@@ -56,7 +56,7 @@ export const StatCard: React.FC<StatCardProps> = ({
 }) => (
   <div
     className={cn(
-      "rounded-console border border-console-border bg-console-surface p-5 shadow-console",
+      "rounded-glass border border-console-border bg-console-surface p-5 shadow-console",
       className,
     )}
   >
