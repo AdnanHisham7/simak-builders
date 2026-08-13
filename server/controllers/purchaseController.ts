@@ -295,6 +295,8 @@ const verifyPurchase = async (
     await notification.save();
 
     // Site expense record
+    let updatedSiteExpenses: number | undefined;
+    let newTransaction: any;
     if (purchase.site) {
       const site = await SiteModel.findById(purchase.site?._id);
       const purchasedUser = await UserModel.findById(purchase.addedBy);
@@ -309,6 +311,8 @@ const verifyPurchase = async (
           user: purchasedUser?._id,
         });
         await site.save();
+        updatedSiteExpenses = site.expenses;
+        newTransaction = site.transactions[site.transactions.length - 1];
       }
     }
 
@@ -351,9 +355,15 @@ const verifyPurchase = async (
       }
     }
 
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Purchase verified, stocks updated, funds deducted" });
+    res.status(HttpStatus.OK).json({
+      message: "Purchase verified, stocks updated, funds deducted",
+      purchase,
+      site:
+        updatedSiteExpenses !== undefined
+          ? { _id: purchase.site?._id, expenses: updatedSiteExpenses }
+          : undefined,
+      transaction: newTransaction,
+    });
   } catch (error) {
     next(error);
   }
@@ -470,7 +480,6 @@ const deletePurchase = async (
   next: NextFunction,
 ) => {
   try {
-    console.log("HEYYYY")
     const { purchaseId } = req.params;
     const purchase: any = await PurchaseModel.findById(purchaseId)
       .populate("site")
@@ -491,6 +500,7 @@ const deletePurchase = async (
     const purchaseAmount = purchase.totalAmount;
     const transportationFee = purchase.transportationFee || 0;
 
+    let updatedSiteExpenses: number | undefined;
     if (wasVerified) {
       // 1. Reverse stock updates
       for (const item of purchase.items) {
@@ -520,6 +530,7 @@ const deletePurchase = async (
           user: new Types.ObjectId(req.user?.userId),
         });
         await site.save();
+        updatedSiteExpenses = site.expenses;
       }
 
       // 3. Reverse source deduction (only for cash purchases)
@@ -579,6 +590,12 @@ const deletePurchase = async (
               user: new Types.ObjectId(req.user?.userId),
             });
             await miscSite.save();
+            if (
+              purchase.site?._id &&
+              miscSite._id.toString() === purchase.site._id.toString()
+            ) {
+              updatedSiteExpenses = miscSite.expenses;
+            }
           }
           // Reverse source for misc
           if (miscExpense.sourceOfFunds === "company") {
@@ -646,9 +663,13 @@ const deletePurchase = async (
 
     res.status(HttpStatus.OK).json({
       message: `Purchase deleted successfully${wasVerified ? " with accounting reversal" : ""}`,
+      wasVerified,
+      site:
+        updatedSiteExpenses !== undefined
+          ? { _id: purchase.site?._id, expenses: updatedSiteExpenses }
+          : undefined,
     });
   } catch (error) {
-    console.log("HEYYY 2, ", error)
     next(error);
   }
 };
