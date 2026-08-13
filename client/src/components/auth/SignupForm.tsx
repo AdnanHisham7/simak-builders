@@ -25,8 +25,6 @@ const SignupForm: React.FC<SignupFormProps> = ({
   setPassword,
   confirmPassword,
   setConfirmPassword,
-  showPassword,
-  showConfirmPassword,
   isLoading,
   handleSubmit,
 }) => (
@@ -34,59 +32,56 @@ const SignupForm: React.FC<SignupFormProps> = ({
     initial={{ opacity: 0 }}
     animate={{ opacity: 1 }}
     exit={{ opacity: 0 }}
-    transition={{ duration: 0.3 }}
+    transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
     className="space-y-6"
   >
-    {/* Email */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">Email</label>
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">Email</label>
       <Input
         type="email"
         name="email"
         placeholder="Enter your email address"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
-        icon={<EnvelopeIcon className="h-5 w-5 text-gray-400" />}
+        icon={<EnvelopeIcon className="h-5 w-5" />}
       />
     </div>
 
-    {/* Password */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">Password</label>
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">Password</label>
       <Input
-        type={showPassword ? "text" : "password"}
+        type="password"
         name="password"
         placeholder="Enter your password"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+        icon={<LockClosedIcon className="h-5 w-5" />}
         showToggle
       />
     </div>
 
-    {/* Confirm Password */}
-    <div className="space-y-1">
-      <label className="block text-sm font-medium text-gray-700">Confirm Password</label>
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-console-text">Confirm password</label>
       <Input
-        type={showConfirmPassword ? "text" : "password"}
+        type="password"
         name="confirmPassword"
         placeholder="Confirm your password"
         value={confirmPassword}
         onChange={(e) => setConfirmPassword(e.target.value)}
-        icon={<LockClosedIcon className="h-5 w-5 text-gray-400" />}
+        icon={<LockClosedIcon className="h-5 w-5" />}
         showToggle
       />
     </div>
 
-    {/* Submit Button */}
     <Button
       type="button"
       loading={isLoading}
       disabled={isLoading}
       onClick={handleSubmit}
-      className="w-full py-3 px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg"
+      className="w-full"
+      size="lg"
     >
-      {isLoading ? "Signing Up..." : "Sign Up"}
+      {isLoading ? "Signing up..." : "Sign up"}
     </Button>
   </motion.div>
 );

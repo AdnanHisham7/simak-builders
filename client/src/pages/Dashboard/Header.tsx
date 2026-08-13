@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Menu, X } from "lucide-react";
-import { motion } from "framer-motion";
+import { Menu, PanelLeftClose, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Button from "@/components/ui/Button";
 import NotificationBell from "@/components/ui/NotificationBell";
+import Tooltip from "@/components/ui/Tooltip";
 import ProfileDropdown from "@/components/layout/ProfileDropDown";
 import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
@@ -18,78 +18,83 @@ interface Notification {
   createdAt: string;
 }
 
+interface HeaderProps {
+  toggleSidebar: () => void;
+  sidebarCollapsed: boolean;
+  isMobile: boolean;
+  sidebarOpen?: boolean;
+}
+
 export default function Header({
   toggleSidebar,
   sidebarCollapsed,
   isMobile,
-}: any) {
+  sidebarOpen = false,
+}: HeaderProps) {
   const navigate = useNavigate();
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch notifications from the backend
   const fetchNotifications = async () => {
     setLoading(true);
     try {
       const response = await privateClient.get("/notifications");
       setNotifications(response.data);
     } catch (error) {
-      console.error("Failed to fetch notifications", error);
       toast.error("Failed to load notifications");
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch notifications when the Header mounts
   useEffect(() => {
     fetchNotifications();
   }, []);
 
-  // Function to update notification status
-  const updateNotificationStatus = (
-    id: string,
-    newStatus: "pending" | "approved" | "rejected"
-  ) => {
+  const updateNotificationStatus = (id: string, newStatus: string) => {
     setNotifications((prev: Notification[]) =>
       prev.map((notif) =>
-        notif._id === id ? { ...notif, status: newStatus } : notif
-      )
+        notif._id === id
+          ? { ...notif, status: newStatus as Notification["status"] }
+          : notif,
+      ),
     );
   };
 
-  // Calculate the count of pending notifications
-  const pendingCount = notifications.filter(
-    (n) => n.status === "pending"
-  ).length;
+  const pendingCount = notifications.filter((n) => n.status === "pending").length;
 
   return (
-    <header className="bg-white border-b border-gray-200 px-4 sm:px-16 sm:ps-6 py-4 flex items-center justify-between">
-      <div className="flex items-center">
-        <motion.button
-          className="text-gray-500 mr-4 p-1 rounded-md hover:bg-gray-100 focus:outline-none"
+    <header className="glass-surface flex items-center justify-between px-4 py-3 sm:px-6">
+      <Tooltip label={isMobile ? (sidebarOpen ? "Close menu" : "Open menu") : (sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar")}>
+        <button
+          type="button"
           onClick={toggleSidebar}
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.9 }}
+          aria-label={isMobile ? "Toggle navigation" : "Collapse sidebar"}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
         >
-          {sidebarCollapsed ? <Menu size={20} /> : <X size={20} />}
-        </motion.button>
-      </div>
-      <div className="flex items-center space-x-4">
-        <Button
-          variant="outline"
-          className="flex items-center"
-          onClick={() => navigate("/")}
-        >
-          Back To Home
+          {isMobile ? (
+            sidebarOpen ? <X size={19} /> : <Menu size={19} />
+          ) : (
+            <PanelLeftClose
+              size={19}
+              className={`transition-transform duration-300 ease-apple ${sidebarCollapsed ? "rotate-180" : ""}`}
+            />
+          )}
+        </button>
+      </Tooltip>
+
+      <div className="flex items-center gap-3">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+          Back to site
         </Button>
-        <NotificationBell
-          count={pendingCount} // Pass dynamic pending count
-          onClick={() => setIsNotificationOpen(true)}
-        />
+        <Tooltip label="Notifications">
+          <NotificationBell count={pendingCount} onClick={() => setIsNotificationOpen(true)} />
+        </Tooltip>
+        <div className="h-6 w-px bg-console-border" />
         <ProfileDropdown />
       </div>
+
       <NotificationPanel
         isOpen={isNotificationOpen}
         onClose={() => setIsNotificationOpen(false)}

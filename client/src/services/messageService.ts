@@ -1,5 +1,5 @@
 import { privateClient } from "@/api";
-import { Enquiry } from "@/store/types/enquiry";
+import { Enquiry } from "@/types/enquiry";
 
 const API_URL = "/enquiries";
 

@@ -49,17 +49,11 @@ const ProtectedDashboardLayout: React.FC<ProtectedDashboardLayoutProps> = ({
     return <Navigate to="/unauthorized" replace />;
   }
 
-  console.log(isAdmin, userType, allowedRoles)
-
   // Check if user role is not allowed
   if (!isAdmin && userType && !allowedRoles.includes(userType)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  console.log(
-    userType,
-    "userTypeuserTypeuserTypeuserTypeuserTypeuserTypeuserTypeuserTypeuserType"
-  );
   const menus =
     userType === "admin"
       ? adminMenus

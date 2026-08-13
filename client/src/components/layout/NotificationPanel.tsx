@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   DollarSign,
 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 interface Notification {
   _id: string;
@@ -115,9 +116,19 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         }
       }
       toast.success(`${getPastTense(action)} successfully`);
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Failed to ${action} notification`, error);
-      toast.error(`Failed to ${action} notification`);
+      const message: string =
+        error?.response?.data?.message || `Failed to ${action} notification`;
+      toast.error(message);
+      // The underlying record was already verified/approved elsewhere (a
+      // second click, another admin, or a stale panel that hadn't picked up
+      // the earlier update yet). Sync this notification's status locally
+      // instead of leaving it stuck as "pending" until the next manual
+      // refresh, since the server-side action it represents did complete.
+      if (message.toLowerCase().includes("already verified")) {
+        updateNotificationStatus(notification._id, "approved");
+      }
     } finally {
       setActionLoading(null);
     }
@@ -193,14 +204,15 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     return `${Math.floor(diffInHours / 24)}d ago`;
   };
 
-  return (
+return createPortal(
     <>
-      {isOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-sm z-40 transition-opacity duration-300"
-          onClick={onClose}
-        />
-      )}
+       {isOpen && (
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300"
+        onClick={onClose}
+      />
+    )}
+
       <div
         className={`
           fixed top-0 right-0 h-full w-[550px] bg-white overflow-auto shadow-2xl transform transition-all duration-300 ease-out z-50
@@ -208,7 +220,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
           ${isAnimating ? "opacity-100" : "opacity-0"}
         `}
       >
-        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500" />
+        <div className="absolute top-0 left-0 right-0 h-1 bg-brand-600" />
         <div className="relative bg-white border-b border-gray-100 p-6 pb-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-3">
@@ -288,7 +300,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
                     }}
                     className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 transition-colors capitalize first:rounded-t-lg last:rounded-b-lg ${
                       filter === status
-                        ? "bg-blue-50 text-blue-700"
+                        ? "bg-brand-50 text-brand-700"
                         : "text-gray-700"
                     }`}
                   >
@@ -455,7 +467,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
           )}
         </div>
       </div>
-    </>
+     </>,
+  document.body
   );
 };
 

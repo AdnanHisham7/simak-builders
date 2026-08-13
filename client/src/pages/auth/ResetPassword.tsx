@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { ShieldCheck } from "lucide-react";
 import ResetPasswordForm from "@/components/auth/ResetPasswordForm";
 import { useResetPassword } from "@/hooks/auth/useResetPassword";
 
@@ -20,52 +21,48 @@ const ResetPassword: React.FC = () => {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="flex h-screen"
-    >
-      {/* Left Panel (Form) */}
+    <div className="flex min-h-screen items-center justify-center bg-console-bg p-4">
       <motion.div
-        className="w-full lg:w-full flex flex-col justify-center p-4 sm:p-8 md:p-12 lg:p-16 xl:p-24 bg-white"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3 }}
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="glass-panel w-full max-w-md rounded-glass p-8 shadow-glass-lg sm:p-10"
       >
-        <div className="max-w-md w-full mx-auto">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Reset Password</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Enter and confirm your new password below.
-            </p>
+        <div className="mb-8 text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-700">
+            <ShieldCheck className="h-5 w-5" />
           </div>
-
-          <ResetPasswordForm
-            password={password}
-            setPassword={setPassword}
-            confirmPassword={confirmPassword}
-            setConfirmPassword={setConfirmPassword}
-            showPassword={showPassword}
-            setShowPassword={setShowPassword}
-            showConfirmPassword={showConfirmPassword}
-            setShowConfirmPassword={setShowConfirmPassword}
-            isLoading={isLoading}
-            handleSubmit={handleSubmit}
-          />
-
-          <p className="mt-6 text-center text-sm text-gray-600">
-            Remember your password?{" "}
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
-            >
-              Sign in
-            </button>
+          <h1 className="text-2xl font-semibold text-console-text">Reset password</h1>
+          <p className="mt-2 text-sm text-console-muted">
+            Enter and confirm your new password below.
           </p>
         </div>
+
+        <ResetPasswordForm
+          password={password}
+          setPassword={setPassword}
+          confirmPassword={confirmPassword}
+          setConfirmPassword={setConfirmPassword}
+          showPassword={showPassword}
+          setShowPassword={setShowPassword}
+          showConfirmPassword={showConfirmPassword}
+          setShowConfirmPassword={setShowConfirmPassword}
+          isLoading={isLoading}
+          handleSubmit={handleSubmit}
+        />
+
+        <p className="mt-6 text-center text-sm text-console-muted">
+          Remember your password?{" "}
+          <button
+            type="button"
+            onClick={() => navigate("/login")}
+            className="font-medium text-brand-700 transition-colors hover:text-brand-800 hover:underline"
+          >
+            Sign in
+          </button>
+        </p>
       </motion.div>
-    </motion.div>
+    </div>
   );
 };
 

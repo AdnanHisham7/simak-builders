@@ -1,11 +1,24 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, ReactNode } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import { motion } from "framer-motion";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { getUnseenEnquiriesCount } from "@/services/messageService";
 import { DashboardContext } from "../../context/DashboardContext";
+
+interface MenuSection {
+  title?: string;
+  items: { name: string; path: string; icon: any }[];
+}
+
+interface DashboardLayoutProps {
+  children: ReactNode;
+  menus: MenuSection[];
+}
+
+const SIDEBAR_WIDTH_EXPANDED = 256;
+const SIDEBAR_WIDTH_COLLAPSED = 76;
 
 const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -18,13 +31,9 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
 
   useEffect(() => {
     const handleResize = () => {
-      const mobile = window.innerWidth < 768;
+      const mobile = window.innerWidth < 1024;
       setIsMobile(mobile);
-      if (mobile) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      setSidebarOpen(!mobile);
     };
 
     handleResize();
@@ -33,78 +42,79 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   }, []);
 
   useEffect(() => {
-    if (userType === 'admin') {
-      const fetchUnseenCount = async () => {
-        try {
-          const count = await getUnseenEnquiriesCount();
-          setUnseenCount(count);
-        } catch (error) {
-          console.error("Failed to fetch unseen enquiries count", error);
-        }
-      };
-      fetchUnseenCount();
-    }
+    if (userType !== "admin") return;
+
+    let isMounted = true;
+    const fetchUnseenCount = async () => {
+      try {
+        const count = await getUnseenEnquiriesCount();
+        if (isMounted) setUnseenCount(count);
+      } catch (error) {
+        // Non-critical: the badge simply stays at its last known value.
+      }
+    };
+
+    fetchUnseenCount();
+    return () => {
+      isMounted = false;
+    };
   }, [userType]);
 
   const toggleSidebar = () => {
     if (isMobile) {
-      setSidebarOpen(!sidebarOpen);
+      setSidebarOpen((prev) => !prev);
     } else {
-      setSidebarCollapsed(!sidebarCollapsed);
+      setSidebarCollapsed((prev) => !prev);
     }
   };
 
+  const sidebarWidth = sidebarCollapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED;
+  const springTransition = { type: "spring" as const, stiffness: 320, damping: 34 };
+
   return (
     <DashboardContext.Provider value={{ unseenCount, setUnseenCount }}>
-      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 transition-all duration-500">
-        {isMobile && sidebarOpen && (
-          <div
-            className="fixed inset-0 bg-black bg-opacity-50 z-20"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-console-bg via-console-bg to-brand-50/40">
+        <AnimatePresence>
+          {isMobile && sidebarOpen && (
+            <motion.div
+              key="sidebar-overlay"
+              className="fixed inset-0 z-20 bg-slate-900/40 backdrop-blur-[1px]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSidebarOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+        </AnimatePresence>
 
-        <motion.div
-          className={`
-            ${isMobile ? "fixed z-30" : "relative"} 
-            ${sidebarOpen || !isMobile ? "" : "-translate-x-full"}
-            bg-white border-r border-gray-200 h-full shadow-sm
-          `}
+        <motion.aside
+          className={`${
+            isMobile ? "fixed inset-y-0 left-0 z-30" : "relative"
+          } h-full shrink-0 overflow-hidden border-r border-console-border shadow-console`}
           initial={false}
           animate={{
-            width: sidebarCollapsed ? 80 : 256,
+            width: isMobile ? 256 : sidebarWidth,
             x: isMobile && !sidebarOpen ? -256 : 0,
           }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          transition={springTransition}
         >
-          <Sidebar collapsed={sidebarCollapsed} menus={memoizedMenus} unseenCount={unseenCount} />
-        </motion.div>
+          <Sidebar collapsed={!isMobile && sidebarCollapsed} menus={memoizedMenus} unseenCount={unseenCount} />
+        </motion.aside>
 
-        <motion.div
-          className="flex-1 flex flex-col overflow-hidden"
-          initial={false}
-          animate={{
-            marginLeft: isMobile ? 0 : 0,
-          }}
-          transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        >
+        <div className="flex flex-1 flex-col overflow-hidden">
           <Header
             toggleSidebar={toggleSidebar}
             sidebarCollapsed={sidebarCollapsed}
             isMobile={isMobile}
+            sidebarOpen={sidebarOpen}
           />
-          <main className="h-full flex-1 flex flex-col overflow-y-auto p-4 sm:p-6">
-            {children}
-          </main>
-        </motion.div>
+          <main className="no-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+        </div>
       </div>
     </DashboardContext.Provider>
   );
 };
 
 export default DashboardLayout;
-
-interface DashboardLayoutProps {
-  children: React.ReactNode;
-  menus: any;
-}

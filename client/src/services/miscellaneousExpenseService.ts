@@ -43,5 +43,8 @@ export const updateMiscellaneousExpense = async (
 };
 
 export const deleteMiscellaneousExpense = async (expenseId: string) => {
-  await privateClient.delete(`/miscellaneous-expenses/${expenseId}`);
+  const response = await privateClient.delete(
+    `/miscellaneous-expenses/${expenseId}`,
+  );
+  return response.data;
 };

@@ -42,5 +42,6 @@ export const deleteBillUpload = async (purchaseId: string) => {
 };
 
 export const deletePurchase = async (purchaseId: string) => {
-  await privateClient.delete(`/purchases/${purchaseId}`);
+  const response = await privateClient.delete(`/purchases/${purchaseId}`);
+  return response.data;
 };

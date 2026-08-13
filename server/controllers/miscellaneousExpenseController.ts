@@ -139,30 +139,54 @@ const verifyMiscellaneousExpense = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    const expense: any =
-      await MiscellaneousExpenseModel.findById(expenseId).populate("site");
-    if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+    // Atomically flip status pending -> verified in a single findOneAndUpdate.
+    // This closes the race window that a plain findById + save left open:
+    // two near-simultaneous verify requests (e.g. an accidental double click,
+    // or a stale notification panel retried after the first click already
+    // succeeded) could otherwise both read status "pending" before either
+    // write landed, and both would then proceed to double-count the site
+    // expense and the source-of-funds deduction below.
+    const expense: any = await MiscellaneousExpenseModel.findOneAndUpdate(
+      { _id: expenseId, status: { $ne: "verified" } },
+      { $set: { status: "verified" } },
+      { new: true },
+    ).populate("site");
 
-    expense.status = "verified";
-    await expense.save();
+    if (!expense) {
+      const stillExists = await MiscellaneousExpenseModel.exists({
+        _id: expenseId,
+      });
+      if (!stillExists) {
+        throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+      }
+      throw new ApiError(
+        "Expense is already verified",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
     const totalExpense = expense.amount + (expense.tip || 0);
 
     // Site record
+    let updatedSiteExpenses: number | undefined;
+    let newTransaction: any;
     if (expense.site) {
       const site = await SiteModel.findById(expense.site._id);
       const addedByUser = await UserModel.findById(expense.addedBy);
       if (site) {
         site.expenses += totalExpense;
-        site.transactions.push({
+        newTransaction = {
           date: new Date(),
           amount: totalExpense,
           type: "miscellaneous",
           description: `${expense.category} - ${expense.name} by ${addedByUser?.name}`,
           relatedId: expense._id,
           user: addedByUser?._id,
-        });
+        };
+        site.transactions.push(newTransaction);
         await site.save();
+        updatedSiteExpenses = site.expenses;
+        newTransaction = site.transactions[site.transactions.length - 1];
       }
     }
 
@@ -203,9 +227,34 @@ const verifyMiscellaneousExpense = async (
       }
     }
 
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Expense verified and funds deducted" });
+    // Notifications: mark the pending "needs verification" notification(s)
+    // for this expense as approved so the notification panel stops showing
+    // it as pending, and let the person who added it know it went through.
+    await NotificationModel.updateMany(
+      {
+        relatedId: expense._id,
+        type: "miscellaneous_expense_verification",
+      },
+      { status: "approved" },
+    );
+    const updateNotification = new NotificationModel({
+      user: expense.addedBy,
+      type: "miscellaneous_expense_update",
+      relatedId: expense._id,
+      message: `Your ${expense.category} expense (${expense.name}) of ₹${totalExpense} has been verified`,
+      status: "approved",
+    });
+    await updateNotification.save();
+
+    res.status(HttpStatus.OK).json({
+      message: "Expense verified and funds deducted",
+      expense,
+      site:
+        updatedSiteExpenses !== undefined
+          ? { _id: expense.site?._id, expenses: updatedSiteExpenses }
+          : undefined,
+      transaction: newTransaction,
+    });
   } catch (error) {
     next(error);
   }
@@ -236,6 +285,7 @@ const deleteMiscellaneousExpense = async (
     const wasVerified = expense.status === "verified";
 
     // If verified, perform accounting reversal
+    let updatedSiteExpenses: number | undefined;
     if (wasVerified) {
       // 1. Reverse site expense
       const site = await SiteModel.findById(expense.site);
@@ -251,6 +301,7 @@ const deleteMiscellaneousExpense = async (
           user: new Types.ObjectId(req.user?.userId),
         });
         await site.save();
+        updatedSiteExpenses = site.expenses;
       }
 
       // 2. Reverse source deduction
@@ -290,6 +341,19 @@ const deleteMiscellaneousExpense = async (
     // Delete the expense document
     await MiscellaneousExpenseModel.findByIdAndDelete(expenseId);
 
+    // Close out any notifications still pointing at this expense so the
+    // notification panel doesn't keep showing a "pending verification"
+    // entry for an expense that no longer exists (which would otherwise
+    // 404 forever if an admin tried to verify it from a stale panel).
+    await NotificationModel.updateMany(
+      {
+        relatedId: expense._id,
+        type: "miscellaneous_expense_verification",
+        status: "pending",
+      },
+      { status: "rejected" },
+    );
+
     // Activity log
     await ActivityLogModel.create({
       user: req.user?.userId,
@@ -301,6 +365,11 @@ const deleteMiscellaneousExpense = async (
 
     res.status(HttpStatus.OK).json({
       message: `Miscellaneous expense deleted successfully${wasVerified ? " with accounting reversal" : ""}`,
+      wasVerified,
+      site:
+        updatedSiteExpenses !== undefined
+          ? { _id: expense.site, expenses: updatedSiteExpenses }
+          : undefined,
     });
   } catch (error) {
     next(error);
