@@ -12,7 +12,7 @@ import { createPortal } from "react-dom";
 const ProfileDropdown = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, userType } = useSelector((state: RootState) => state.auth);
   const [isLogoutConfirmOpen, setIsLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -28,6 +28,8 @@ const ProfileDropdown = () => {
       setIsLoggingOut(false);
     }
   };
+
+  const rolePrefix = userType ? `/${userType}` : "";
 
   const getDropdownPosition = () => {
     if (!buttonRef.current) {
@@ -77,7 +79,7 @@ const ProfileDropdown = () => {
               <Menu.Item>
                 {({ active }) => (
                   <button
-                    onClick={() => navigate("/profile")}
+                    onClick={() => navigate(`${rolePrefix}/profile`)}
                     className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-console-text ${
                       active ? "bg-white/70" : ""
                     }`}
@@ -91,7 +93,7 @@ const ProfileDropdown = () => {
               <Menu.Item>
                 {({ active }) => (
                   <button
-                    onClick={() => navigate("/settings")}
+                    onClick={() => navigate(`${rolePrefix}/settings`)}
                     className={`flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-console-text ${
                       active ? "bg-white/70" : ""
                     }`}

@@ -22,6 +22,8 @@ export interface Transaction {
 }
 
 export interface Site {
+  architectCount: number;
+  siteManagerCount: number;
   id: string;
   name: string;
   address: string;

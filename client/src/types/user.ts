@@ -5,6 +5,7 @@ export interface IUser {
   userType: string;
   resetToken?: string;
   profileImage?: string;
+  phone?: string;
   savedCompanies?: string[];
   isEmailVerified: boolean;
   verificationToken?: string;

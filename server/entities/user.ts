@@ -15,6 +15,7 @@ export interface User {
   email: string;
   password: string;
   profileImage?: string;
+  phone?: string;
   role: UserRole;
   assignedSites: Types.ObjectId[]; // For SiteManager, Architect, Client
   isEmailVerified: boolean;

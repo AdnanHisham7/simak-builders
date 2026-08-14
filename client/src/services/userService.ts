@@ -327,6 +327,22 @@ export const getCurrentUser = async () => {
   return response.data;
 };
 
+export const updateOwnProfile = async (payload: {
+  name?: string;
+  phone?: string;
+  profileImage?: File;
+}) => {
+  const formData = new FormData();
+  if (payload.name !== undefined) formData.append("name", payload.name);
+  if (payload.phone !== undefined) formData.append("phone", payload.phone);
+  if (payload.profileImage) formData.append("profileImage", payload.profileImage);
+
+  const response = await privateClient.patch("/users/me", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data;
+};
+
 export const getUnassignedClients = async (): Promise<User[]> => {
   const response = await privateClient.get("/users/clients/unassigned");
   return response.data.map((user: any) => ({

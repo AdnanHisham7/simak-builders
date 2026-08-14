@@ -72,8 +72,8 @@ const mapSiteForDisplay = (site: Site): MappedSite => ({
   budget: site.budget,
   expenses: site.expenses,
   createdAt: new Date(site.createdAt).toLocaleDateString(),
-  siteManagerCount: site.siteManagers?.length || 0,
-  architectCount: site.architects?.length || 0,
+  siteManagerCount: site.siteManagerCount || 0,
+  architectCount: site.architectCount || 0,
   completedPhases: site.phases?.filter((p) => p.status === "completed").length || 0,
   totalPhases: site.phases?.length || 0,
 });

@@ -7,6 +7,7 @@ const UserSchema = new Schema<User>(
     email: { type: String, unique: true, required: true },
     password: { type: String, required: true },
     profileImage: { type: String },
+    phone: { type: String, trim: true },
     role: { type: String, enum: Object.values(UserRole), required: true },
     assignedSites: [{ type: Schema.Types.ObjectId, ref: "Site" }],
     isEmailVerified: { type: Boolean, default: false },

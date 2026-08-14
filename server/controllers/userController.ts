@@ -1001,12 +1001,98 @@ const getCurrentUser = async (
 ) => {
   try {
     const user = await UserModel.findById(req.user?.userId)
+      .select("-password -twoFactorSecret -resetToken -verificationToken -refreshToken")
       .populate("assignedSites")
       .populate("salaryAssignments.givenBy", "name")
       .populate("siteExpensesTransactions.givenBy", "name")
       .populate("siteExpensesTransactions.site", "name");
     if (!user) throw new ApiError("User not found", HttpStatus.NOT_FOUND);
     res.status(HttpStatus.OK).json(user);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const MAX_PROFILE_NAME_LENGTH = 100;
+const MAX_PROFILE_PHONE_LENGTH = 20;
+
+const updateOwnProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    const { name, phone } = req.body;
+    const updatedFields: string[] = [];
+
+    if (name !== undefined) {
+      const trimmedName = String(name).trim();
+      if (!trimmedName) {
+        throw new ApiError("Name cannot be empty", HttpStatus.BAD_REQUEST);
+      }
+      if (trimmedName.length > MAX_PROFILE_NAME_LENGTH) {
+        throw new ApiError(
+          `Name cannot exceed ${MAX_PROFILE_NAME_LENGTH} characters`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      user.name = trimmedName;
+      updatedFields.push("name");
+    }
+
+    if (phone !== undefined) {
+      const trimmedPhone = String(phone).trim();
+      if (trimmedPhone.length > MAX_PROFILE_PHONE_LENGTH) {
+        throw new ApiError(
+          `Phone number cannot exceed ${MAX_PROFILE_PHONE_LENGTH} characters`,
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      user.phone = trimmedPhone;
+      updatedFields.push("phone");
+    }
+
+    if (req.file) {
+      user.profileImage = req.file.path;
+      updatedFields.push("profileImage");
+    }
+
+    if (updatedFields.length === 0) {
+      throw new ApiError("No updatable fields provided", HttpStatus.BAD_REQUEST);
+    }
+
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: userId,
+      action: "update",
+      resource: "profile",
+      resourceId: user._id,
+      details: `Updated own profile fields: ${updatedFields.join(", ")}`,
+    });
+
+    const sanitizedUser = user.toObject();
+    delete (sanitizedUser as any).password;
+    delete (sanitizedUser as any).twoFactorSecret;
+    delete (sanitizedUser as any).resetToken;
+    delete (sanitizedUser as any).verificationToken;
+    delete (sanitizedUser as any).refreshToken;
+
+    res.status(HttpStatus.OK).json({
+      message: "Profile updated successfully",
+      user: sanitizedUser,
+      updatedFields,
+    });
   } catch (error) {
     next(error);
   }
@@ -1040,6 +1126,7 @@ const getUserById = async (req: Request, res: Response, next: NextFunction) => {
 
     // Fetch user by ID and populate relevant fields
     const user = await UserModel.findById(id)
+      .select("-password -twoFactorSecret -resetToken -verificationToken -refreshToken")
       .populate("assignedSites")
       .populate("salaryAssignments.givenBy", "name")
       .populate("siteExpensesTransactions.givenBy", "name")
@@ -1085,6 +1172,7 @@ export default {
   updateSalaryAssignmentAmount,
   assignSiteExpenses,
   getCurrentUser,
+  updateOwnProfile,
   assignSitesToClients,
   getUnassignedClients,
 };

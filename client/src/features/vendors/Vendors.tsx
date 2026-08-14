@@ -25,6 +25,7 @@ import {
   getPurchasesByVendor,
 } from "@/services/vendorService";
 import SettleVendorModal from "./SettleVendorModal";
+import VendorPurchaseHistoryModal from "./VendorPurchaseHistoryModal";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -103,6 +104,8 @@ const Vendors: React.FC = () => {
   >([]);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] =
     useState<boolean>(false);
+  const [purchaseModalVendorName, setPurchaseModalVendorName] = useState("");
+  const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
@@ -210,13 +213,18 @@ const Vendors: React.FC = () => {
     }
   };
 
-  const openPurchaseModal = async (vendorId: string) => {
+  const openPurchaseModal = async (vendorId: string, vendorName: string) => {
+    setPurchaseModalVendorName(vendorName);
+    setIsPurchaseModalOpen(true);
+    setIsLoadingPurchases(true);
     try {
       const purchases = await getPurchasesByVendor(vendorId);
       setSelectedVendorPurchases(purchases);
-      setIsPurchaseModalOpen(true);
     } catch (err) {
       toast.error("Failed to fetch purchases");
+      setIsPurchaseModalOpen(false);
+    } finally {
+      setIsLoadingPurchases(false);
     }
   };
 
@@ -408,7 +416,7 @@ const Vendors: React.FC = () => {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => openPurchaseModal(vendor.id)}
+                      onClick={() => openPurchaseModal(vendor.id, vendor.name)}
                       className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-console-bg px-3 py-2 text-sm font-medium text-console-text transition-colors hover:bg-slate-200"
                     >
                       <Eye size={14} /> Purchases
@@ -496,7 +504,7 @@ const Vendors: React.FC = () => {
                             <Tooltip label="View purchases">
                               <button
                                 type="button"
-                                onClick={() => openPurchaseModal(vendor.id)}
+                                onClick={() => openPurchaseModal(vendor.id, vendor.name)}
                                 aria-label="View purchases"
                                 className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
                               >
@@ -597,90 +605,13 @@ const Vendors: React.FC = () => {
         </form>
       </Modal>
 
-      <Modal
+      <VendorPurchaseHistoryModal
         isOpen={isPurchaseModalOpen}
         onClose={closePurchaseModal}
-        title="Purchase History"
-        size="xl"
-      >
-        {selectedVendorPurchases.length === 0 ? (
-          <EmptyState icon={Package} title="No purchases found for this vendor" />
-        ) : (
-          <div className="space-y-4">
-            {selectedVendorPurchases.map((purchase) => (
-              <div key={purchase._id} className="rounded-console border border-console-border p-5">
-                <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Site</p>
-                    <p className="text-sm text-console-text">{purchase.site ? purchase.site.name : "N/A"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Date</p>
-                    <p className="text-sm text-console-text">
-                      {new Date(purchase.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Total amount</p>
-                    <p className="text-lg font-semibold text-success-700">{formatCurrency(purchase.totalAmount)}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Status</p>
-                    <Badge variant="success">{purchase.status}</Badge>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Payment method</p>
-                    <p className="text-sm capitalize text-console-text">{purchase.payment.method}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Payment status</p>
-                    <Badge variant={purchase.payment.isPaid ? "success" : "warning"}>
-                      {purchase.payment.isPaid ? "Paid" : "Unpaid"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <p className="mb-2 text-xs font-medium text-console-muted">Items ({purchase.items.length})</p>
-                  <div className="space-y-2">
-                    {purchase.items.map((item, index) => (
-                      <div key={index} className="rounded-lg border border-console-border bg-console-bg p-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-console-text">{item.name}</p>
-                            <p className="text-xs text-console-muted">Category: {item.category}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm font-medium text-console-text">
-                              {item.quantity} {item.unit}
-                            </p>
-                            <p className="text-xs text-console-muted">{formatCurrency(item.price)} each</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {purchase.billUpload && (
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Bill upload</p>
-                    <a
-                      href={purchase.billUpload.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-brand-700 hover:underline"
-                    >
-                      {purchase.billUpload.name}
-                    </a>
-                    <p className="text-xs text-console-muted">
-                      Uploaded: {new Date(purchase.billUpload.uploadDate).toLocaleDateString()}
-                    </p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </Modal>
+        vendorName={purchaseModalVendorName}
+        purchases={selectedVendorPurchases}
+        loading={isLoadingPurchases}
+      />
 
       <ConfirmDialog
         isOpen={!!deleteTarget}

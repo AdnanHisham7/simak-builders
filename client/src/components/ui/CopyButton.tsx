@@ -32,7 +32,6 @@ const CopyButton: React.FC<CopyButtonProps> = ({
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.success(`${label} copied to clipboard`);
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       timeoutRef.current = setTimeout(() => setCopied(false), 1600);
     } catch {

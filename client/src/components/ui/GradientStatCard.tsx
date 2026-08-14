@@ -90,7 +90,7 @@ const GradientStatCard: React.FC<GradientStatCardProps> = ({
             e.stopPropagation();
             action.onClick(e);
           }}
-          className="mt-5 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/12 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-white/20"
+          className="mt-5 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-sm transition-colors hover:bg-white/20"
         >
           {action.label}
         </button>

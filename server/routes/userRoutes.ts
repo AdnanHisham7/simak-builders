@@ -1,12 +1,19 @@
 import { Router } from "express";
 import userController from "@controllers/userController";
 import { authMiddleware } from "@middleware/authMiddleware";
+import upload from "@middleware/multer";
 
 const router = Router();
 
 router.get("/", userController.getUsersByRole);
 router.post("/", authMiddleware, userController.createUser);
 router.get('/me', authMiddleware, userController.getCurrentUser);
+router.patch(
+  '/me',
+  authMiddleware,
+  upload.single("profileImage"),
+  userController.updateOwnProfile,
+);
 
 router.put("/update", authMiddleware, userController.updateUser);
 router.put("/toggleStatus/:id", authMiddleware, userController.toggleStatus);

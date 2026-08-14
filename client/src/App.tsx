@@ -33,6 +33,7 @@ import Sites from "./features/sites/Sites.tsx";
 import Stocks from "./features/stocks/Stocks.tsx";
 import Reports from "./features/reports/Reports.tsx";
 import SettingsPage from "./features/settings/Settings.tsx";
+import Profile from "./pages/Profile/Profile.tsx";
 import SiteDetail from "./features/sites/SiteDetail.tsx";
 import Salary from "./features/salary/Salary.tsx";
 import SiteManagerDashboard from "./pages/siteManager/SiteManagerDashboard.tsx";
@@ -119,6 +120,7 @@ const App: React.FC = () => {
             <Route path="stocks" element={<Stocks />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<Profile />} />
             <Route
               path="site-managers/:managerId/dashboard"
               element={<SiteManagerDashboard />}
@@ -136,14 +138,19 @@ const App: React.FC = () => {
             <Route path="sites/:siteId" element={<SiteDetail />} />
             <Route path="reports" element={<Reports />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
 
           <Route path="architect" element={<ArchitectProtected />}>
             <Route path="dashboard" element={<ArchitectDashboard />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
 
           <Route path="client" element={<ClientProtected />}>
             <Route path="dashboard" element={<ClientDashboard />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
           {/* Catch-all route for 404 */}
           <Route path="*" element={<NotFound />} />
