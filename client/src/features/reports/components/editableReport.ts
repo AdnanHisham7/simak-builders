@@ -128,12 +128,17 @@ export const computeTotals = (
   rows: EditableReportRow[],
   supervisionPercentage: number,
   roundAmounts: boolean,
+  supervisionOverride?: number | null,
 ): EditableTotals => {
   const totalAmount = roundToCents(
     rows.reduce((sum, row) => sum + displayAmount(Number(row.amount) || 0, roundAmounts), 0),
   );
-  const supervisionRaw = (totalAmount * (Number(supervisionPercentage) || 0)) / 100;
-  const supervisionAmount = displayAmount(supervisionRaw, roundAmounts);
+
+  const supervisionAmount =
+    supervisionOverride !== null && supervisionOverride !== undefined
+      ? displayAmount(supervisionOverride, roundAmounts)
+      : displayAmount((totalAmount * (Number(supervisionPercentage) || 0)) / 100, roundAmounts);
+
   const netTotal = displayAmount(totalAmount + supervisionAmount, roundAmounts);
 
   return { totalAmount, supervisionAmount, netTotal };

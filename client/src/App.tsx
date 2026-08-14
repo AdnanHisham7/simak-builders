@@ -33,7 +33,7 @@ import Sites from "./features/sites/Sites.tsx";
 import Stocks from "./features/stocks/Stocks.tsx";
 import Reports from "./features/reports/Reports.tsx";
 import SettingsPage from "./features/settings/Settings.tsx";
-import Profile from "./pages/Profile/Profile.tsx";
+import Profile from "./pages/profile/Profile.tsx";
 import SiteDetail from "./features/sites/SiteDetail.tsx";
 import Salary from "./features/salary/Salary.tsx";
 import SiteManagerDashboard from "./pages/siteManager/SiteManagerDashboard.tsx";

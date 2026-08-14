@@ -151,6 +151,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
   const [loading, setLoading] = useState(false);
   const [editableRows, setEditableRows] = useState<any[]>([]);
   const [roundAmounts, setRoundAmounts] = useState(false);
+  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const handleSiteChange = (siteId: string) => {
@@ -163,6 +164,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
     setReportData(null);
     setEditableRows([]);
     setRoundAmounts(false);
+    setSupervisionOverride(null);
   };
 
   const handleSupervisionChange = (value: string) => {
@@ -191,6 +193,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
       setReportData(res.data);
       setEditableRows(buildEditableRows(res.data.transactions));
       setRoundAmounts(false);
+      setSupervisionOverride(null);
     } catch (err) {
       console.error("Error fetching expense report:", err);
       setReportData(null);
@@ -200,7 +203,12 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
   };
 
   const totals = reportData
-    ? computeTotals(editableRows, Number(reportData.supervisionPercentage) || 0, roundAmounts)
+    ? computeTotals(
+        editableRows,
+        Number(reportData.supervisionPercentage) || 0,
+        roundAmounts,
+        supervisionOverride,
+      )
     : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
 
   const exportToPDF = async () => {
@@ -323,12 +331,34 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
-              <p className="text-sm text-console-muted">
-                Supervision amount ({reportData.supervisionPercentage}%)
-              </p>
-              <p className="mt-1 text-xl font-semibold text-warning-600">
-                ₹{totals.supervisionAmount.toLocaleString("en-IN")}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-console-muted">
+                  Supervision amount ({reportData.supervisionPercentage}%)
+                </p>
+                {supervisionOverride !== null && (
+                  <Tooltip label="Reset to computed supervision">
+                    <button
+                      type="button"
+                      onClick={() => setSupervisionOverride(null)}
+                      aria-label="Reset to computed supervision"
+                      className="text-console-muted hover:text-console-text"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="mt-1">
+                <EditableAmountField
+                  value={totals.supervisionAmount}
+                  onCommit={(value: number) => setSupervisionOverride(value)}
+                  inputClassName="w-full border-0 border-b border-transparent bg-transparent px-0 py-0 text-right text-xl font-semibold text-warning-600 transition-colors hover:border-slate-300 focus:border-brand-500 focus:ring-0"
+                  currencyClassName="mr-1 text-xl font-semibold text-warning-600"
+                />
+              </div>
+              {supervisionOverride !== null && (
+                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+              )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Net total (with supervision)</p>
@@ -374,6 +404,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
   const [roundAmounts, setRoundAmounts] = useState(false);
   const [roundBalance, setRoundBalance] = useState(false);
   const [balanceOverride, setBalanceOverride] = useState<number | null>(null);
+  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const handleSiteChange = (siteId: string) => {
@@ -388,6 +419,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
     setRoundAmounts(false);
     setRoundBalance(false);
     setBalanceOverride(null);
+    setSupervisionOverride(null);
   };
 
   const fetchData = async () => {
@@ -414,6 +446,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
       setRoundAmounts(false);
       setRoundBalance(false);
       setBalanceOverride(null);
+      setSupervisionOverride(null);
     } catch (err) {
       console.error("Error fetching client report:", err);
       setReportData(null);
@@ -423,7 +456,12 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
   };
 
   const totals = reportData
-    ? computeTotals(editableRows, Number(reportData.supervisionPercentage) || 0, roundAmounts)
+    ? computeTotals(
+        editableRows,
+        Number(reportData.supervisionPercentage) || 0,
+        roundAmounts,
+        supervisionOverride,
+      )
     : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
   const rawBalance = reportData
     ? balanceOverride !== null
@@ -555,12 +593,34 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
-              <p className="text-sm text-console-muted">
-                Supervision ({reportData.supervisionPercentage}%)
-              </p>
-              <p className="mt-1 text-xl font-semibold text-warning-600">
-                ₹{totals.supervisionAmount.toLocaleString("en-IN")}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-console-muted">
+                  Supervision ({reportData.supervisionPercentage}%)
+                </p>
+                {supervisionOverride !== null && (
+                  <Tooltip label="Reset to computed supervision">
+                    <button
+                      type="button"
+                      onClick={() => setSupervisionOverride(null)}
+                      aria-label="Reset to computed supervision"
+                      className="text-console-muted hover:text-console-text"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="mt-1">
+                <EditableAmountField
+                  value={totals.supervisionAmount}
+                  onCommit={(value: number) => setSupervisionOverride(value)}
+                  inputClassName="w-full border-0 border-b border-transparent bg-transparent px-0 py-0 text-right text-xl font-semibold text-warning-600 transition-colors hover:border-slate-300 focus:border-brand-500 focus:ring-0"
+                  currencyClassName="mr-1 text-xl font-semibold text-warning-600"
+                />
+              </div>
+              {supervisionOverride !== null && (
+                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+              )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Net total</p>

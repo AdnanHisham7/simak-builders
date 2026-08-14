@@ -88,29 +88,29 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
 
   doc.setFont("Roboto-Regular", "normal");
 
-  doc.setFontSize(16);
+  doc.setFontSize(19);
   doc.setTextColor(25, 25, 25);
   doc.text(title, 14, yOffset);
-  yOffset += 7;
+  yOffset += 8;
 
-  doc.setFontSize(10.5);
+  doc.setFontSize(12.5);
   doc.setTextColor(80, 80, 80);
   doc.text(`Site: ${siteName}`, 14, yOffset);
-  yOffset += 5;
+  yOffset += 6;
 
   if (address) {
     doc.text(`Address: ${address}`, 14, yOffset);
-    yOffset += 5;
+    yOffset += 6;
   }
 
   if (clientName) {
     doc.text(`Client: ${clientName}`, 14, yOffset);
-    yOffset += 5;
+    yOffset += 6;
   }
 
   if (periodLabel) {
     doc.text(`Period: ${periodLabel}`, 14, yOffset);
-    yOffset += 5;
+    yOffset += 6;
   }
 
   doc.setDrawColor(210, 210, 210);
@@ -141,8 +141,8 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
     theme: "grid",
     styles: {
       font: "Roboto-Regular",
-      fontSize: 9.5,
-      cellPadding: 3,
+      fontSize: 11.5,
+      cellPadding: 3.5,
       lineColor: [222, 224, 228],
       lineWidth: 0.15,
       textColor: [45, 45, 45],
@@ -151,7 +151,7 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
     headStyles: {
       font: "Roboto-Regular",
       fontStyle: "bold",
-      fontSize: 9.5,
+      fontSize: 11.5,
       fillColor: [240, 242, 245],
       textColor: [30, 30, 30],
       lineColor: [205, 208, 213],
