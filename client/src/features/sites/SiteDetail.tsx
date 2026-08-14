@@ -202,6 +202,8 @@ const SiteDetail: React.FC = () => {
 
   const [purchaseSearchQuery, setPurchaseSearchQuery] = useState("");
   const [miscSearchQuery, setMiscSearchQuery] = useState("");
+  const [stockSearchQuery, setStockSearchQuery] = useState("");
+  const [documentSearchQuery, setDocumentSearchQuery] = useState("");
 
   const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
   const [editMiscName, setEditMiscName] = useState("");
@@ -1012,6 +1014,30 @@ const SiteDetail: React.FC = () => {
     );
   }, [miscellaneousExpenses, miscSearchQuery]);
 
+  const filteredStocks = useMemo(() => {
+    const query = stockSearchQuery.trim().toLowerCase();
+    if (!query) return stocks;
+    return stocks.filter(
+      (stock) =>
+        stock.name.toLowerCase().includes(query) ||
+        (stock.category || "").toLowerCase().includes(query),
+    );
+  }, [stocks, stockSearchQuery]);
+
+  const filteredClientDocuments = useMemo(() => {
+    const allClientDocs = site?.documents.filter((doc) => doc.category === "client") || [];
+    const query = documentSearchQuery.trim().toLowerCase();
+    if (!query) return allClientDocs;
+    return allClientDocs.filter((doc) => doc.name.toLowerCase().includes(query));
+  }, [site, documentSearchQuery]);
+
+  const filteredSiteDocuments = useMemo(() => {
+    const allSiteDocs = site?.documents.filter((doc) => doc.category === "site") || [];
+    const query = documentSearchQuery.trim().toLowerCase();
+    if (!query) return allSiteDocs;
+    return allSiteDocs.filter((doc) => doc.name.toLowerCase().includes(query));
+  }, [site, documentSearchQuery]);
+
   if (loading) {
     return <PageLoader label="Loading site details" />;
   }
@@ -1036,10 +1062,15 @@ const SiteDetail: React.FC = () => {
   }
 
   const completedPhases = site.phases.filter((p) => p.status === "completed").length;
+  const pendingPhases = site.phases.filter((p) => p.status === "pending").length;
+  const notStartedPhases = site.phases.filter((p) => p.status === "not started").length;
   const totalPhases = site.phases.length;
   const progressPercentage = totalPhases > 0 ? (completedPhases / totalPhases) * 100 : 0;
   const clientDocuments = site.documents.filter((doc) => doc.category === "client");
   const siteDocuments = site.documents.filter((doc) => doc.category === "site");
+  const budgetUtilizationPercentage =
+    site.budget > 0 ? ((site.expenses || 0) / site.budget) * 100 : 0;
+  const teamSize = site.siteManagers.length + site.architects.length + site.supervisors.length;
 
   return (
     <div className="space-y-6">
@@ -1153,6 +1184,11 @@ const SiteDetail: React.FC = () => {
           prefix="₹"
           tone="danger"
           icon={TrendingUp}
+          helperText={
+            site.budget > 0
+              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized`
+              : "No funds received yet"
+          }
           onClick={() => setIsTransactionsModalOpen(true)}
         />
 
@@ -1168,6 +1204,11 @@ const SiteDetail: React.FC = () => {
               <Activity size={18} />
             </div>
           </div>
+          <p className="mt-2 text-xs text-console-muted">
+            {totalPhases > 0
+              ? `${completedPhases} done • ${pendingPhases} pending • ${notStartedPhases} not started`
+              : "No phases added yet"}
+          </p>
         </div>
 
         <div className="rounded-glass border border-console-border bg-white p-5">
@@ -1175,13 +1216,17 @@ const SiteDetail: React.FC = () => {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Team size</p>
               <p className="mt-1 text-xl font-semibold text-console-text">
-                {site.siteManagers.length + site.architects.length}
+                {teamSize}
               </p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-info-50 text-info-700">
               <Users size={18} />
             </div>
           </div>
+          <p className="mt-2 text-xs text-console-muted">
+            {site.siteManagers.length} managers • {site.architects.length} architects •{" "}
+            {site.supervisors.length} supervisors
+          </p>
         </div>
       </div>
 
@@ -1835,8 +1880,31 @@ const SiteDetail: React.FC = () => {
               </div>
             )}
           </div>
+
+          {stocks.length > 0 && (
+            <div className="mb-5">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+                <input
+                  type="text"
+                  placeholder="Search stock items..."
+                  value={stockSearchQuery}
+                  onChange={(e) => setStockSearchQuery(e.target.value)}
+                  className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                />
+              </div>
+              {stockSearchQuery.trim() && (
+                <p className="mt-2 text-sm text-console-muted">
+                  Found {filteredStocks.length} matching stock items.
+                </p>
+              )}
+            </div>
+          )}
+
           {stocks.length === 0 ? (
             <EmptyState icon={Package} title="No stock recorded for this site" />
+          ) : filteredStocks.length === 0 ? (
+            <EmptyState icon={Package} title="No stock items match the search" />
           ) : (
             <div className="overflow-hidden rounded-console border border-console-border">
               <table className="min-w-full divide-y divide-console-border">
@@ -1847,7 +1915,7 @@ const SiteDetail: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-console-border bg-white">
-                  {stocks.map((stock: any) => (
+                  {filteredStocks.map((stock: any) => (
                     <tr key={stock._id}>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">{stock.name}</td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
@@ -2059,16 +2127,44 @@ const SiteDetail: React.FC = () => {
 
       {selectedTab === "documents" && (
         <SectionCard>
+          <div className="mb-5">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+              <input
+                type="text"
+                placeholder="Search documents..."
+                value={documentSearchQuery}
+                onChange={(e) => setDocumentSearchQuery(e.target.value)}
+                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              />
+            </div>
+            {documentSearchQuery.trim() && (
+              <p className="mt-2 text-sm text-console-muted">
+                Found {filteredClientDocuments.length + filteredSiteDocuments.length} matching documents.
+              </p>
+            )}
+          </div>
+
           <div className="space-y-6">
             {[
-              { title: "Client Documentation", docs: clientDocuments, category: "client" as const },
-              { title: "Site Documentation", docs: siteDocuments, category: "site" as const },
+              {
+                title: "Client Documentation",
+                docs: filteredClientDocuments,
+                totalCount: clientDocuments.length,
+                category: "client" as const,
+              },
+              {
+                title: "Site Documentation",
+                docs: filteredSiteDocuments,
+                totalCount: siteDocuments.length,
+                category: "site" as const,
+              },
             ].map((group) => (
               <div key={group.category}>
                 <div className="flex items-center justify-between">
                   <h4 className="flex items-center text-sm font-medium text-console-text">
                     <FileText size={15} className="mr-2" />
-                    {group.title} ({group.docs.length})
+                    {group.title} ({group.totalCount})
                   </h4>
                   {canUploadDocuments && (
                     <label className="relative cursor-pointer">
@@ -2088,8 +2184,10 @@ const SiteDetail: React.FC = () => {
                     </label>
                   )}
                 </div>
-                {group.docs.length === 0 ? (
+                {group.totalCount === 0 ? (
                   <p className="mt-2 text-sm text-console-muted">No documents uploaded yet</p>
+                ) : group.docs.length === 0 ? (
+                  <p className="mt-2 text-sm text-console-muted">No documents match the search</p>
                 ) : (
                   <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
                     {group.docs.map((doc) => (

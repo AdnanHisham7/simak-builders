@@ -35,6 +35,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Tooltip from "@/components/ui/Tooltip";
 import CopyButton from "@/components/ui/CopyButton";
+import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 export interface Architect {
@@ -44,6 +45,7 @@ export interface Architect {
   password: string;
   isBlocked: boolean;
   sites: Site[];
+  profileImage?: string;
 }
 
 const Architects: React.FC = () => {
@@ -93,6 +95,7 @@ const Architects: React.FC = () => {
             email: user.email,
             password: user.password || "********",
             isBlocked: user.isBlocked,
+            profileImage: user.profileImage,
           })),
         );
         setAllSites(sitesData);
@@ -338,13 +341,7 @@ const Architects: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className="relative">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                                {architect.name
-                                  .split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </div>
+                              <Avatar name={architect.name} imageUrl={architect.profileImage} />
                               <div
                                 className={cn(
                                   "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",

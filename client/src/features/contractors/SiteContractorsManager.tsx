@@ -504,7 +504,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
         isOpen={isViewTransactionsModalOpen && !!selectedContractor}
         onClose={() => setIsViewTransactionsModalOpen(false)}
         title={`Transactions — ${selectedContractor?.name ?? ""}`}
-        size="lg"
+        size="xl"
       >
         {transactions.length === 0 ? (
           <EmptyState icon={DollarSign} title="No transactions yet" />

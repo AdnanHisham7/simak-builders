@@ -11,6 +11,8 @@ import {
   Eye,
   Inbox,
   AlertCircle,
+  Grid as GridIcon,
+  List,
 } from "lucide-react";
 import { useDashboardContext } from "../../context/DashboardContext";
 import { Card } from "@/components/ui/Card";
@@ -20,6 +22,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import Tooltip from "@/components/ui/Tooltip";
+import { cn } from "@/lib/cn";
 
 interface Enquiry {
   _id: string;
@@ -33,6 +36,7 @@ interface Enquiry {
 }
 
 type SeenFilter = "all" | "new" | "seen";
+type ViewMode = "grid" | "list";
 
 const ListEnquiries: React.FC = () => {
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
@@ -44,6 +48,7 @@ const ListEnquiries: React.FC = () => {
   const [sortBy, setSortBy] = useState<"date" | "name" | "subject">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [filterSeen, setFilterSeen] = useState<SeenFilter>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const { unseenCount, setUnseenCount } = useDashboardContext();
 
   useEffect(() => {
@@ -180,6 +185,34 @@ const ListEnquiries: React.FC = () => {
                     {sortOrder === "asc" ? <SortAsc size={17} /> : <SortDesc size={17} />}
                   </button>
                 </Tooltip>
+                <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
+                  <Tooltip label="Card view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      aria-label="Card view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "grid" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <GridIcon size={17} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="Table view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      aria-label="Table view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "list" ? "bg-brand-50 text-brand-700" : "text-console-muted hover:bg-console-bg",
+                      )}
+                    >
+                      <List size={17} />
+                    </button>
+                  </Tooltip>
+                </div>
               </div>
             </div>
           </Card>
@@ -209,7 +242,7 @@ const ListEnquiries: React.FC = () => {
                 }
               />
             </Card>
-          ) : (
+          ) : viewMode === "grid" ? (
             <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
               {filteredAndSortedEnquiries.map((enquiry) => (
                 <button
@@ -260,6 +293,68 @@ const ListEnquiries: React.FC = () => {
                 </button>
               ))}
             </div>
+          ) : (
+            <Card className="p-0">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-console-border">
+                  <thead className="bg-console-bg">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Contact</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Subject</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Phone</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-console-border">
+                    {filteredAndSortedEnquiries.map((enquiry) => (
+                      <tr key={enquiry._id} className="hover:bg-console-bg">
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
+                              {enquiry.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-console-text">{enquiry.name}</div>
+                              <div className="truncate text-xs text-console-muted">{enquiry.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="max-w-xs px-4 py-3.5">
+                          <span className="line-clamp-1 text-sm text-console-text">{enquiry.subject}</span>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">{enquiry.phone}</td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-muted">
+                          {new Date(enquiry.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {enquiry.isSeen ? (
+                            <Badge variant="success">Seen</Badge>
+                          ) : (
+                            <Badge variant="error">New</Badge>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <div className="flex items-center justify-center gap-1">
+                            <Tooltip label="View details">
+                              <button
+                                type="button"
+                                onClick={() => openModal(enquiry)}
+                                aria-label="View details"
+                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                              >
+                                <Eye size={16} />
+                              </button>
+                            </Tooltip>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
         </>
       )}

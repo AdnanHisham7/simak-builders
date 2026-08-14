@@ -546,6 +546,7 @@ const Contractors: React.FC = () => {
                   0,
                 )}
                 prefix="₹"
+                tone="danger"
                 icon={Wallet}
               />
             </div>

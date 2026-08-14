@@ -66,6 +66,7 @@ const getUsersByRole = async (
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted || false,
       role: user.role,
+      profileImage: user.profileImage,
       assignedSites:
         user.assignedSites?.map((site: any) => ({
           id: site._id,

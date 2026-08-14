@@ -139,7 +139,6 @@ const Vendors: React.FC = () => {
 
   const stats = {
     total: vendors.length,
-    active: vendors.filter((v) => v.status === "active").length,
     totalAmount: vendors.reduce((sum, v) => sum + (v.totalAmount || 0), 0),
     totalPurchases: vendors.reduce((sum, v) => sum + (v.totalPurchases || 0), 0),
     totalOutstanding: vendors.reduce(
@@ -280,7 +279,7 @@ const Vendors: React.FC = () => {
 
       {loading ? (
         <div className="space-y-6">
-          <SkeletonStatCards count={5} />
+          <SkeletonStatCards count={4} />
           <SkeletonTable />
         </div>
       ) : (
@@ -295,12 +294,17 @@ const Vendors: React.FC = () => {
               {expandedStats ? <ChevronUp size={18} className="text-console-muted" /> : <ChevronDown size={18} className="text-console-muted" />}
             </button>
             {expandedStats && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Total Vendors" value={stats.total} icon={Users} />
-                <StatCard label="Active Vendors" value={stats.active} icon={Users} />
                 <StatCard label="Total Purchases" value={stats.totalPurchases} icon={Package} />
                 <GradientStatCard label="Total Value" value={stats.totalAmount} prefix="₹" icon={DollarSign} />
-                <GradientStatCard label="Total Outstanding" value={stats.totalOutstanding} prefix="₹" icon={DollarSign} />
+                <GradientStatCard
+                  label="Total Outstanding"
+                  value={stats.totalOutstanding}
+                  prefix="₹"
+                  tone="danger"
+                  icon={DollarSign}
+                />
               </div>
             )}
           </Card>

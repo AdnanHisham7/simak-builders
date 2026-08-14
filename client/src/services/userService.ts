@@ -11,6 +11,7 @@ export interface User {
   isBlocked: boolean;
   isDeleted?: boolean;
   siteExpensesBalance: number;
+  profileImage?: string;
 }
 
 export interface SalaryAssignment {
@@ -62,6 +63,7 @@ export const getUsersByRole = async (
     isDeleted: user.isDeleted || false,
     password: user.password,
     siteExpensesBalance: user.siteExpensesBalance,
+    profileImage: user.profileImage,
   }));
 };
 

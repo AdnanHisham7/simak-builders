@@ -116,7 +116,9 @@ const Modal: React.FC<ModalProps> = ({
                     </h2>
                   )}
                   {description && (
-                    <p className="mt-1 text-sm text-console-muted">{description}</p>
+                    <p className="mt-1 text-sm text-console-muted">
+                      {description}
+                    </p>
                   )}
                 </div>
                 {!disableClose && (
@@ -134,7 +136,9 @@ const Modal: React.FC<ModalProps> = ({
               </div>
             )}
 
-            <div className="overflow-y-auto px-6 py-5">{children}</div>
+            <div className="overflow-y-auto px-6 py-5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/60 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80 [&::-webkit-scrollbar-track]:bg-transparent">
+              {children}
+            </div>
 
             {footer && (
               <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/50 px-6 py-4">

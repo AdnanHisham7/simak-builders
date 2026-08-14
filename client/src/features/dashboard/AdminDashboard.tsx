@@ -57,6 +57,9 @@ interface DashboardData {
   totalEmployees: number;
   totalSites: number;
   totalStocks: number;
+  employeesLastMonth: number;
+  sitesLastMonth: number;
+  stocksLastMonth: number;
   clientsCount: number;
   architectsCount: number;
   vendorsCount: number;
@@ -260,6 +263,35 @@ const AdminDashboard = () => {
     };
   }, [data]);
 
+  const computeGrowthTrend = (
+    current: number | undefined,
+    previous: number | undefined,
+  ) => {
+    if (current === undefined || current === null) return null;
+    if (previous === undefined || previous === null || previous === 0) return null;
+    const changePercent = ((current - previous) / previous) * 100;
+    return {
+      direction: (changePercent >= 0 ? "up" : "down") as "up" | "down",
+      value: `${changePercent >= 0 ? "+" : ""}${changePercent.toFixed(1)}%`,
+      label: "vs last month",
+    };
+  };
+
+  const employeesTrend = useMemo(
+    () => computeGrowthTrend(data?.totalEmployees, data?.employeesLastMonth),
+    [data],
+  );
+
+  const sitesTrend = useMemo(
+    () => computeGrowthTrend(data?.totalSites, data?.sitesLastMonth),
+    [data],
+  );
+
+  const stocksTrend = useMemo(
+    () => computeGrowthTrend(data?.totalStocks, data?.stocksLastMonth),
+    [data],
+  );
+
   const ecosystemStats: Array<{
     label: string;
     value: number | undefined;
@@ -360,9 +392,24 @@ const AdminDashboard = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                <StatCard label="Total Employees" value={formatNumber(data?.totalEmployees)} icon={Briefcase} />
-                <StatCard label="Active Sites" value={formatNumber(data?.totalSites)} icon={Building} />
-                <StatCard label="Stock Items" value={formatNumber(data?.totalStocks)} icon={Package} />
+                <StatCard
+                  label="Total Employees"
+                  value={formatNumber(data?.totalEmployees)}
+                  icon={Briefcase}
+                  trend={employeesTrend ?? undefined}
+                />
+                <StatCard
+                  label="Active Sites"
+                  value={formatNumber(data?.totalSites)}
+                  icon={Building}
+                  trend={sitesTrend ?? undefined}
+                />
+                <StatCard
+                  label="Stock Items"
+                  value={formatNumber(data?.totalStocks)}
+                  icon={Package}
+                  trend={stocksTrend ?? undefined}
+                />
                 <StatCard
                   label="Monthly Revenue"
                   value={`₹${formatNumber(latestRevenue)}`}

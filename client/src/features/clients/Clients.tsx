@@ -38,6 +38,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Tooltip from "@/components/ui/Tooltip";
 import CopyButton from "@/components/ui/CopyButton";
+import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 interface Client {
@@ -47,6 +48,7 @@ interface Client {
   isBlocked: boolean;
   isDeleted?: boolean;
   assignedSites: Site[];
+  profileImage?: string;
 }
 
 const Clients: React.FC = () => {
@@ -421,13 +423,7 @@ const Clients: React.FC = () => {
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
                             <div className="relative">
-                              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800">
-                                {client.name
-                                  ?.split(" ")
-                                  .map((n) => n[0])
-                                  .join("")
-                                  .toUpperCase()}
-                              </div>
+                              <Avatar name={client.name} imageUrl={client.profileImage} />
                               <div
                                 className={cn(
                                   "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",

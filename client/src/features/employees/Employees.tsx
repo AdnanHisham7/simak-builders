@@ -391,6 +391,7 @@ const Employees: React.FC = () => {
               label="Total Paid Salary"
               value={employees.reduce((sum, e) => sum + (e.totalPaidSalary || 0), 0)}
               prefix="₹"
+              tone="success"
               icon={CalendarCheck}
             />
           </div>

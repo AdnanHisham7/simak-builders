@@ -39,6 +39,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Tooltip from "@/components/ui/Tooltip";
 import CopyButton from "@/components/ui/CopyButton";
+import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
 
 interface SiteManager {
@@ -49,6 +50,7 @@ interface SiteManager {
   isBlocked: boolean;
   sites: Site[];
   siteExpensesBalance: number;
+  profileImage?: string;
 }
 
 const SiteManagers: React.FC = () => {
@@ -100,6 +102,7 @@ const SiteManagers: React.FC = () => {
             password: user.password || "********",
             isBlocked: user.isBlocked,
             siteExpensesBalance: user.siteExpensesBalance || 0,
+            profileImage: user.profileImage,
           })),
         );
         setAllSites(sitesData);
@@ -374,13 +377,11 @@ const SiteManagers: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <Link to={`/admin/site-managers/${manager.id}/dashboard`}>
                               <div className="relative">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800 transition-opacity hover:opacity-80">
-                                  {manager.name
-                                    .split(" ")
-                                    .map((n) => n[0])
-                                    .join("")
-                                    .toUpperCase()}
-                                </div>
+                                <Avatar
+                                  name={manager.name}
+                                  imageUrl={manager.profileImage}
+                                  className="transition-opacity hover:opacity-80"
+                                />
                                 <div
                                   className={cn(
                                     "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white",

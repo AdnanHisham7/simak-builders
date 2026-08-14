@@ -48,6 +48,24 @@ const getDashboardData = async (
     const totalSites = await SiteModel.countDocuments();
     const totalStocks = await StockModel.countDocuments();
 
+    const now = new Date();
+    const startOfCurrentMonth = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0),
+    );
+
+    const [employeesLastMonth, sitesLastMonth, stocksLastMonth] =
+      await Promise.all([
+        EmployeeModel.countDocuments({
+          createdAt: { $lt: startOfCurrentMonth },
+        }),
+        SiteModel.countDocuments({
+          createdAt: { $lt: startOfCurrentMonth },
+        }),
+        StockModel.countDocuments({
+          createdAt: { $lt: startOfCurrentMonth },
+        }),
+      ]);
+
     const clientsCount = await UserModel.countDocuments({
       role: "client",
       isBlocked: false,
@@ -190,6 +208,9 @@ const getDashboardData = async (
       totalEmployees,
       totalSites,
       totalStocks,
+      employeesLastMonth,
+      sitesLastMonth,
+      stocksLastMonth,
       clientsCount,
       architectsCount,
       vendorsCount,
