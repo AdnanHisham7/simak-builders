@@ -10,23 +10,49 @@ import {
   SalaryAssignment,
 } from "@/services/userService";
 import AddSalaryModal from "./AddSalaryModal";
+import SalaryHistoryModal from "./SalaryHistoryModal";
+import EditFixedSalaryModal from "./EditFixedSalaryModal";
 import { toast } from "sonner";
-import { Lock, Users, Plus, FileText, CheckCircle2, Clock } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import {
+  Lock,
+  Users,
+  Plus,
+  Eye,
+  Pencil,
+  Clock,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Wallet,
+  BadgeIndianRupee,
+  DollarSign,
+  Grid as GridIcon,
+  List,
+  Mail,
+  AlertCircle,
+} from "lucide-react";
+import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
-import { SkeletonCard } from "@/components/ui/Skeleton";
+import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Tooltip from "@/components/ui/Tooltip";
+import GradientStatCard from "@/components/ui/GradientStatCard";
+import CopyButton from "@/components/ui/CopyButton";
+import Avatar from "@/components/ui/Avatar";
+import { cn } from "@/lib/cn";
 
-const formatCurrency = (amount: number) =>
-  `₹${amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrency = (amount: number | undefined) =>
+  `₹${(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
 
-const roleBadgeVariant = (role: string): "error" | "info" | "success" | "neutral" => {
+const roleBadgeVariant = (
+  role: string
+): "error" | "info" | "success" | "neutral" => {
   switch (role.toLowerCase()) {
     case "admin":
       return "error";
     case "manager":
+    case "sitemanager":
       return "info";
     case "employee":
       return "success";
@@ -35,177 +61,72 @@ const roleBadgeVariant = (role: string): "error" | "info" | "success" | "neutral
   }
 };
 
-const sortAssignmentsNewestFirst = (assignments: SalaryAssignment[]) =>
-  [...assignments].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+type SortOption =
+  | "pending-desc"
+  | "pending-asc"
+  | "name-asc"
+  | "name-desc"
+  | "paid-desc";
+type StatusFilter = "all" | "pending" | "clear";
 
-interface SalaryHistoryPanelProps {
-  user: UserWithSalary;
-  editableAmounts: { [key: string]: number | undefined };
-  editableAllowances: { [key: string]: number | undefined };
-  editableNotes: { [key: string]: string | undefined };
-  loadingStates: { [key: string]: boolean };
-  onAmountChange: (assignmentId: string, value: number) => void;
-  onAllowanceChange: (assignmentId: string, value: number) => void;
-  onNotesChange: (assignmentId: string, value: string) => void;
-  onSaveAmount: (assignmentId: string, sa: SalaryAssignment) => void;
-  onVerify: (assignmentId: string, originalAmount: number) => void;
-}
-
-const SalaryHistoryPanel: React.FC<SalaryHistoryPanelProps> = ({
-  user,
-  editableAmounts,
-  editableAllowances,
-  editableNotes,
-  loadingStates,
-  onAmountChange,
-  onAllowanceChange,
-  onNotesChange,
-  onSaveAmount,
-  onVerify,
-}) => {
-  const sortedAssignments = useMemo(
-    () => sortAssignmentsNewestFirst(user.salaryAssignments),
-    [user.salaryAssignments],
-  );
-
-  return (
-    <div className="flex h-full flex-col rounded-console border border-console-border bg-console-bg/60">
-      <div className="flex shrink-0 items-center gap-2 border-b border-console-border px-4 py-3">
-        <FileText size={16} className="text-brand-600" />
-        <h3 className="text-sm font-semibold text-console-text">Salary history</h3>
-        <span className="ml-auto text-xs text-console-muted">
-          {sortedAssignments.length} {sortedAssignments.length === 1 ? "record" : "records"}
-        </span>
-      </div>
-
-      {sortedAssignments.length === 0 ? (
-        <p className="p-4 text-sm text-console-muted">No salary assignments yet.</p>
-      ) : (
-        <div className="no-scrollbar max-h-[420px] flex-1 space-y-3 overflow-y-auto p-4">
-          {sortedAssignments.map((sa) => (
-            <div
-              key={sa._id}
-              className="rounded-console border border-console-border bg-white p-4 shadow-console"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Date</p>
-                    <p className="text-sm text-console-text">
-                      {new Date(sa.date).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Amount</p>
-                    {sa.isVerified ? (
-                      <p className="text-sm font-semibold text-console-text">
-                        {formatCurrency(sa.amount)}
-                      </p>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          value={editableAmounts[sa._id] !== undefined ? editableAmounts[sa._id] : sa.amount}
-                          onChange={(e) => onAmountChange(sa._id, parseFloat(e.target.value) || 0)}
-                          className="w-24 rounded-lg border border-console-border px-2.5 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                        />
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Allowance</p>
-                    {sa.isVerified ? (
-                      <p className="text-sm text-console-text">{formatCurrency(sa.allowance || 0)}</p>
-                    ) : (
-                      <input
-                        type="number"
-                        min="0"
-                        value={editableAllowances[sa._id] !== undefined ? editableAllowances[sa._id] : sa.allowance || 0}
-                        onChange={(e) => onAllowanceChange(sa._id, parseFloat(e.target.value) || 0)}
-                        className="w-24 rounded-lg border border-console-border px-2.5 py-1.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Assigned by</p>
-                    <p className="text-sm text-console-text">{sa.givenBy?.name || "auto"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-console-muted">Status</p>
-                    {sa.isVerified ? (
-                      <Badge variant="success">
-                        <CheckCircle2 size={12} /> Verified
-                      </Badge>
-                    ) : (
-                      <Badge variant="warning">
-                        <Clock size={12} /> Pending
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                {!sa.isVerified && (
-                  <div className="flex shrink-0 flex-col gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      loading={loadingStates[`save-${sa._id}`]}
-                      onClick={() => onSaveAmount(sa._id, sa)}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      loading={loadingStates[`verify-${sa._id}`]}
-                      onClick={() => onVerify(sa._id, sa.amount)}
-                    >
-                      {!loadingStates[`verify-${sa._id}`] && <CheckCircle2 size={14} />}
-                      Verify
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {(sa.notes || !sa.isVerified) && (
-                <div className="mt-3">
-                  <p className="text-xs font-medium text-console-muted">Notes</p>
-                  {sa.isVerified ? (
-                    <p className="text-sm text-console-text">{sa.notes || "—"}</p>
-                  ) : (
-                    <input
-                      type="text"
-                      value={editableNotes[sa._id] !== undefined ? editableNotes[sa._id] : sa.notes || ""}
-                      onChange={(e) => onNotesChange(sa._id, e.target.value)}
-                      placeholder="Optional notes..."
-                      className="mt-1 w-full rounded-lg border border-console-border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "pending-desc", label: "Pending payout (high to low)" },
+  { value: "pending-asc", label: "Pending payout (low to high)" },
+  { value: "paid-desc", label: "Total paid (high to low)" },
+  { value: "name-asc", label: "Name (A to Z)" },
+  { value: "name-desc", label: "Name (Z to A)" },
+];
 
 const Salary: React.FC = () => {
   const [users, setUsers] = useState<UserWithSalary[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-  const [fixedSalaries, setFixedSalaries] = useState<{ [key: string]: number | undefined }>({});
-  const [editableAmounts, setEditableAmounts] = useState<{ [key: string]: number | undefined }>({});
+  const [loading, setLoading] = useState(true);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [loadingStates, setLoadingStates] = useState<{ [key: string]: boolean }>({});
-  const [editableAllowances, setEditableAllowances] = useState<{ [key: string]: number | undefined }>({});
-  const [editableNotes, setEditableNotes] = useState<{ [key: string]: string | undefined }>({});
-  const [addSalaryTarget, setAddSalaryTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Filters & Controls
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("pending-desc");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [expandedStats, setExpandedStats] = useState<boolean>(true);
+
+  // Modals state
+  const [addSalaryTarget, setAddSalaryTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [historyModalUser, setHistoryModalUser] =
+    useState<UserWithSalary | null>(null);
+  const [editFixedSalaryUser, setEditFixedSalaryUser] =
+    useState<UserWithSalary | null>(null);
+  const [isUpdatingFixed, setIsUpdatingFixed] = useState(false);
+
   const userType = useSelector((state: RootState) => state.auth.userType);
+
+  const fetchSalaryData = async () => {
+    try {
+      setLoading(true);
+      const data = await listSalaries();
+      setUsers(data);
+      setPageError(null);
+
+      // Keep active history modal in sync with refreshed data
+      if (historyModalUser) {
+        const refreshed = data.find((u) => u._id === historyModalUser._id);
+        if (refreshed) setHistoryModalUser(refreshed);
+      }
+    } catch (err) {
+      setPageError("Failed to fetch salary records");
+      toast.error("Failed to load salary data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (userType === "admin") {
-      setIsLoadingUsers(true);
-      listSalaries()
-        .then((data) => setUsers(data))
-        .catch(() => toast.error("Failed to load salary data"))
-        .finally(() => setIsLoadingUsers(false));
+      fetchSalaryData();
     }
   }, [userType]);
 
@@ -215,21 +136,86 @@ const Salary: React.FC = () => {
       .reduce((sum, sa) => sum + sa.amount + (sa.allowance || 0), 0);
   };
 
-  const handleSaveFixedSalary = async (userId: string) => {
-    const fixedSalary = fixedSalaries[userId];
-    if (fixedSalary !== undefined) {
-      setLoadingStates((prev) => ({ ...prev, [`fixed-${userId}`]: true }));
-      try {
-        await updateFixedSalary(userId, fixedSalary);
-        const updatedUsers = await listSalaries();
-        setUsers(updatedUsers);
-        setFixedSalaries((prev) => ({ ...prev, [userId]: undefined }));
-        toast.success("Fixed salary updated");
-      } catch (err) {
-        toast.error("Failed to update fixed salary");
-      } finally {
-        setLoadingStates((prev) => ({ ...prev, [`fixed-${userId}`]: false }));
+  const calculatePendingCount = (salaryAssignments: SalaryAssignment[]) =>
+    salaryAssignments.filter((sa) => !sa.isVerified).length;
+
+  const availableRoles = useMemo(() => {
+    const roles = new Set(users.map((u) => u.role));
+    return Array.from(roles).sort();
+  }, [users]);
+
+  const stats = useMemo(() => {
+    return users.reduce(
+      (acc, user) => {
+        const pendingAmount = calculateTotalToBePaid(user.salaryAssignments);
+        acc.totalEmployees += 1;
+        acc.totalPending += pendingAmount;
+        acc.totalPaid += user.totalSalary;
+        if (pendingAmount > 0) acc.pendingEmployeesCount += 1;
+        return acc;
+      },
+      {
+        totalEmployees: 0,
+        totalPending: 0,
+        totalPaid: 0,
+        pendingEmployeesCount: 0,
       }
+    );
+  }, [users]);
+
+  const filteredUsers = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    let result = users.filter((user) => {
+      const matchesTerm =
+        term.length === 0 ||
+        user.name.toLowerCase().includes(term) ||
+        user.email.toLowerCase().includes(term);
+      const matchesRole = roleFilter === "all" || user.role === roleFilter;
+      const pending = calculateTotalToBePaid(user.salaryAssignments);
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "pending" && pending > 0) ||
+        (statusFilter === "clear" && pending === 0);
+      return matchesTerm && matchesRole && matchesStatus;
+    });
+
+    result = [...result].sort((a, b) => {
+      switch (sortOption) {
+        case "pending-desc":
+          return (
+            calculateTotalToBePaid(b.salaryAssignments) -
+            calculateTotalToBePaid(a.salaryAssignments)
+          );
+        case "pending-asc":
+          return (
+            calculateTotalToBePaid(a.salaryAssignments) -
+            calculateTotalToBePaid(b.salaryAssignments)
+          );
+        case "paid-desc":
+          return b.totalSalary - a.totalSalary;
+        case "name-asc":
+          return a.name.localeCompare(b.name);
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [users, searchTerm, roleFilter, statusFilter, sortOption]);
+
+  const handleSaveFixedSalary = async (userId: string, newAmount: number) => {
+    setIsUpdatingFixed(true);
+    try {
+      await updateFixedSalary(userId, newAmount);
+      await fetchSalaryData();
+      setEditFixedSalaryUser(null);
+      toast.success("Fixed salary updated successfully");
+    } catch (err) {
+      toast.error("Failed to update fixed salary");
+    } finally {
+      setIsUpdatingFixed(false);
     }
   };
 
@@ -238,40 +224,44 @@ const Salary: React.FC = () => {
     assignmentId: string,
     amount: number,
     allowance?: number,
-    notes?: string,
+    notes?: string
   ) => {
     setLoadingStates((prev) => ({ ...prev, [`save-${assignmentId}`]: true }));
     try {
-      await updateSalaryAssignmentAmount(userId, assignmentId, { amount, allowance, notes });
-      const updatedUsers = await listSalaries();
-      setUsers(updatedUsers);
-      setEditableAmounts((prev) => ({ ...prev, [assignmentId]: undefined }));
-      setEditableAllowances((prev) => ({ ...prev, [assignmentId]: undefined }));
-      setEditableNotes((prev) => ({ ...prev, [assignmentId]: undefined }));
+      await updateSalaryAssignmentAmount(userId, assignmentId, {
+        amount,
+        allowance,
+        notes,
+      });
+      await fetchSalaryData();
       toast.success("Salary assignment updated");
     } catch (err) {
       toast.error("Failed to update salary assignment");
     } finally {
-      setLoadingStates((prev) => ({ ...prev, [`save-${assignmentId}`]: false }));
+      setLoadingStates((prev) => ({
+        ...prev,
+        [`save-${assignmentId}`]: false,
+      }));
     }
   };
 
-  const handleVerifySalary = async (userId: string, assignmentId: string, originalAmount: number) => {
-    if (editableAmounts[assignmentId] !== undefined && editableAmounts[assignmentId] !== originalAmount) {
-      toast.error("Please save the changes before verifying.");
-      return;
-    }
-
+  const handleVerifySalary = async (
+    userId: string,
+    assignmentId: string,
+    originalAmount: number
+  ) => {
     setLoadingStates((prev) => ({ ...prev, [`verify-${assignmentId}`]: true }));
     try {
       await verifySalaryAssignment(userId, assignmentId);
-      const updatedUsers = await listSalaries();
-      setUsers(updatedUsers);
+      await fetchSalaryData();
       toast.success("Salary assignment verified");
     } catch (err) {
       toast.error("Failed to verify salary assignment");
     } finally {
-      setLoadingStates((prev) => ({ ...prev, [`verify-${assignmentId}`]: false }));
+      setLoadingStates((prev) => ({
+        ...prev,
+        [`verify-${assignmentId}`]: false,
+      }));
     }
   };
 
@@ -291,129 +281,458 @@ const Salary: React.FC = () => {
     );
   }
 
+  if (pageError) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center p-4">
+        <Card className="max-w-md text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger-50 text-danger-600">
+            <AlertCircle size={22} />
+          </div>
+          <h3 className="text-lg font-semibold text-console-text">
+            Something went wrong
+          </h3>
+          <p className="mt-1 text-sm text-console-muted">{pageError}</p>
+          <Button className="mt-5" onClick={fetchSalaryData}>
+            Try again
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-console-text">Salary Management</h1>
+          <h1 className="text-xl font-semibold text-console-text">
+            Salary Management
+          </h1>
           <p className="mt-0.5 text-sm text-console-muted">
-            Manage employee compensation and verify salary assignments
+            Manage employee compensation, fixed salaries, and verify payouts
           </p>
         </div>
         <Badge variant="default">{users.length} Employees</Badge>
       </div>
 
-      {isLoadingUsers ? (
-        <div className="space-y-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+      {loading ? (
+        <div className="space-y-6">
+          <SkeletonStatCards count={4} />
+          <SkeletonTable />
         </div>
-      ) : users.length === 0 ? (
-        <EmptyState icon={Users} title="No employees found" description="Employee data will appear here once available." />
       ) : (
-        <div className="space-y-5">
-          {users.map((user) => (
-            <Card key={user._id} className="overflow-visible">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full bg-brand-100 text-sm font-bold text-brand-800">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h2 className="text-base font-semibold text-console-text">{user.name}</h2>
-                    <p className="text-sm text-console-muted">{user.email}</p>
-                  </div>
+        <>
+          {/* Overview Statistics Card */}
+          <Card>
+            <button
+              type="button"
+              onClick={() => setExpandedStats((v) => !v)}
+              className="mb-4 flex w-full items-center justify-between"
+            >
+              <h2 className="text-sm font-semibold text-console-text">
+                Overview statistics
+              </h2>
+              {expandedStats ? (
+                <ChevronUp size={18} className="text-console-muted" />
+              ) : (
+                <ChevronDown size={18} className="text-console-muted" />
+              )}
+            </button>
+            {expandedStats && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Total Employees"
+                  value={stats.totalEmployees}
+                  icon={Users}
+                />
+                <StatCard
+                  label="Pending Approvals"
+                  value={stats.pendingEmployeesCount}
+                  icon={Clock}
+                />
+                <GradientStatCard
+                  label="Total Paid"
+                  value={stats.totalPaid}
+                  prefix="₹"
+                  icon={Wallet}
+                />
+                <GradientStatCard
+                  label="Total Outstanding"
+                  value={stats.totalPending}
+                  prefix="₹"
+                  tone="danger"
+                  icon={DollarSign}
+                />
+              </div>
+            )}
+          </Card>
+
+          {/* Filter & View Toolbar */}
+          <Card>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-6">
+              <div className="md:col-span-2">
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Search employees
+                </label>
+                <div className="relative">
+                  <Search
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+                    size={16}
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search by name or email..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant={roleBadgeVariant(user.role)}>{user.role}</Badge>
-                  <Tooltip label="Assign a new salary payment to this employee">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => setAddSalaryTarget({ id: user._id, name: user.name })}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Filter by role
+                </label>
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="w-full rounded-lg border border-console-border px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="all">All Roles</option>
+                  {availableRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role.charAt(0).toUpperCase() + role.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Filter by status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                  className="w-full rounded-lg border border-console-border px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending Payout</option>
+                  <option value="clear">Fully Settled</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-console-text">
+                  Sort by
+                </label>
+                <select
+                  value={sortOption}
+                  onChange={(e) => setSortOption(e.target.value as SortOption)}
+                  className="w-full rounded-lg border border-console-border px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                >
+                  {SORT_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-end">
+                <div className="flex items-center gap-1 rounded-lg border border-console-border p-1">
+                  <Tooltip label="Grid view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("grid")}
+                      aria-label="Grid view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "grid"
+                          ? "bg-brand-50 text-brand-700"
+                          : "text-console-muted hover:bg-console-bg"
+                      )}
                     >
-                      <Plus size={14} /> Add salary
-                    </Button>
+                      <GridIcon size={16} />
+                    </button>
+                  </Tooltip>
+                  <Tooltip label="List view">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode("list")}
+                      aria-label="List view"
+                      className={cn(
+                        "rounded-md p-1.5 transition-colors",
+                        viewMode === "list"
+                          ? "bg-brand-50 text-brand-700"
+                          : "text-console-muted hover:bg-console-bg"
+                      )}
+                    >
+                      <List size={16} />
+                    </button>
                   </Tooltip>
                 </div>
               </div>
+            </div>
+          </Card>
 
-              <div className="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
-                <div className="flex flex-col gap-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-console border border-console-border bg-console-bg p-4">
-                      <p className="text-xs font-medium uppercase tracking-wide text-console-muted">
-                        To be paid
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-danger-600">
-                        {formatCurrency(calculateTotalToBePaid(user.salaryAssignments))}
-                      </p>
-                    </div>
-                    <div className="rounded-console border border-console-border bg-console-bg p-4">
-                      <p className="text-xs font-medium uppercase tracking-wide text-console-muted">Paid</p>
-                      <p className="mt-1 text-lg font-semibold text-success-700">
-                        {formatCurrency(user.totalSalary)}
-                      </p>
-                    </div>
-                  </div>
+          {/* Results Views */}
+          {filteredUsers.length === 0 ? (
+            <Card>
+              <EmptyState
+                icon={Users}
+                title="No employees found"
+                description="Try adjusting your search or filters."
+              />
+            </Card>
+          ) : viewMode === "grid" ? (
+            /* Grid Card View */
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredUsers.map((user) => {
+                const pending = calculateTotalToBePaid(user.salaryAssignments);
+                const pendingCount = calculatePendingCount(user.salaryAssignments);
 
-                  <div className="rounded-console border border-console-border bg-console-bg p-4">
-                    <label className="mb-2 block text-sm font-medium text-console-text">Fixed salary</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={
-                          fixedSalaries[user._id] !== undefined ? fixedSalaries[user._id] : user.fixedSalary
-                        }
-                        onChange={(e) =>
-                          setFixedSalaries((prev) => ({
-                            ...prev,
-                            [user._id]: parseFloat(e.target.value) || 0,
-                          }))
-                        }
-                        className="w-full min-w-0 rounded-lg border border-console-border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-                      />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        loading={loadingStates[`fixed-${user._id}`]}
-                        onClick={() => handleSaveFixedSalary(user._id)}
+                return (
+                  <Card
+                    key={user._id}
+                    className="transition-shadow hover:shadow-console-lg"
+                  >
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          name={user.name}
+                          imageUrl={(user as any).profileImage}
+                          className="h-11 w-11 shrink-0 text-base"
+                        />
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-semibold text-console-text">
+                            {user.name}
+                          </h3>
+                          <Badge variant={roleBadgeVariant(user.role)}>
+                            {user.role}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mb-4 space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-console-muted">
+                        <Mail size={13} className="shrink-0" />
+                        <span className="truncate">{user.email}</span>
+                        <CopyButton value={user.email} label="Email" />
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-console-muted">
+                        <BadgeIndianRupee size={13} className="shrink-0" /> Fixed:{" "}
+                        <span className="font-medium text-console-text">
+                          {formatCurrency(user.fixedSalary)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Stats Grid Pill */}
+                    <div className="mb-4 grid grid-cols-2 gap-2 rounded-console bg-console-bg p-3 text-center">
+                      <div>
+                        <p className="text-lg font-semibold text-success-700">
+                          {formatCurrency(user.totalSalary)}
+                        </p>
+                        <p className="text-xs text-console-muted">Total Paid</p>
+                      </div>
+                      <div>
+                        <p
+                          className={cn(
+                            "text-lg font-semibold",
+                            pending > 0 ? "text-danger-700" : "text-console-muted"
+                          )}
+                        >
+                          {formatCurrency(pending)}
+                        </p>
+                        <p className="text-xs text-console-muted">
+                          Pending {pendingCount > 0 && `(${pendingCount})`}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryModalUser(user)}
+                        className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-console-bg px-3 py-2 text-sm font-medium text-console-text transition-colors hover:bg-slate-200"
                       >
-                        Save
-                      </Button>
+                        <Eye size={14} /> History
+                      </button>
+                      <Tooltip label="Add salary assignment">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setAddSalaryTarget({ id: user._id, name: user.name })
+                          }
+                          aria-label="Add salary"
+                          className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                        >
+                          <Plus size={16} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip label="Edit fixed salary">
+                        <button
+                          type="button"
+                          onClick={() => setEditFixedSalaryUser(user)}
+                          aria-label="Edit fixed salary"
+                          className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      </Tooltip>
                     </div>
-                  </div>
-                </div>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            /* Table List View */
+            <Card className="p-0">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-console-border">
+                  <thead className="bg-console-bg">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Employee
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Contact
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Role & Fixed Base
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Compensation Stats
+                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-console-muted">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-console-border">
+                    {filteredUsers.map((user) => {
+                      const pending = calculateTotalToBePaid(
+                        user.salaryAssignments
+                      );
+                      const pendingCount = calculatePendingCount(
+                        user.salaryAssignments
+                      );
 
-                <SalaryHistoryPanel
-                  user={user}
-                  editableAmounts={editableAmounts}
-                  editableAllowances={editableAllowances}
-                  editableNotes={editableNotes}
-                  loadingStates={loadingStates}
-                  onAmountChange={(id, value) => setEditableAmounts((prev) => ({ ...prev, [id]: value }))}
-                  onAllowanceChange={(id, value) => setEditableAllowances((prev) => ({ ...prev, [id]: value }))}
-                  onNotesChange={(id, value) => setEditableNotes((prev) => ({ ...prev, [id]: value }))}
-                  onSaveAmount={(assignmentId, sa) =>
-                    handleSaveAmount(
-                      user._id,
-                      assignmentId,
-                      editableAmounts[assignmentId] ?? sa.amount,
-                      editableAllowances[assignmentId] ?? sa.allowance ?? 0,
-                      editableNotes[assignmentId] ?? sa.notes ?? "",
-                    )
-                  }
-                  onVerify={(assignmentId, originalAmount) =>
-                    handleVerifySalary(user._id, assignmentId, originalAmount)
-                  }
-                />
+                      return (
+                        <tr key={user._id} className="hover:bg-console-bg">
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <Avatar
+                                name={user.name}
+                                imageUrl={(user as any).profileImage}
+                                className="h-9 w-9 shrink-0 text-sm"
+                              />
+                              <div>
+                                <div className="text-sm font-medium text-console-text">
+                                  {user.name}
+                                </div>
+                                <div className="text-xs text-console-muted">
+                                  {user.salaryAssignments?.length || 0} assignments
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2 text-sm text-console-text">
+                              {user.email}
+                              <CopyButton value={user.email} label="Email" />
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <Badge variant={roleBadgeVariant(user.role)}>
+                                {user.role}
+                              </Badge>
+                              <span className="text-xs font-medium text-console-muted">
+                                {formatCurrency(user.fixedSalary)} / mo
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="text-sm font-medium text-success-700">
+                              {formatCurrency(user.totalSalary)} total paid
+                            </div>
+                            <div
+                              className={cn(
+                                "text-xs",
+                                pending > 0
+                                  ? "font-medium text-danger-600"
+                                  : "text-console-muted"
+                              )}
+                            >
+                              {formatCurrency(pending)} pending
+                              {pendingCount > 0 && ` (${pendingCount})`}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <Tooltip label="View salary history">
+                                <button
+                                  type="button"
+                                  onClick={() => setHistoryModalUser(user)}
+                                  aria-label="View history"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                                >
+                                  <Eye size={16} />
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Add salary assignment">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setAddSalaryTarget({
+                                      id: user._id,
+                                      name: user.name,
+                                    })
+                                  }
+                                  aria-label="Add salary assignment"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </Tooltip>
+                              <Tooltip label="Edit fixed salary">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditFixedSalaryUser(user)}
+                                  aria-label="Edit fixed salary"
+                                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              </Tooltip>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </Card>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
+      {/* Salary History Modal */}
+      <SalaryHistoryModal
+        isOpen={!!historyModalUser}
+        onClose={() => setHistoryModalUser(null)}
+        user={historyModalUser}
+        onSaveAmount={handleSaveAmount}
+        onVerify={handleVerifySalary}
+        loadingStates={loadingStates}
+      />
+
+      {/* Add Salary Modal */}
       {addSalaryTarget && (
         <AddSalaryModal
           isOpen={!!addSalaryTarget}
@@ -421,11 +740,19 @@ const Salary: React.FC = () => {
           userId={addSalaryTarget.id}
           userName={addSalaryTarget.name}
           onAssigned={async () => {
-            const updatedUsers = await listSalaries();
-            setUsers(updatedUsers);
+            await fetchSalaryData();
           }}
         />
       )}
+
+      {/* Edit Fixed Salary Modal */}
+      <EditFixedSalaryModal
+        isOpen={!!editFixedSalaryUser}
+        onClose={() => setEditFixedSalaryUser(null)}
+        user={editFixedSalaryUser}
+        onSave={handleSaveFixedSalary}
+        isLoading={isUpdatingFixed}
+      />
     </div>
   );
 };

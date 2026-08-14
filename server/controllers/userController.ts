@@ -883,7 +883,7 @@ const listSalaries = async (
     const allowedRoles = ["siteManager", "supervisor", "architect"];
     const users = await UserModel.find(
       { role: { $in: allowedRoles } },
-      "name email role salaryAssignments totalSalary fixedSalary" // Added fixedSalary
+      "name email role salaryAssignments totalSalary fixedSalary profileImage" // Added fixedSalary
     ).populate("salaryAssignments.givenBy", "name");
     res.status(HttpStatus.OK).json(users);
   } catch (error) {
