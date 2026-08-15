@@ -8,6 +8,7 @@ import { setUser } from "@/store/slices/authSlice";
 import { login } from "@/services/authService";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
+import { getLandingPagePath } from "@/constants/landingPages";
 
 const AdminLogin = () => {
   const [email, setEmail] = useState("");
@@ -33,7 +34,9 @@ const AdminLogin = () => {
       const data = await login(email, password);
       dispatch(setUser({ user: data.user, userType: "admin" }));
       if (data.user.isAdmin) {
-        navigate("/admin/dashboard");
+        navigate(
+          getLandingPagePath("admin", data.user.preferences?.defaultLandingPage),
+        );
       } else {
         setError("You do not have admin privileges.");
       }

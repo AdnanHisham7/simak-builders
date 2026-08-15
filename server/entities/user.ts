@@ -52,6 +52,31 @@ export interface User {
     site?: Types.ObjectId;
     givenBy?: Types.ObjectId;
   }[];
+  sessions: {
+    _id: Types.ObjectId;
+    tokenHash: string;
+    userAgent?: string;
+    ip?: string;
+    device?: string;
+    browser?: string;
+    os?: string;
+    createdAt: Date;
+    lastUsedAt: Date;
+  }[];
+  preferences: {
+    defaultLandingPage?: string;
+    dateFormat: string;
+    numberFormat: string;
+    timezone: string;
+  };
+  deactivationRequest?: {
+    status: "none" | "pending" | "approved" | "rejected";
+    reason?: string;
+    requestedAt?: Date;
+    reviewedBy?: Types.ObjectId;
+    reviewedAt?: Date;
+    reviewNotes?: string;
+  };
   createdAt: Date;
   updatedAt: Date;
 }

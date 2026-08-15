@@ -8,6 +8,8 @@ import {
   assignSitesToClients,
   assignSiteExpenses,
   getUsersByRole,
+  deleteStaffMember,
+  restoreStaffMember,
 } from "@/services/userService";
 import { getSites, Site } from "@/services/siteService";
 import {
@@ -23,6 +25,7 @@ import {
   ShieldCheck,
   ShieldX,
   Trash2,
+  RotateCcw,
   Plus,
   Loader2,
   Wallet,
@@ -48,6 +51,7 @@ interface SiteManager {
   email: string;
   password: string;
   isBlocked: boolean;
+  isDeleted?: boolean;
   sites: Site[];
   siteExpensesBalance: number;
   profileImage?: string;
@@ -68,6 +72,9 @@ const SiteManagers: React.FC = () => {
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [isAssignFundsModalOpen, setIsAssignFundsModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
+  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>({});
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -90,7 +97,7 @@ const SiteManagers: React.FC = () => {
       setLoading(true);
       try {
         const [siteManagersData, sitesData] = await Promise.all([
-          getUsersByRole("siteManager"),
+          getUsersByRole("siteManager", showDeleted),
           getSites(),
         ]);
         setSiteManagers(
@@ -101,6 +108,7 @@ const SiteManagers: React.FC = () => {
             email: user.email,
             password: user.password || "********",
             isBlocked: user.isBlocked,
+            isDeleted: user.isDeleted || false,
             siteExpensesBalance: user.siteExpensesBalance || 0,
             profileImage: user.profileImage,
           })),
@@ -113,7 +121,7 @@ const SiteManagers: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [showDeleted]);
 
   const filteredSiteManagers = siteManagers.filter((manager) => {
     const matchesSearch =
@@ -123,8 +131,8 @@ const SiteManagers: React.FC = () => {
       !selectedSiteId || manager.sites.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !manager.isBlocked) ||
-      (selectedStatus === "blocked" && manager.isBlocked);
+      (selectedStatus === "active" && !manager.isBlocked && !manager.isDeleted) ||
+      (selectedStatus === "blocked" && manager.isBlocked && !manager.isDeleted);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
@@ -133,8 +141,9 @@ const SiteManagers: React.FC = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSiteManagers = filteredSiteManagers.slice(indexOfFirstItem, indexOfLastItem);
 
-  const activeSiteManagers = siteManagers.filter((a) => !a.isBlocked).length;
-  const blockedSiteManagers = siteManagers.filter((a) => a.isBlocked).length;
+  const activeSiteManagers = siteManagers.filter((a) => !a.isBlocked && !a.isDeleted).length;
+  const blockedSiteManagers = siteManagers.filter((a) => a.isBlocked && !a.isDeleted).length;
+  const deletedSiteManagersCount = siteManagers.filter((a) => a.isDeleted).length;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
@@ -196,6 +205,60 @@ const SiteManagers: React.FC = () => {
     });
   };
 
+  const handleDeleteSiteManager = (manager: SiteManager) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Site Manager",
+      message: `Are you sure you want to delete ${manager.name}? This is a soft delete — their historical data is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsDeleting((prev) => ({ ...prev, [manager.id]: true }));
+        try {
+          await deleteStaffMember("managers", manager.id);
+          if (showDeleted) {
+            setSiteManagers((prev) =>
+              prev.map((m) => (m.id === manager.id ? { ...m, isDeleted: true } : m)),
+            );
+          } else {
+            setSiteManagers((prev) => prev.filter((m) => m.id !== manager.id));
+          }
+          toast.success(`${manager.name} has been deleted.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to delete site manager.");
+        } finally {
+          setIsDeleting((prev) => ({ ...prev, [manager.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
+  const handleRestoreSiteManager = (manager: SiteManager) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Restore Site Manager",
+      message: `Restore ${manager.name}? They will reappear in active lists and be able to log in again.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsRestoring((prev) => ({ ...prev, [manager.id]: true }));
+        try {
+          await restoreStaffMember("managers", manager.id);
+          setSiteManagers((prev) =>
+            prev.map((m) => (m.id === manager.id ? { ...m, isDeleted: false } : m)),
+          );
+          toast.success(`${manager.name} has been restored.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to restore site manager.");
+        } finally {
+          setIsRestoring((prev) => ({ ...prev, [manager.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
   const handleRemoveSite = (managerId: string, siteId: string) => {
     const manager = siteManagers.find((a) => a.id === managerId);
     const site = allSites.find((s) => s.id === siteId);
@@ -246,7 +309,7 @@ const SiteManagers: React.FC = () => {
     if (!selectedSiteManager) return;
     try {
       await assignSiteExpenses(selectedSiteManager.id, amount);
-      const updatedManagers = await getUsersByRole("siteManager");
+      const updatedManagers = await getUsersByRole("siteManager", showDeleted);
       setSiteManagers(
         updatedManagers.map((user) => ({
           id: user.id,
@@ -347,6 +410,18 @@ const SiteManagers: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
+                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-console-border bg-console-bg px-4 py-2.5 text-sm text-console-text">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => {
+                      setShowDeleted(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-console-border text-brand-600 focus:ring-brand-500"
+                  />
+                  Show deleted{deletedSiteManagersCount > 0 ? ` (${deletedSiteManagersCount})` : ""}
+                </label>
               </div>
             </div>
           </Card>
@@ -463,12 +538,18 @@ const SiteManagers: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              manager.isBlocked
-                                ? "bg-danger-50 text-danger-700"
-                                : "bg-success-50 text-success-700",
+                              manager.isDeleted
+                                ? "bg-slate-100 text-slate-600"
+                                : manager.isBlocked
+                                  ? "bg-danger-50 text-danger-700"
+                                  : "bg-success-50 text-success-700",
                             )}
                           >
-                            {manager.isBlocked ? (
+                            {manager.isDeleted ? (
+                              <>
+                                <Trash2 size={11} /> Deleted
+                              </>
+                            ) : manager.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -481,67 +562,100 @@ const SiteManagers: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStatus(manager)}
-                              disabled={isToggling[manager.id]}
-                              aria-label={manager.isBlocked ? "Unblock manager" : "Block manager"}
-                              className={cn(
-                                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                manager.isBlocked
-                                  ? "bg-success-50 text-success-700 hover:bg-success-100"
-                                  : "bg-console-bg text-console-text hover:bg-slate-200",
-                              )}
-                            >
-                              {isToggling[manager.id] ? (
-                                <Loader2 size={13} className="animate-spin" />
-                              ) : manager.isBlocked ? (
-                                "Unblock"
-                              ) : (
-                                "Block"
-                              )}
-                            </button>
-                            <Tooltip label="Edit manager">
+                            {manager.isDeleted ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setSelectedSiteManager(manager);
-                                  setIsEditModalOpen(true);
-                                }}
-                                aria-label="Edit manager"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                onClick={() => handleRestoreSiteManager(manager)}
+                                disabled={isRestoring[manager.id]}
+                                className="flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 transition-colors hover:bg-success-100 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Pencil size={14} />
-                              </button>
-                            </Tooltip>
-                            <Tooltip label="Regenerate password">
-                              <button
-                                type="button"
-                                onClick={() => handleRegeneratePassword(manager)}
-                                disabled={isRegenerating[manager.id]}
-                                aria-label="Regenerate password"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {isRegenerating[manager.id] ? (
-                                  <Loader2 size={14} className="animate-spin" />
+                                {isRestoring[manager.id] ? (
+                                  <Loader2 size={13} className="animate-spin" />
                                 ) : (
-                                  <RefreshCw size={14} />
+                                  <RotateCcw size={13} />
                                 )}
+                                Restore
                               </button>
-                            </Tooltip>
-                            <Tooltip label="Assign funds">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedSiteManager(manager);
-                                  setIsAssignFundsModalOpen(true);
-                                }}
-                                aria-label="Assign funds"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
-                              >
-                                <Wallet size={14} />
-                              </button>
-                            </Tooltip>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(manager)}
+                                  disabled={isToggling[manager.id]}
+                                  aria-label={manager.isBlocked ? "Unblock manager" : "Block manager"}
+                                  className={cn(
+                                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                    manager.isBlocked
+                                      ? "bg-success-50 text-success-700 hover:bg-success-100"
+                                      : "bg-console-bg text-console-text hover:bg-slate-200",
+                                  )}
+                                >
+                                  {isToggling[manager.id] ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : manager.isBlocked ? (
+                                    "Unblock"
+                                  ) : (
+                                    "Block"
+                                  )}
+                                </button>
+                                <Tooltip label="Edit manager">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSiteManager(manager);
+                                      setIsEditModalOpen(true);
+                                    }}
+                                    aria-label="Edit manager"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Regenerate password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegeneratePassword(manager)}
+                                    disabled={isRegenerating[manager.id]}
+                                    aria-label="Regenerate password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isRegenerating[manager.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Assign funds">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSiteManager(manager);
+                                      setIsAssignFundsModalOpen(true);
+                                    }}
+                                    aria-label="Assign funds"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-success-50 hover:text-success-700"
+                                  >
+                                    <Wallet size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Delete manager">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSiteManager(manager)}
+                                    disabled={isDeleting[manager.id]}
+                                    aria-label="Delete manager"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isDeleting[manager.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -625,7 +739,7 @@ const SiteManagers: React.FC = () => {
               email: newSiteManager.email,
               role: "siteManager",
             });
-            const updatedSiteManagers = await getUsersByRole("siteManager");
+            const updatedSiteManagers = await getUsersByRole("siteManager", showDeleted);
             setSiteManagers(
               updatedSiteManagers.map((user) => ({
                 id: user.id,

@@ -33,7 +33,9 @@ export interface Site {
     type: string;
     uploadDate: Date;
     url: string;
+    public_id?: string;
     uploadedBy: Types.ObjectId;
+    category: "client" | "site";
   }>;
   createdAt: Date;
   updatedAt: Date;

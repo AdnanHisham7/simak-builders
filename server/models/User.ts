@@ -51,6 +51,36 @@ const UserSchema = new Schema<User>(
         givenBy: { type: Schema.Types.ObjectId, ref: "User" },
       },
     ],
+    sessions: [
+      {
+        tokenHash: { type: String, required: true, select: false },
+        userAgent: { type: String },
+        ip: { type: String },
+        device: { type: String },
+        browser: { type: String },
+        os: { type: String },
+        createdAt: { type: Date, default: Date.now },
+        lastUsedAt: { type: Date, default: Date.now },
+      },
+    ],
+    preferences: {
+      defaultLandingPage: { type: String, default: "" },
+      dateFormat: { type: String, default: "DD/MM/YYYY" },
+      numberFormat: { type: String, default: "en-IN" },
+      timezone: { type: String, default: "Asia/Kolkata" },
+    },
+    deactivationRequest: {
+      status: {
+        type: String,
+        enum: ["none", "pending", "approved", "rejected"],
+        default: "none",
+      },
+      reason: { type: String },
+      requestedAt: { type: Date },
+      reviewedBy: { type: Schema.Types.ObjectId, ref: "User" },
+      reviewedAt: { type: Date },
+      reviewNotes: { type: String },
+    },
   },
   { timestamps: true }
 );

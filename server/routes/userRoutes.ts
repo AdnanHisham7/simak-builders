@@ -19,20 +19,37 @@ router.put("/update", authMiddleware, userController.updateUser);
 router.put("/toggleStatus/:id", authMiddleware, userController.toggleStatus);
 router.post("/:id/regenerate-password", authMiddleware, userController.regeneratePassword);
 
+// Preferences (every role)
+router.patch("/me/preferences", authMiddleware, userController.updateOwnPreferences);
+
+// Self-service account deactivation (every role)
+router.post("/me/deactivation-request", authMiddleware, userController.requestOwnDeactivation);
+router.delete("/me/deactivation-request", authMiddleware, userController.cancelOwnDeactivationRequest);
+
+// Admin review of deactivation requests
+router.get("/deactivation-requests", authMiddleware, userController.listDeactivationRequests);
+router.post("/deactivation-requests/:id/review", authMiddleware, userController.reviewDeactivationRequest);
+
 // Managers
 router.post('/managers', authMiddleware, userController.createSiteManager);
 router.put('/managers/:id', authMiddleware, userController.updateSiteManager);
 router.put('/manager/:id/assign-sites', authMiddleware, userController.assignSitesToManager);
+router.delete('/managers/:id', authMiddleware, userController.deleteStaffMember);
+router.patch('/managers/:id/restore', authMiddleware, userController.restoreStaffMember);
 
 // Supervisors
 router.post('/supervisors', authMiddleware, userController.createSupervisor);
 router.put('/supervisors/:id', authMiddleware, userController.updateSupervisor);
 router.put("/supervisor/:id/assign-sites", authMiddleware, userController.assignSitesToSupervisor);
+router.delete('/supervisors/:id', authMiddleware, userController.deleteStaffMember);
+router.patch('/supervisors/:id/restore', authMiddleware, userController.restoreStaffMember);
 
 // Architects
 router.post('/architects', authMiddleware, userController.createArchitect);
 router.put('/architects/:id', authMiddleware, userController.updateArchitect);
 router.put('/architect/:id/assign-sites', authMiddleware, userController.assignSitesToArchitect);
+router.delete('/architects/:id', authMiddleware, userController.deleteStaffMember);
+router.patch('/architects/:id/restore', authMiddleware, userController.restoreStaffMember);
 
 // Clients
 router.post('/clients', authMiddleware, userController.createClient);

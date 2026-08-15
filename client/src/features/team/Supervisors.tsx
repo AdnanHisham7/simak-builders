@@ -6,6 +6,8 @@ import {
   updateSupervisor,
   assignSitesToClients,
   getUsersByRole,
+  deleteStaffMember,
+  restoreStaffMember,
 } from "@/services/userService";
 import { getSites, Site } from "@/services/siteService";
 import {
@@ -21,6 +23,7 @@ import {
   ShieldCheck,
   ShieldX,
   Trash2,
+  RotateCcw,
   Plus,
   Loader2,
 } from "lucide-react";
@@ -44,6 +47,7 @@ interface Supervisor {
   email: string;
   password: string;
   isBlocked: boolean;
+  isDeleted?: boolean;
   sites: Site[];
   profileImage?: string;
 }
@@ -62,6 +66,9 @@ const Supervisors: React.FC = () => {
   const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
+  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>({});
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -84,7 +91,7 @@ const Supervisors: React.FC = () => {
       setLoading(true);
       try {
         const [supervisorsData, sitesData] = await Promise.all([
-          getUsersByRole("supervisor"),
+          getUsersByRole("supervisor", showDeleted),
           getSites(),
         ]);
         setSupervisors(
@@ -95,6 +102,7 @@ const Supervisors: React.FC = () => {
             email: user.email,
             password: user.password || "********",
             isBlocked: user.isBlocked,
+            isDeleted: user.isDeleted || false,
             profileImage: user.profileImage,
           })),
         );
@@ -106,7 +114,7 @@ const Supervisors: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [showDeleted]);
 
   const filteredSupervisors = supervisors.filter((supervisor) => {
     const matchesSearch =
@@ -116,8 +124,8 @@ const Supervisors: React.FC = () => {
       !selectedSiteId || supervisor.sites.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !supervisor.isBlocked) ||
-      (selectedStatus === "blocked" && supervisor.isBlocked);
+      (selectedStatus === "active" && !supervisor.isBlocked && !supervisor.isDeleted) ||
+      (selectedStatus === "blocked" && supervisor.isBlocked && !supervisor.isDeleted);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
@@ -126,8 +134,9 @@ const Supervisors: React.FC = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentSupervisors = filteredSupervisors.slice(indexOfFirstItem, indexOfLastItem);
 
-  const activeSupervisors = supervisors.filter((a) => !a.isBlocked).length;
-  const blockedSupervisors = supervisors.filter((a) => a.isBlocked).length;
+  const activeSupervisors = supervisors.filter((a) => !a.isBlocked && !a.isDeleted).length;
+  const blockedSupervisors = supervisors.filter((a) => a.isBlocked && !a.isDeleted).length;
+  const deletedSupervisorsCount = supervisors.filter((a) => a.isDeleted).length;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
@@ -184,6 +193,60 @@ const Supervisors: React.FC = () => {
         } finally {
           setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
+        }
+      },
+    });
+  };
+
+  const handleDeleteSupervisor = (supervisor: Supervisor) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Supervisor",
+      message: `Are you sure you want to delete ${supervisor.name}? This is a soft delete — their historical data is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsDeleting((prev) => ({ ...prev, [supervisor.id]: true }));
+        try {
+          await deleteStaffMember("supervisors", supervisor.id);
+          if (showDeleted) {
+            setSupervisors((prev) =>
+              prev.map((s) => (s.id === supervisor.id ? { ...s, isDeleted: true } : s)),
+            );
+          } else {
+            setSupervisors((prev) => prev.filter((s) => s.id !== supervisor.id));
+          }
+          toast.success(`${supervisor.name} has been deleted.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to delete supervisor.");
+        } finally {
+          setIsDeleting((prev) => ({ ...prev, [supervisor.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
+  const handleRestoreSupervisor = (supervisor: Supervisor) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Restore Supervisor",
+      message: `Restore ${supervisor.name}? They will reappear in active lists and be able to log in again.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsRestoring((prev) => ({ ...prev, [supervisor.id]: true }));
+        try {
+          await restoreStaffMember("supervisors", supervisor.id);
+          setSupervisors((prev) =>
+            prev.map((s) => (s.id === supervisor.id ? { ...s, isDeleted: false } : s)),
+          );
+          toast.success(`${supervisor.name} has been restored.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to restore supervisor.");
+        } finally {
+          setIsRestoring((prev) => ({ ...prev, [supervisor.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
@@ -312,6 +375,18 @@ const Supervisors: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
+                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-console-border bg-console-bg px-4 py-2.5 text-sm text-console-text">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => {
+                      setShowDeleted(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-console-border text-brand-600 focus:ring-brand-500"
+                  />
+                  Show deleted{deletedSupervisorsCount > 0 ? ` (${deletedSupervisorsCount})` : ""}
+                </label>
               </div>
             </div>
           </Card>
@@ -414,12 +489,18 @@ const Supervisors: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              supervisor.isBlocked
-                                ? "bg-danger-50 text-danger-700"
-                                : "bg-success-50 text-success-700",
+                              supervisor.isDeleted
+                                ? "bg-slate-100 text-slate-600"
+                                : supervisor.isBlocked
+                                  ? "bg-danger-50 text-danger-700"
+                                  : "bg-success-50 text-success-700",
                             )}
                           >
-                            {supervisor.isBlocked ? (
+                            {supervisor.isDeleted ? (
+                              <>
+                                <Trash2 size={11} /> Deleted
+                              </>
+                            ) : supervisor.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -432,54 +513,87 @@ const Supervisors: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStatus(supervisor)}
-                              disabled={isToggling[supervisor.id]}
-                              aria-label={supervisor.isBlocked ? "Unblock supervisor" : "Block supervisor"}
-                              className={cn(
-                                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                supervisor.isBlocked
-                                  ? "bg-success-50 text-success-700 hover:bg-success-100"
-                                  : "bg-console-bg text-console-text hover:bg-slate-200",
-                              )}
-                            >
-                              {isToggling[supervisor.id] ? (
-                                <Loader2 size={13} className="animate-spin" />
-                              ) : supervisor.isBlocked ? (
-                                "Unblock"
-                              ) : (
-                                "Block"
-                              )}
-                            </button>
-                            <Tooltip label="Edit supervisor">
+                            {supervisor.isDeleted ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setSelectedSupervisor(supervisor);
-                                  setIsEditModalOpen(true);
-                                }}
-                                aria-label="Edit supervisor"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                onClick={() => handleRestoreSupervisor(supervisor)}
+                                disabled={isRestoring[supervisor.id]}
+                                className="flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 transition-colors hover:bg-success-100 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Pencil size={14} />
-                              </button>
-                            </Tooltip>
-                            <Tooltip label="Regenerate password">
-                              <button
-                                type="button"
-                                onClick={() => handleRegeneratePassword(supervisor)}
-                                disabled={isRegenerating[supervisor.id]}
-                                aria-label="Regenerate password"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {isRegenerating[supervisor.id] ? (
-                                  <Loader2 size={14} className="animate-spin" />
+                                {isRestoring[supervisor.id] ? (
+                                  <Loader2 size={13} className="animate-spin" />
                                 ) : (
-                                  <RefreshCw size={14} />
+                                  <RotateCcw size={13} />
                                 )}
+                                Restore
                               </button>
-                            </Tooltip>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(supervisor)}
+                                  disabled={isToggling[supervisor.id]}
+                                  aria-label={supervisor.isBlocked ? "Unblock supervisor" : "Block supervisor"}
+                                  className={cn(
+                                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                    supervisor.isBlocked
+                                      ? "bg-success-50 text-success-700 hover:bg-success-100"
+                                      : "bg-console-bg text-console-text hover:bg-slate-200",
+                                  )}
+                                >
+                                  {isToggling[supervisor.id] ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : supervisor.isBlocked ? (
+                                    "Unblock"
+                                  ) : (
+                                    "Block"
+                                  )}
+                                </button>
+                                <Tooltip label="Edit supervisor">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedSupervisor(supervisor);
+                                      setIsEditModalOpen(true);
+                                    }}
+                                    aria-label="Edit supervisor"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Regenerate password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegeneratePassword(supervisor)}
+                                    disabled={isRegenerating[supervisor.id]}
+                                    aria-label="Regenerate password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isRegenerating[supervisor.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Delete supervisor">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSupervisor(supervisor)}
+                                    disabled={isDeleting[supervisor.id]}
+                                    aria-label="Delete supervisor"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isDeleting[supervisor.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -559,7 +673,7 @@ const Supervisors: React.FC = () => {
         onSubmit={async (newSupervisor: { name: string; email: string }) => {
           try {
             await createSupervisor(newSupervisor);
-            const updatedSupervisors = await getUsersByRole("supervisor");
+            const updatedSupervisors = await getUsersByRole("supervisor", showDeleted);
             setSupervisors(
               updatedSupervisors.map((user) => ({
                 id: user.id,

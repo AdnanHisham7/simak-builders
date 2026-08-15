@@ -46,7 +46,10 @@ import {
   Percent,
   Check,
   Search,
+  Briefcase,
 } from "lucide-react";
+import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
+import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import {
   getPurchasesBySite,
@@ -169,6 +172,9 @@ const SiteDetail: React.FC = () => {
   >(null);
   const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
+  const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [linkedPortfolioProject, setLinkedPortfolioProject] =
+    useState<PortfolioProject | null>(null);
   const [isEditingSupervision, setIsEditingSupervision] = useState(false);
   const [supervisionInput, setSupervisionInput] = useState("0");
   const [isSavingSupervision, setIsSavingSupervision] = useState(false);
@@ -246,6 +252,13 @@ const SiteDetail: React.FC = () => {
     };
     fetchSite();
   }, [siteId]);
+
+  useEffect(() => {
+    if (userType !== "admin" || !siteId) return;
+    getProjectBySiteId(siteId)
+      .then(setLinkedPortfolioProject)
+      .catch(() => setLinkedPortfolioProject(null));
+  }, [siteId, userType]);
 
   const handleStartEditingSupervision = () => {
     setSupervisionInput(String(site?.supervisionPercentage ?? 0));
@@ -1154,6 +1167,25 @@ const SiteDetail: React.FC = () => {
               <Button size="sm" onClick={() => setIsCompleteModalOpen(true)}>
                 <CheckCircle2 size={15} /> Mark as completed
               </Button>
+            )}
+            {userType === "admin" && (
+              linkedPortfolioProject ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(`/admin/portfolio?projectId=${linkedPortfolioProject.id}`)}
+                >
+                  <Briefcase size={15} /> View portfolio project
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsConvertModalOpen(true)}
+                >
+                  <Briefcase size={15} /> Convert to portfolio
+                </Button>
+              )
             )}
           </div>
         </div>
@@ -2315,6 +2347,17 @@ const SiteDetail: React.FC = () => {
           onConfirm={handleMarkAsCompleted}
           downloadSiteDocuments={downloadSiteDocumentsZip}
           downloadPurchaseBills={downloadPurchaseBillsZip}
+        />
+      )}
+
+      {isConvertModalOpen && (
+        <ConvertToPortfolioModal
+          isOpen={isConvertModalOpen}
+          onClose={() => setIsConvertModalOpen(false)}
+          site={site}
+          onConverted={() => {
+            getProjectBySiteId(siteId!).then(setLinkedPortfolioProject);
+          }}
         />
       )}
 

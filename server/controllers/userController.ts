@@ -11,6 +11,7 @@ import bcrypt from "bcryptjs";
 import { sendInitialPasswordEmail } from "../services/emailService";
 import { CompanyModel } from "@models/Company";
 import { ActivityLogModel } from "@models/ActivityLog";
+import { Types } from "mongoose";
 
 const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -97,7 +98,7 @@ const toggleStatus = async (
     if (typeof isBlocked !== "undefined") {
       user.isBlocked = isBlocked;
       if (isBlocked) {
-        user.refreshToken = null; // Invalidate refresh token
+        user.sessions = [] as any; // Invalidate all active sessions
       }
     }
     await user.save();
@@ -522,6 +523,7 @@ const deleteClient = async (
 
     user.isDeleted = true;
     user.deletedAt = new Date();
+    user.sessions = [] as any;
     await user.save();
 
     await ActivityLogModel.create({
@@ -566,6 +568,80 @@ const restoreClient = async (
     });
 
     res.status(HttpStatus.OK).json({ message: "Client restored successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const DELETABLE_STAFF_ROLES = [
+  UserRole.Architect,
+  UserRole.SiteManager,
+  UserRole.Supervisor,
+  UserRole.Employee,
+];
+
+const deleteStaffMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const user = await UserModel.findById(id);
+    if (!user || !DELETABLE_STAFF_ROLES.includes(user.role)) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+    if (user.isDeleted) {
+      throw new ApiError("This user is already deleted", HttpStatus.BAD_REQUEST);
+    }
+
+    user.isDeleted = true;
+    user.deletedAt = new Date();
+    user.sessions = [] as any;
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "delete",
+      resource: user.role,
+      resourceId: user._id,
+      details: `Soft-deleted ${user.role}: ${user.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({ message: "User deleted successfully" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const restoreStaffMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { id } = req.params;
+    const user = await UserModel.findById(id);
+    if (!user || !DELETABLE_STAFF_ROLES.includes(user.role)) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+    if (!user.isDeleted) {
+      throw new ApiError("This user is not deleted", HttpStatus.BAD_REQUEST);
+    }
+
+    user.isDeleted = false;
+    user.deletedAt = undefined;
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: user.role,
+      resourceId: user._id,
+      details: `Restored ${user.role}: ${user.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({ message: "User restored successfully" });
   } catch (error) {
     next(error);
   }
@@ -1002,7 +1078,9 @@ const getCurrentUser = async (
 ) => {
   try {
     const user = await UserModel.findById(req.user?.userId)
-      .select("-password -twoFactorSecret -resetToken -verificationToken -refreshToken")
+      .select(
+        "-password -twoFactorSecret -resetToken -verificationToken -refreshToken"
+      )
       .populate("assignedSites")
       .populate("salaryAssignments.givenBy", "name")
       .populate("siteExpensesTransactions.givenBy", "name")
@@ -1088,11 +1166,265 @@ const updateOwnProfile = async (
     delete (sanitizedUser as any).resetToken;
     delete (sanitizedUser as any).verificationToken;
     delete (sanitizedUser as any).refreshToken;
+    delete (sanitizedUser as any).sessions;
 
     res.status(HttpStatus.OK).json({
       message: "Profile updated successfully",
       user: sanitizedUser,
       updatedFields,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const ALLOWED_DATE_FORMATS = ["DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD"];
+const ALLOWED_NUMBER_FORMATS = ["en-IN", "en-US", "en-GB"];
+
+const updateOwnPreferences = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    const { defaultLandingPage, dateFormat, numberFormat, timezone } = req.body;
+
+    if (dateFormat !== undefined && !ALLOWED_DATE_FORMATS.includes(dateFormat)) {
+      throw new ApiError("Invalid date format", HttpStatus.BAD_REQUEST);
+    }
+    if (
+      numberFormat !== undefined &&
+      !ALLOWED_NUMBER_FORMATS.includes(numberFormat)
+    ) {
+      throw new ApiError("Invalid number format", HttpStatus.BAD_REQUEST);
+    }
+    if (timezone !== undefined && typeof timezone !== "string") {
+      throw new ApiError("Invalid timezone", HttpStatus.BAD_REQUEST);
+    }
+    if (
+      defaultLandingPage !== undefined &&
+      typeof defaultLandingPage !== "string"
+    ) {
+      throw new ApiError("Invalid default landing page", HttpStatus.BAD_REQUEST);
+    }
+
+    if (!user.preferences) {
+      user.preferences = {
+        dateFormat: "DD/MM/YYYY",
+        numberFormat: "en-IN",
+        timezone: "Asia/Kolkata",
+      } as any;
+    }
+
+    if (defaultLandingPage !== undefined) {
+      user.preferences.defaultLandingPage = defaultLandingPage;
+    }
+    if (dateFormat !== undefined) user.preferences.dateFormat = dateFormat;
+    if (numberFormat !== undefined) user.preferences.numberFormat = numberFormat;
+    if (timezone !== undefined) user.preferences.timezone = timezone;
+
+    await user.save();
+
+    res.status(HttpStatus.OK).json({
+      message: "Preferences updated successfully",
+      preferences: user.preferences,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const requestOwnDeactivation = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    }
+    if (req.user?.role === UserRole.CompanyAdmin) {
+      throw new ApiError(
+        "Admin accounts cannot request self-deactivation",
+        HttpStatus.FORBIDDEN
+      );
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    if (user.deactivationRequest?.status === "pending") {
+      throw new ApiError(
+        "A deactivation request is already pending review",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const { reason } = req.body;
+    user.deactivationRequest = {
+      status: "pending",
+      reason: reason ? String(reason).trim().slice(0, 500) : "",
+      requestedAt: new Date(),
+    } as any;
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: userId,
+      action: "create",
+      resource: "deactivation_request",
+      resourceId: user._id,
+      details: `User requested account deactivation`,
+    });
+
+    res.status(HttpStatus.CREATED).json({
+      message: "Deactivation request submitted for admin approval",
+      deactivationRequest: user.deactivationRequest,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const cancelOwnDeactivationRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      throw new ApiError("Unauthorized", HttpStatus.UNAUTHORIZED);
+    }
+
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    if (user.deactivationRequest?.status !== "pending") {
+      throw new ApiError(
+        "There is no pending deactivation request to cancel",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    user.deactivationRequest = { status: "none" } as any;
+    await user.save();
+
+    res
+      .status(HttpStatus.OK)
+      .json({ message: "Deactivation request cancelled" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listDeactivationRequests = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (req.user?.role !== UserRole.CompanyAdmin) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const users = await UserModel.find({
+      "deactivationRequest.status": "pending",
+    }).select("name email role deactivationRequest");
+
+    res.status(HttpStatus.OK).json(
+      users.map((user) => ({
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        deactivationRequest: user.deactivationRequest,
+      }))
+    );
+  } catch (error) {
+    next(error);
+  }
+};
+
+const reviewDeactivationRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (req.user?.role !== UserRole.CompanyAdmin) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const { id } = req.params;
+    const { decision, notes } = req.body;
+    if (!["approve", "reject"].includes(decision)) {
+      throw new ApiError(
+        "decision must be 'approve' or 'reject'",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const user = await UserModel.findById(id);
+    if (!user) {
+      throw new ApiError("User not found", HttpStatus.NOT_FOUND);
+    }
+    if (user.deactivationRequest?.status !== "pending") {
+      throw new ApiError(
+        "This user has no pending deactivation request",
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    if (decision === "approve") {
+      user.isDeleted = true;
+      user.deletedAt = new Date();
+      user.sessions = [] as any;
+      user.deactivationRequest = {
+        status: "approved",
+        reason: user.deactivationRequest.reason,
+        requestedAt: user.deactivationRequest.requestedAt,
+        reviewedBy: new Types.ObjectId(req.user!.userId),
+        reviewedAt: new Date(),
+        reviewNotes: notes ? String(notes).trim().slice(0, 500) : "",
+      } as any;
+    } else {
+      user.deactivationRequest = {
+        status: "rejected",
+        reason: user.deactivationRequest.reason,
+        requestedAt: user.deactivationRequest.requestedAt,
+        reviewedBy: new Types.ObjectId(req.user!.userId),
+        reviewedAt: new Date(),
+        reviewNotes: notes ? String(notes).trim().slice(0, 500) : "",
+      } as any;
+    }
+    await user.save();
+
+    await ActivityLogModel.create({
+      user: req.user!.userId,
+      action: "update",
+      resource: "deactivation_request",
+      resourceId: user._id,
+      details: `Deactivation request ${decision}d for ${user.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: `Deactivation request ${decision}d successfully`,
+      deactivationRequest: user.deactivationRequest,
     });
   } catch (error) {
     next(error);
@@ -1127,7 +1459,9 @@ const getUserById = async (req: Request, res: Response, next: NextFunction) => {
 
     // Fetch user by ID and populate relevant fields
     const user = await UserModel.findById(id)
-      .select("-password -twoFactorSecret -resetToken -verificationToken -refreshToken")
+      .select(
+        "-password -twoFactorSecret -resetToken -verificationToken -refreshToken"
+      )
       .populate("assignedSites")
       .populate("salaryAssignments.givenBy", "name")
       .populate("siteExpensesTransactions.givenBy", "name")
@@ -1165,6 +1499,8 @@ export default {
   updateClient,
   deleteClient,
   restoreClient,
+  deleteStaffMember,
+  restoreStaffMember,
   assignSitesToArchitect,
   assignSalary,
   verifySalaryAssignment,
@@ -1176,4 +1512,9 @@ export default {
   updateOwnProfile,
   assignSitesToClients,
   getUnassignedClients,
+  updateOwnPreferences,
+  requestOwnDeactivation,
+  cancelOwnDeactivationRequest,
+  listDeactivationRequests,
+  reviewDeactivationRequest,
 };

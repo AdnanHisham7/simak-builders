@@ -12,7 +12,7 @@ export const signToken = (
 export function verifyToken(
   token: string,
   secret: string
-): { userId: string; role: UserRole } {
+): { userId: string; role: UserRole; sessionId?: string } {
   if (!token || typeof token !== "string") {
     throw new Error("Token is missing or invalid");
   }
@@ -21,15 +21,13 @@ export function verifyToken(
     throw new Error("JWT secret is not configured");
   }
 
-  console.log(token, secret, "jiji")
-
   try {
     return jwt.verify(token, secret) as {
       userId: string;
-      role: UserRole
+      role: UserRole;
+      sessionId?: string;
     };
   } catch (error) {
-    console.error("JWT verification error:", error);
     throw new Error("Invalid token");
   }
 }

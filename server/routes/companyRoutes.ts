@@ -1,6 +1,6 @@
 import express from "express";
 import companyController from "../controllers/companyController";
-import { authMiddleware } from "@middleware/authMiddleware";
+import { authMiddleware, optionalAuthMiddleware } from "@middleware/authMiddleware";
 import upload from "@middleware/multer";
 
 const router = express.Router();
@@ -20,6 +20,13 @@ router.post(
   authMiddleware,
   upload.any(),
   companyController.createSiteWithBulkData
+);
+router.get("/profile", optionalAuthMiddleware, companyController.getCompanyProfile);
+router.put(
+  "/profile",
+  authMiddleware,
+  upload.single("logo"),
+  companyController.updateCompanyProfile,
 );
 
 export default router;

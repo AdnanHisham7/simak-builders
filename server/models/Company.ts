@@ -3,6 +3,19 @@ import { Schema, model } from "mongoose";
 
 const CompanySchema = new Schema(
   {
+    name: { type: String, default: "", trim: true },
+    logo: { type: String, default: "" },
+    logoPublicId: { type: String, default: "" },
+    address: { type: String, default: "", trim: true },
+    city: { type: String, default: "", trim: true },
+    state: { type: String, default: "", trim: true },
+    zip: { type: String, default: "", trim: true },
+    country: { type: String, default: "", trim: true },
+    phone: { type: String, default: "", trim: true },
+    email: { type: String, default: "", trim: true },
+    website: { type: String, default: "", trim: true },
+    taxId: { type: String, default: "", trim: true },
+    description: { type: String, default: "", trim: true },
     totalAmount: { type: Number, default: 0 },
     transactions: [
       {

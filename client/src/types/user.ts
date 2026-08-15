@@ -12,6 +12,12 @@ export interface IUser {
   googleId?: string;
   isBlocked?: boolean;
   isAdmin: boolean;
+  preferences?: {
+    defaultLandingPage?: string;
+    dateFormat?: string;
+    numberFormat?: string;
+    timezone?: string;
+  };
 }
 
 export enum UserRole {

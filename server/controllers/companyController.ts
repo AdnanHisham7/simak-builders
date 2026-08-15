@@ -12,6 +12,7 @@ import { UserModel } from "@models/User";
 import { VendorModel } from "@models/Vendor";
 import { ContractorModel } from "@models/Contractor";
 import upload from "@middleware/multer";
+import cloudinary from "../services/cloudinaryService";
 import Joi from "joi";
 import mongoose, { startSession, Types } from "mongoose";
 import { PurchaseModel } from "@models/Purchase";
@@ -437,6 +438,7 @@ const createSiteWithBulkData = async (
           public_id: docFile.filename,
           uploadedBy: new Types.ObjectId(adminUser.userId),
           uploadDate: new Date(),
+          category: "site" as const,
         };
         newSite.documents.push(document);
       }
@@ -735,6 +737,119 @@ const addCompanyFunds = async (
   }
 };
 
+const getCompanyProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    let company = await CompanyModel.findOne();
+    if (!company) {
+      company = await CompanyModel.create({ totalAmount: 0 });
+    }
+    const isRequesterAdmin = req.user?.role === "admin";
+    res.status(HttpStatus.OK).json({
+      id: company._id,
+      name: company.name || "",
+      logo: company.logo || "",
+      address: company.address || "",
+      city: company.city || "",
+      state: company.state || "",
+      zip: company.zip || "",
+      country: company.country || "",
+      phone: company.phone || "",
+      email: company.email || "",
+      website: company.website || "",
+      description: company.description || "",
+      ...(isRequesterAdmin ? { taxId: company.taxId || "" } : {}),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const COMPANY_PROFILE_TEXT_FIELDS = [
+  "name",
+  "address",
+  "city",
+  "state",
+  "zip",
+  "country",
+  "phone",
+  "email",
+  "website",
+  "taxId",
+  "description",
+] as const;
+
+const updateCompanyProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    let company = await CompanyModel.findOne();
+    if (!company) {
+      company = new CompanyModel({ totalAmount: 0 });
+    }
+
+    for (const field of COMPANY_PROFILE_TEXT_FIELDS) {
+      const value = (req.body as Record<string, unknown>)[field];
+      if (value !== undefined) {
+        (company as any)[field] = String(value).trim().slice(0, 500);
+      }
+    }
+
+    if (req.file) {
+      const previousPublicId = company.logoPublicId;
+      company.logo = (req.file as Express.Multer.File).path;
+      company.logoPublicId = (req.file as Express.Multer.File).filename;
+      if (previousPublicId) {
+        try {
+          await cloudinary.uploader.destroy(previousPublicId);
+        } catch (error) {
+          // Non-fatal: stale asset can be cleaned up manually.
+        }
+      }
+    }
+
+    await company.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "company_profile",
+      resourceId: company._id,
+      details: "Updated company profile",
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Company profile updated successfully",
+      company: {
+        id: company._id,
+        name: company.name || "",
+        logo: company.logo || "",
+        address: company.address || "",
+        city: company.city || "",
+        state: company.state || "",
+        zip: company.zip || "",
+        country: company.country || "",
+        phone: company.phone || "",
+        email: company.email || "",
+        website: company.website || "",
+        taxId: company.taxId || "",
+        description: company.description || "",
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAmountToBeReceived = async (
   req: Request,
   res: Response,
@@ -784,4 +899,6 @@ export default {
   getCompanySummary,
   addCompanyFunds,
   getAmountToBeReceived,
+  getCompanyProfile,
+  updateCompanyProfile,
 };

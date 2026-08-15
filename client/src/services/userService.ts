@@ -317,6 +317,22 @@ export const restoreClient = async (userId: string): Promise<void> => {
   await privateClient.patch(`/users/clients/${userId}/restore`);
 };
 
+export type StaffRolePathPrefix = "architects" | "managers" | "supervisors";
+
+export const deleteStaffMember = async (
+  rolePathPrefix: StaffRolePathPrefix,
+  userId: string,
+): Promise<void> => {
+  await privateClient.delete(`/users/${rolePathPrefix}/${userId}`);
+};
+
+export const restoreStaffMember = async (
+  rolePathPrefix: StaffRolePathPrefix,
+  userId: string,
+): Promise<void> => {
+  await privateClient.patch(`/users/${rolePathPrefix}/${userId}/restore`);
+};
+
 export const assignSiteExpenses = async (
   userId: string,
   amount: number
@@ -360,4 +376,65 @@ export const getUnassignedClients = async (): Promise<User[]> => {
 export const getUserById = async (userId: string) => {
   const response = await privateClient.get(`/users/${userId}`); // Adjust endpoint as needed
   return response.data;
+};
+
+export interface UserPreferences {
+  defaultLandingPage?: string;
+  dateFormat: string;
+  numberFormat: string;
+  timezone: string;
+}
+
+export const updateOwnPreferences = async (
+  preferences: Partial<UserPreferences>,
+): Promise<UserPreferences> => {
+  const response = await privateClient.patch("/users/me/preferences", preferences);
+  return response.data.preferences;
+};
+
+export interface DeactivationRequest {
+  status: "none" | "pending" | "approved" | "rejected";
+  reason?: string;
+  requestedAt?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
+export const requestOwnDeactivation = async (
+  reason?: string,
+): Promise<DeactivationRequest> => {
+  const response = await privateClient.post("/users/me/deactivation-request", {
+    reason,
+  });
+  return response.data.deactivationRequest;
+};
+
+export const cancelOwnDeactivationRequest = async (): Promise<void> => {
+  await privateClient.delete("/users/me/deactivation-request");
+};
+
+export interface PendingDeactivationRequest {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  deactivationRequest: DeactivationRequest;
+}
+
+export const listDeactivationRequests = async (): Promise<
+  PendingDeactivationRequest[]
+> => {
+  const response = await privateClient.get("/users/deactivation-requests");
+  return response.data;
+};
+
+export const reviewDeactivationRequest = async (
+  userId: string,
+  decision: "approve" | "reject",
+  notes?: string,
+): Promise<void> => {
+  await privateClient.post(`/users/deactivation-requests/${userId}/review`, {
+    decision,
+    notes,
+  });
 };

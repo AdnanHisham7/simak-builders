@@ -7,6 +7,9 @@ const ActivityLogSchema = new Schema(
     resource: { type: String, required: true }, // e.g., "user", "site", "stock"
     resourceId: { type: Schema.Types.ObjectId, required: true },
     details: { type: String },
+    ip: { type: String },
+    userAgent: { type: String },
+    device: { type: String },
     timestamp: { type: Date, default: Date.now },
   },
   { timestamps: true }

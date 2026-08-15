@@ -292,6 +292,27 @@ export const sendInitialPasswordEmail = async (email: string, password: string):
   });
 };
 
+// Send password changed confirmation email
+export const sendPasswordChangedEmail = async (email: string): Promise<void> => {
+  const content = `
+    <p>This is a confirmation that the password for your account was just changed.</p>
+    <div class="security-notice">
+      <p><strong>Didn't do this?</strong> If you did not change your password, please contact our support team immediately and secure your account.</p>
+    </div>
+  `;
+
+  await transporter.sendMail({
+    to: email,
+    subject: 'Your password was changed',
+    html: getEmailTemplate(
+      'Password Changed',
+      content,
+      'Login to Your Account',
+      `${env.FRONTEND_URL}?redirect=/login`,
+    ),
+  });
+};
+
 // Send regenerated password email
 export const sendRegeneratedPasswordEmail = async (email: string, password: string): Promise<void> => {
   const content = `

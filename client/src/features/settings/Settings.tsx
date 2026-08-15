@@ -1,50 +1,81 @@
 import { useState } from "react";
-import { Building2, Info } from "lucide-react";
-import { toast } from "sonner";
-import { Card } from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
+import { useDispatch, useSelector } from "react-redux";
+import AnimatedTabs from "@/components/ui/AnimatedTabs";
+import { RootState } from "@/store/store";
+import { updateUserFields } from "@/store/slices/authSlice";
+import { DeactivationRequest, UserPreferences } from "@/services/userService";
+import ChangePasswordCard from "./components/ChangePasswordCard";
+import SessionsCard from "./components/SessionsCard";
+import LoginActivityCard from "./components/LoginActivityCard";
+import PreferencesCard from "./components/PreferencesCard";
+import CompanyProfileCard from "./components/CompanyProfileCard";
+import DeactivateAccountCard from "./components/DeactivateAccountCard";
+import DeactivationRequestsCard from "./components/DeactivationRequestsCard";
+
+const TAB_ACCOUNT = "Account & Security";
+const TAB_PREFERENCES = "Preferences";
+const TAB_COMPANY = "Company";
+
+const DEFAULT_PREFERENCES: UserPreferences = {
+  defaultLandingPage: "",
+  dateFormat: "DD/MM/YYYY",
+  numberFormat: "en-IN",
+  timezone: "Asia/Kolkata",
+};
 
 const Settings: React.FC = () => {
-  const [companyName, setCompanyName] = useState("");
+  const dispatch = useDispatch();
+  const { user, userType } = useSelector((state: RootState) => state.auth);
+  const isAdmin = userType === "admin";
 
-  const handleSave = () => {
-    toast.info("Company settings management isn't connected yet — check back soon.");
+  const tabs = isAdmin
+    ? [TAB_ACCOUNT, TAB_PREFERENCES, TAB_COMPANY]
+    : [TAB_ACCOUNT, TAB_PREFERENCES];
+
+  const [activeTab, setActiveTab] = useState(TAB_ACCOUNT);
+  const [deactivationRequest, setDeactivationRequest] = useState<
+    DeactivationRequest | undefined
+  >(undefined);
+
+  const handlePreferencesChange = (preferences: UserPreferences) => {
+    dispatch(updateUserFields({ preferences }));
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold text-console-text">Settings</h1>
-        <p className="mt-0.5 text-sm text-console-muted">Manage your company preferences</p>
+        <p className="mt-0.5 text-sm text-console-muted">
+          Manage your account, security, and preferences
+        </p>
       </div>
 
-      <Card>
-        <div className="mb-5 flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-            <Building2 size={16} />
-          </div>
-          <h3 className="text-base font-semibold text-console-text">Company profile</h3>
-        </div>
+      <AnimatedTabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
-        <div className="mb-5 flex items-start gap-2.5 rounded-console border border-info-100 bg-info-50 p-4 text-sm text-info-800">
-          <Info size={16} className="mt-0.5 shrink-0" />
-          <p>This section isn't connected to a backend yet, so changes here won't be saved.</p>
-        </div>
-
-        <div className="max-w-md space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-console-text">Company name</label>
-            <input
-              type="text"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Enter company name"
-              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+      {activeTab === TAB_ACCOUNT && (
+        <div className="space-y-6">
+          {isAdmin && <DeactivationRequestsCard />}
+          <ChangePasswordCard />
+          <SessionsCard />
+          <LoginActivityCard />
+          {!isAdmin && (
+            <DeactivateAccountCard
+              deactivationRequest={deactivationRequest}
+              onChange={setDeactivationRequest}
             />
-          </div>
-          <Button onClick={handleSave}>Save changes</Button>
+          )}
         </div>
-      </Card>
+      )}
+
+      {activeTab === TAB_PREFERENCES && userType && (
+        <PreferencesCard
+          role={userType}
+          preferences={{ ...DEFAULT_PREFERENCES, ...(user?.preferences || {}) }}
+          onChange={handlePreferencesChange}
+        />
+      )}
+
+      {activeTab === TAB_COMPANY && isAdmin && <CompanyProfileCard />}
     </div>
   );
 };

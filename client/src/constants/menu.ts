@@ -39,6 +39,7 @@ export const adminMenus = [
     items: [
       { name: "Sites", icon: Building, path: "/admin/sites" },
       { name: "Stocks", icon: Package, path: "/admin/stocks" },
+      { name: "Portfolio", icon: Briefcase, path: "/admin/portfolio" },
     ],
   },
   {

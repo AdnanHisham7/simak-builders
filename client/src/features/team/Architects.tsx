@@ -6,6 +6,8 @@ import {
   updateArchitect,
   assignSitesToClients,
   getUsersByRole,
+  deleteStaffMember,
+  restoreStaffMember,
 } from "@/services/userService";
 import { getSites, Site } from "@/services/siteService";
 import {
@@ -21,6 +23,7 @@ import {
   ShieldCheck,
   ShieldX,
   Trash2,
+  RotateCcw,
   Plus,
   Loader2,
 } from "lucide-react";
@@ -44,6 +47,7 @@ export interface Architect {
   email: string;
   password: string;
   isBlocked: boolean;
+  isDeleted?: boolean;
   sites: Site[];
   profileImage?: string;
 }
@@ -62,6 +66,9 @@ const Architects: React.FC = () => {
   const [isRegenerating, setIsRegenerating] = useState<{ [key: string]: boolean }>({});
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
+  const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>({});
+  const [showDeleted, setShowDeleted] = useState(false);
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -84,7 +91,7 @@ const Architects: React.FC = () => {
       setLoading(true);
       try {
         const [architectsData, sitesData] = await Promise.all([
-          getUsersByRole("architect"),
+          getUsersByRole("architect", showDeleted),
           getSites(),
         ]);
         setArchitects(
@@ -95,6 +102,7 @@ const Architects: React.FC = () => {
             email: user.email,
             password: user.password || "********",
             isBlocked: user.isBlocked,
+            isDeleted: user.isDeleted || false,
             profileImage: user.profileImage,
           })),
         );
@@ -106,7 +114,7 @@ const Architects: React.FC = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [showDeleted]);
 
   const filteredArchitects = architects.filter((architect) => {
     const matchesSearch =
@@ -116,8 +124,8 @@ const Architects: React.FC = () => {
       !selectedSiteId || architect.sites.some((site) => site.id === selectedSiteId);
     const matchesStatus =
       selectedStatus === "all" ||
-      (selectedStatus === "active" && !architect.isBlocked) ||
-      (selectedStatus === "blocked" && architect.isBlocked);
+      (selectedStatus === "active" && !architect.isBlocked && !architect.isDeleted) ||
+      (selectedStatus === "blocked" && architect.isBlocked && !architect.isDeleted);
     return matchesSearch && matchesSite && matchesStatus;
   });
 
@@ -126,8 +134,9 @@ const Architects: React.FC = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentArchitects = filteredArchitects.slice(indexOfFirstItem, indexOfLastItem);
 
-  const activeArchitects = architects.filter((a) => !a.isBlocked).length;
-  const blockedArchitects = architects.filter((a) => a.isBlocked).length;
+  const activeArchitects = architects.filter((a) => !a.isBlocked && !a.isDeleted).length;
+  const blockedArchitects = architects.filter((a) => a.isBlocked && !a.isDeleted).length;
+  const deletedArchitectsCount = architects.filter((a) => a.isDeleted).length;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
@@ -184,6 +193,60 @@ const Architects: React.FC = () => {
         } finally {
           setIsRegenerating((prev) => ({ ...prev, [architect.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
+        }
+      },
+    });
+  };
+
+  const handleDeleteArchitect = (architect: Architect) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Architect",
+      message: `Are you sure you want to delete ${architect.name}? This is a soft delete — their historical data is preserved, but they will no longer appear in active lists or be able to log in. You can restore them later.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsDeleting((prev) => ({ ...prev, [architect.id]: true }));
+        try {
+          await deleteStaffMember("architects", architect.id);
+          if (showDeleted) {
+            setArchitects((prev) =>
+              prev.map((a) => (a.id === architect.id ? { ...a, isDeleted: true } : a)),
+            );
+          } else {
+            setArchitects((prev) => prev.filter((a) => a.id !== architect.id));
+          }
+          toast.success(`${architect.name} has been deleted.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to delete architect.");
+        } finally {
+          setIsDeleting((prev) => ({ ...prev, [architect.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
+        }
+      },
+    });
+  };
+
+  const handleRestoreArchitect = (architect: Architect) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Restore Architect",
+      message: `Restore ${architect.name}? They will reappear in active lists and be able to log in again.`,
+      isLoading: false,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: true }));
+        setIsRestoring((prev) => ({ ...prev, [architect.id]: true }));
+        try {
+          await restoreStaffMember("architects", architect.id);
+          setArchitects((prev) =>
+            prev.map((a) => (a.id === architect.id ? { ...a, isDeleted: false } : a)),
+          );
+          toast.success(`${architect.name} has been restored.`);
+        } catch (err: any) {
+          toast.error(err?.response?.data?.error || "Failed to restore architect.");
+        } finally {
+          setIsRestoring((prev) => ({ ...prev, [architect.id]: false }));
+          setConfirmModal((prev) => ({ ...prev, isOpen: false, isLoading: false }));
         }
       },
     });
@@ -312,6 +375,18 @@ const Architects: React.FC = () => {
                     <option value="blocked">Blocked</option>
                   </select>
                 </div>
+                <label className="flex cursor-pointer select-none items-center gap-2 rounded-lg border border-console-border bg-console-bg px-4 py-2.5 text-sm text-console-text">
+                  <input
+                    type="checkbox"
+                    checked={showDeleted}
+                    onChange={(e) => {
+                      setShowDeleted(e.target.checked);
+                      setCurrentPage(1);
+                    }}
+                    className="rounded border-console-border text-brand-600 focus:ring-brand-500"
+                  />
+                  Show deleted{deletedArchitectsCount > 0 ? ` (${deletedArchitectsCount})` : ""}
+                </label>
               </div>
             </div>
           </Card>
@@ -414,12 +489,18 @@ const Architects: React.FC = () => {
                           <span
                             className={cn(
                               "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                              architect.isBlocked
-                                ? "bg-danger-50 text-danger-700"
-                                : "bg-success-50 text-success-700",
+                              architect.isDeleted
+                                ? "bg-slate-100 text-slate-600"
+                                : architect.isBlocked
+                                  ? "bg-danger-50 text-danger-700"
+                                  : "bg-success-50 text-success-700",
                             )}
                           >
-                            {architect.isBlocked ? (
+                            {architect.isDeleted ? (
+                              <>
+                                <Trash2 size={11} /> Deleted
+                              </>
+                            ) : architect.isBlocked ? (
                               <>
                                 <ShieldX size={11} /> Blocked
                               </>
@@ -432,54 +513,87 @@ const Architects: React.FC = () => {
                         </td>
                         <td className="px-4 py-3.5">
                           <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleStatus(architect)}
-                              disabled={isToggling[architect.id]}
-                              aria-label={architect.isBlocked ? "Unblock architect" : "Block architect"}
-                              className={cn(
-                                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                                architect.isBlocked
-                                  ? "bg-success-50 text-success-700 hover:bg-success-100"
-                                  : "bg-console-bg text-console-text hover:bg-slate-200",
-                              )}
-                            >
-                              {isToggling[architect.id] ? (
-                                <Loader2 size={13} className="animate-spin" />
-                              ) : architect.isBlocked ? (
-                                "Unblock"
-                              ) : (
-                                "Block"
-                              )}
-                            </button>
-                            <Tooltip label="Edit architect">
+                            {architect.isDeleted ? (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  setSelectedArchitect(architect);
-                                  setIsEditModalOpen(true);
-                                }}
-                                aria-label="Edit architect"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                onClick={() => handleRestoreArchitect(architect)}
+                                disabled={isRestoring[architect.id]}
+                                className="flex items-center gap-1.5 rounded-lg bg-success-50 px-3 py-1.5 text-xs font-medium text-success-700 transition-colors hover:bg-success-100 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Pencil size={14} />
-                              </button>
-                            </Tooltip>
-                            <Tooltip label="Regenerate password">
-                              <button
-                                type="button"
-                                onClick={() => handleRegeneratePassword(architect)}
-                                disabled={isRegenerating[architect.id]}
-                                aria-label="Regenerate password"
-                                className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
-                              >
-                                {isRegenerating[architect.id] ? (
-                                  <Loader2 size={14} className="animate-spin" />
+                                {isRestoring[architect.id] ? (
+                                  <Loader2 size={13} className="animate-spin" />
                                 ) : (
-                                  <RefreshCw size={14} />
+                                  <RotateCcw size={13} />
                                 )}
+                                Restore
                               </button>
-                            </Tooltip>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleStatus(architect)}
+                                  disabled={isToggling[architect.id]}
+                                  aria-label={architect.isBlocked ? "Unblock architect" : "Block architect"}
+                                  className={cn(
+                                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                    architect.isBlocked
+                                      ? "bg-success-50 text-success-700 hover:bg-success-100"
+                                      : "bg-console-bg text-console-text hover:bg-slate-200",
+                                  )}
+                                >
+                                  {isToggling[architect.id] ? (
+                                    <Loader2 size={13} className="animate-spin" />
+                                  ) : architect.isBlocked ? (
+                                    "Unblock"
+                                  ) : (
+                                    "Block"
+                                  )}
+                                </button>
+                                <Tooltip label="Edit architect">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedArchitect(architect);
+                                      setIsEditModalOpen(true);
+                                    }}
+                                    aria-label="Edit architect"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Regenerate password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegeneratePassword(architect)}
+                                    disabled={isRegenerating[architect.id]}
+                                    aria-label="Regenerate password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-info-50 hover:text-info-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isRegenerating[architect.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <RefreshCw size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Delete architect">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteArchitect(architect)}
+                                    disabled={isDeleting[architect.id]}
+                                    aria-label="Delete architect"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-danger-50 hover:text-danger-700 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {isDeleting[architect.id] ? (
+                                      <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                      <Trash2 size={14} />
+                                    )}
+                                  </button>
+                                </Tooltip>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -559,7 +673,7 @@ const Architects: React.FC = () => {
         onSubmit={async (newArchitect: { name: string; email: string }) => {
           try {
             await createArchitect(newArchitect);
-            const updatedArchitects = await getUsersByRole("architect");
+            const updatedArchitects = await getUsersByRole("architect", showDeleted);
             setArchitects(
               updatedArchitects.map((user) => ({
                 id: user.id,

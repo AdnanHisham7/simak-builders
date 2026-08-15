@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import { signToken, verifyToken } from "@utils/jwt";
 import { UserRole } from "@entities/user";
 
@@ -13,16 +14,32 @@ export const comparePassword = async (
   return bcrypt.compare(password, hash);
 };
 
-export const generateAccessToken = (userId: string, role: UserRole): string => {
-  return signToken({ userId, role }, process.env.JWT_SECRET!, {
+export const hashToken = (token: string): string => {
+  return crypto.createHash("sha256").update(token).digest("hex");
+};
+
+export const generateAccessToken = (
+  userId: string,
+  role: UserRole,
+  sessionId: string
+): string => {
+  return signToken({ userId, role, sessionId }, process.env.JWT_SECRET!, {
     expiresIn: "15m",
   });
 };
 
-export const generateRefreshToken = (userId: string, role: UserRole): string => {
-  return signToken({ userId, role }, process.env.JWT_REFRESH_SECRET!, {
-    expiresIn: "7d",
-  });
+export const generateRefreshToken = (
+  userId: string,
+  role: UserRole,
+  sessionId: string
+): string => {
+  return signToken(
+    { userId, role, sessionId },
+    process.env.JWT_REFRESH_SECRET!,
+    {
+      expiresIn: "7d",
+    }
+  );
 };
 
 export const generateVerificationToken = (userId: string): string => {
@@ -39,7 +56,7 @@ export const generateTempPassword = (): string => {
 
 export const verifyRefreshToken = (
   token: string
-): { userId: string; role: UserRole } => {
+): { userId: string; role: UserRole; sessionId?: string } => {
   return verifyToken(token, process.env.JWT_REFRESH_SECRET!);
 };
 

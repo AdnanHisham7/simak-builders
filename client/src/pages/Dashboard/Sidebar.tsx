@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import SidebarItem from "./SidebarItem";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
 interface MenuItem {
   name: string;
@@ -26,6 +27,7 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { userType } = useSelector((state: RootState) => state.auth);
+  const { profile } = useCompanyProfile();
 
   const currentPath = location.pathname;
 
@@ -41,6 +43,14 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
   };
 
   const displayRole = userType ? formatRoleName(userType) : "";
+  const companyName = profile?.name || "Simak Builders";
+  const companyInitials = companyName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 
   return (
     <div className="flex h-full flex-col bg-white/90 backdrop-blur-xl">
@@ -49,13 +59,21 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
           collapsed ? "justify-center" : "px-4"
         }`}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-900 text-sm font-bold tracking-wide text-white shadow-glow-brand">
-          SB
-        </div>
+        {profile?.logo ? (
+          <img
+            src={profile.logo}
+            alt={companyName}
+            className="h-9 w-9 shrink-0 rounded-lg object-cover shadow-glow-brand"
+          />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-900 text-sm font-bold tracking-wide text-white shadow-glow-brand">
+            {companyInitials || "SB"}
+          </div>
+        )}
         {!collapsed && (
           <div className="ml-3 min-w-0">
             <div className="truncate text-sm font-semibold text-console-text">
-              Simak Builders
+              {companyName}
             </div>
             <div className="truncate text-xs text-console-muted">{displayRole}</div>
           </div>

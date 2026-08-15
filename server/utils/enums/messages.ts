@@ -29,4 +29,11 @@ export enum Messages {
   REFRESH_TOKEN_INVALID = "Invalid refresh token",
   TOKEN_MISSING = "Access token is missing",
   INVALID_TOKEN = "Invalid token",
+
+  // Auth: Password / sessions
+  CURRENT_PASSWORD_INCORRECT = "Current password is incorrect.",
+  PASSWORD_CHANGED = "Password changed successfully.",
+  SESSION_NOT_FOUND = "Session not found.",
+  SESSION_REVOKED = "Session revoked successfully.",
+  OTHER_SESSIONS_LOGGED_OUT = "All other sessions have been logged out.",
 }

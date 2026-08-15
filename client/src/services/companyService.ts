@@ -49,3 +49,47 @@ export const getAmountToBeReceived =
     const response = await privateClient.get("/company/amount-to-be-received");
     return response.data;
   };
+
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  logo: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
+  country: string;
+  phone: string;
+  email: string;
+  website: string;
+  taxId: string;
+  description: string;
+}
+
+export const getCompanyProfile = async (): Promise<CompanyProfile> => {
+  const response = await privateClient.get("/company/profile");
+  return response.data;
+};
+
+export type CompanyProfileUpdatePayload = Partial<
+  Omit<CompanyProfile, "id" | "logo">
+> & { logo?: File };
+
+export const updateCompanyProfile = async (
+  payload: CompanyProfileUpdatePayload,
+): Promise<CompanyProfile> => {
+  const formData = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined) return;
+    if (key === "logo" && value instanceof File) {
+      formData.append("logo", value);
+    } else if (key !== "logo") {
+      formData.append(key, String(value));
+    }
+  });
+
+  const response = await privateClient.put("/company/profile", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return response.data.company;
+};

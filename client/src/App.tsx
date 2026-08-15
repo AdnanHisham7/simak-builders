@@ -33,6 +33,7 @@ import Sites from "./features/sites/Sites.tsx";
 import Stocks from "./features/stocks/Stocks.tsx";
 import Reports from "./features/reports/Reports.tsx";
 import SettingsPage from "./features/settings/Settings.tsx";
+import PortfolioAdmin from "./pages/admin/Portfolio.tsx";
 import Profile from "./pages/profile/Profile.tsx";
 import SiteDetail from "./features/sites/SiteDetail.tsx";
 import Salary from "./features/salary/Salary.tsx";
@@ -119,6 +120,7 @@ const App: React.FC = () => {
             <Route path="sites/:siteId" element={<SiteDetail />} />
             <Route path="stocks" element={<Stocks />} />
             <Route path="reports" element={<Reports />} />
+            <Route path="portfolio" element={<PortfolioAdmin />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="profile" element={<Profile />} />
             <Route

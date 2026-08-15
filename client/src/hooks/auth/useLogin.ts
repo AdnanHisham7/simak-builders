@@ -9,6 +9,7 @@ import {
   resendVerificationEmail,
 } from "@/services/authService";
 import { setUser } from "@/store/slices/authSlice";
+import { getLandingPagePath } from "@/constants/landingPages";
 
 export const useLogin = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -27,7 +28,12 @@ export const useLogin = () => {
     try {
       const data = await login(email, password);
       dispatch(setUser({ user: data.user, userType: data.user.role }));
-      navigate("/");
+      navigate(
+        getLandingPagePath(
+          data.user.role,
+          data.user.preferences?.defaultLandingPage,
+        ),
+      );
     } catch (error: any) {
       if (error?.response?.status === 403) {
         setIsEmailNotVerified(true);

@@ -1,8 +1,19 @@
 import logoHorizontal from "@/assets/logo-horizontal-light.svg";
 import { useNavigate } from "react-router-dom";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
 
 const Footer = () => {
   const navigate = useNavigate();
+  const { profile } = useCompanyProfile();
+
+  const companyName = profile?.name || "Simak Builders";
+  const email = profile?.email || "support@simakbuilders.com";
+  const phone = profile?.phone || "+91 97472 16052";
+  const addressLine = [profile?.address, profile?.city, profile?.state]
+    .filter(Boolean)
+    .join(", ");
+  const website = profile?.website;
+
   return (
     <footer className="bg-gray-900 text-white pt-16 pb-6 px-6 md:px-20">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
@@ -119,12 +130,24 @@ const Footer = () => {
         <div>
           <h3 className="text-lg font-semibold mb-6">Get In Touch</h3>
           <ul className="space-y-3 text-gray-400">
-            <li>support@simakbuilders.com</li>
-            <li>+91 97472 16052</li>
+            <li>{email}</li>
+            <li>{phone}</li>
+            {website && (
+              <li>
+                <a
+                  href={website.startsWith("http") ? website : `https://${website}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-white transition"
+                >
+                  {website}
+                </a>
+              </li>
+            )}
             <li>
-              Simak Builders
+              {companyName}
               <br />
-              Nediyiruppu, Kerala, India
+              {addressLine || "Nediyiruppu, Kerala, India"}
             </li>
           </ul>
         </div>
@@ -132,7 +155,7 @@ const Footer = () => {
 
       <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row justify-between items-center">
         <p className="text-gray-500 mb-4 md:mb-0">
-          © 2025 Simak. All rights reserved
+          © {new Date().getFullYear()} {companyName}. All rights reserved
         </p>
         <div className="flex space-x-6">
           <a

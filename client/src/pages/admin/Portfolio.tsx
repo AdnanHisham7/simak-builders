@@ -1,273 +1,325 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Search,
   Plus,
-  Edit2,
+  Search,
+  Pencil,
   Trash2,
-  Image,
-  Tag,
-  FileText,
-  Calendar,
+  Eye,
+  EyeOff,
+  Layers,
 } from "lucide-react";
+import { toast } from "sonner";
+import { Card } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Badge from "@/components/ui/Badge";
+import Skeleton from "@/components/ui/Skeleton";
+import ConfirmModal from "@/components/ui/ConfirmModal";
+import EmptyState from "@/components/ui/EmptyState";
 import {
-  getProjects,
-  createProject,
-  updateProject,
+  Project,
+  getAllProjects,
+  setProjectPublishStatus,
   deleteProject,
 } from "@/services/portfolioService";
-
-interface Project {
-  id: string;
-  title: string;
-  imagePath: string;
-  category: string;
-  description: string;
-  createdAt: string;
-}
-
-interface ProjectFormData {
-  title: string;
-  imagePath: string;
-  category: string;
-  description: string;
-}
+import { getSites, Site } from "@/services/siteService";
+import ConvertToPortfolioModal from "@/features/sites/ConvertToPortfolioModal";
+import ProjectFormModal from "./components/ProjectFormModal";
+import SitePickerModal from "./components/SitePickerModal";
 
 const Portfolio: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
-  const [isEditMode, setIsEditMode] = useState<boolean>(false);
-  const [currentProject, setCurrentProject] = useState<Project | null>(null);
-  const [formData, setFormData] = useState<ProjectFormData>({
-    title: "",
-    imagePath: "",
-    category: "",
-    description: "",
-  });
-  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
+
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+
+  const [isSitePickerOpen, setIsSitePickerOpen] = useState(false);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [sitesLoading, setSitesLoading] = useState(false);
+  const [convertingSite, setConvertingSite] = useState<Site | null>(null);
+
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const loadProjects = async () => {
+    setLoading(true);
+    try {
+      const data = await getAllProjects();
+      setProjects(data);
+    } catch (err) {
+      toast.error("Failed to load portfolio projects");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        const data = await getProjects();
-        setProjects(
-          data.map((project: any) => ({ ...project, id: project._id }))
-        );
-      } catch (err) {
-        setError("Failed to fetch projects");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+    loadProjects();
   }, []);
 
-  const filteredProjects = projects.filter((project) =>
-    project.title.toLowerCase().includes(searchTerm.toLowerCase())
+  const convertedSiteIds = useMemo(
+    () =>
+      new Set(
+        projects
+          .map((project) => {
+            const source = project.sourceSite;
+            if (!source) return undefined;
+            return typeof source === "string" ? source : source._id;
+          })
+          .filter((id): id is string => !!id),
+      ),
+    [projects],
   );
 
-  const openCreateModal = () => {
-    setIsEditMode(false);
-    setFormData({ title: "", imagePath: "", category: "", description: "" });
-    setIsModalOpen(true);
-  };
-
-  const openEditModal = (project: Project) => {
-    setIsEditMode(true);
-    setCurrentProject(project);
-    setFormData({
-      title: project.title,
-      imagePath: project.imagePath,
-      category: project.category,
-      description: project.description,
-    });
-    setIsModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setIsModalOpen(false);
-    setCurrentProject(null);
-  };
-
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
-  };
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const openSitePicker = async () => {
+    setIsSitePickerOpen(true);
+    setSitesLoading(true);
     try {
-      if (isEditMode && currentProject) {
-        await updateProject(currentProject.id, formData);
-      } else {
-        await createProject(formData);
-      }
-      closeModal();
-      const data = await getProjects();
-      setProjects(
-        data.map((project: any) => ({ ...project, id: project._id }))
-      );
+      const data = await getSites();
+      setSites(data);
     } catch (err) {
-      setError("Operation failed");
+      toast.error("Failed to load sites");
+    } finally {
+      setSitesLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm("Are you sure you want to delete this project?")) {
-      try {
-        await deleteProject(id);
-        const data = await getProjects();
-        setProjects(
-          data.map((project: any) => ({ ...project, id: project._id }))
-        );
-      } catch (err) {
-        setError("Failed to delete project");
-      }
+  const filteredProjects = projects.filter((project) => {
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "published" ? project.isPublished : !project.isPublished);
+    const matchesSearch =
+      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.location.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesStatus && matchesSearch;
+  });
+
+  const handleTogglePublish = async (project: Project) => {
+    setTogglingId(project.id);
+    try {
+      const updated = await setProjectPublishStatus(project.id, !project.isPublished);
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+      toast.success(updated.isPublished ? "Project published" : "Project unpublished");
+    } catch (err) {
+      toast.error("Failed to update publish status");
+    } finally {
+      setTogglingId(null);
     }
   };
 
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>{error}</div>;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteProject(deleteTarget.id);
+      setProjects((prev) => prev.filter((p) => p.id !== deleteTarget.id));
+      toast.success("Project deleted");
+    } catch (err) {
+      toast.error("Failed to delete project");
+    } finally {
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Project Portfolio</h1>
-        <button
-          onClick={openCreateModal}
-          className="px-4 py-2 bg-blue-500 text-white rounded flex items-center"
-        >
-          <Plus className="w-5 h-5 mr-2" />
-          Add Project
-        </button>
-      </div>
-
-      <div className="mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search projects..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 pr-4 py-2 border rounded w-full"
-          />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-console-text">Portfolio</h1>
+          <p className="mt-0.5 text-sm text-console-muted">
+            Manage the projects shown on the public portfolio page
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={openSitePicker}>
+            <Layers size={15} /> Convert a site
+          </Button>
+          <Button
+            onClick={() => {
+              setEditingProject(null);
+              setIsFormModalOpen(true);
+            }}
+          >
+            <Plus size={15} /> New project
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProjects.map((project) => (
-          <div key={project.id} className="bg-white p-4 rounded shadow">
-            <img
-              src={project.imagePath}
-              alt={project.title}
-              className="w-full h-48 object-cover mb-4"
+      <Card>
+        <div className="mb-5 flex flex-wrap items-center gap-3">
+          <div className="relative max-w-sm flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-console-muted" />
+            <input
+              type="text"
+              placeholder="Search projects..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full rounded-lg border border-console-border py-2.5 pl-9 pr-3.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
-            <h3 className="text-xl font-semibold mb-2">{project.title}</h3>
-            <p className="text-gray-600 mb-2">{project.category}</p>
-            <p className="text-gray-700 mb-4">{project.description}</p>
-            <div className="flex justify-between">
-              <button
-                onClick={() => openEditModal(project)}
-                className="text-blue-500"
-              >
-                <Edit2 className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => handleDelete(project.id)}
-                className="text-red-500"
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
-            </div>
           </div>
-        ))}
-      </div>
-
-      {isModalOpen && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-6 rounded shadow-lg w-full max-w-md">
-            <h2 className="text-2xl font-bold mb-4">
-              {isEditMode ? "Edit Project" : "Add New Project"}
-            </h2>
-            <form onSubmit={handleFormSubmit}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Title
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  value={formData.title}
-                  onChange={handleInputChange}
-                  className="mt-1 p-2 border rounded w-full"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Image Path
-                </label>
-                <input
-                  type="text"
-                  name="imagePath"
-                  value={formData.imagePath}
-                  onChange={handleInputChange}
-                  className="mt-1 p-2 border rounded w-full"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Category
-                </label>
-                <input
-                  type="text"
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="mt-1 p-2 border rounded w-full"
-                  required
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  className="mt-1 p-2 border rounded w-full"
-                  required
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="px-4 py-2 bg-gray-300 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-500 text-white rounded"
-                >
-                  {isEditMode ? "Update" : "Create"}
-                </button>
-              </div>
-            </form>
+          <div className="flex gap-1.5 rounded-lg border border-console-border p-1">
+            {(["all", "published", "draft"] as const).map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                  statusFilter === status
+                    ? "bg-brand-700 text-white"
+                    : "text-console-muted hover:text-console-text"
+                }`}
+              >
+                {status}
+              </button>
+            ))}
           </div>
         </div>
+
+        {loading ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} className="h-64 w-full rounded-glass" />
+            ))}
+          </div>
+        ) : filteredProjects.length === 0 ? (
+          <EmptyState
+            title="No portfolio projects yet"
+            description="Create a project manually, or convert an existing site into one."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredProjects.map((project) => (
+              <div
+                key={project.id}
+                className="overflow-hidden rounded-glass border border-console-border bg-console-surface"
+              >
+                <div className="relative aspect-video">
+                  <img
+                    src={project.imagePath}
+                    alt={project.title}
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute left-2 top-2 flex gap-1.5">
+                    <Badge variant={project.isPublished ? "success" : "neutral"}>
+                      {project.isPublished ? "Published" : "Draft"}
+                    </Badge>
+                    {project.sourceSite && (
+                      <Badge variant="info">
+                        <Layers size={11} /> From site
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="truncate text-sm font-semibold text-console-text">
+                      {project.title}
+                    </h3>
+                    <span className="shrink-0 text-xs text-console-muted">
+                      {project.category}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs text-console-muted">
+                    {project.description}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between border-t border-console-border pt-3">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingProject(project);
+                          setIsFormModalOpen(true);
+                        }}
+                        className="rounded-lg p-1.5 text-console-muted hover:bg-console-bg hover:text-console-text"
+                        title="Edit"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(project)}
+                        className="rounded-lg p-1.5 text-console-muted hover:bg-danger-50 hover:text-danger-600"
+                        title="Delete"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePublish(project)}
+                      disabled={togglingId === project.id}
+                      className="flex items-center gap-1.5 text-xs font-medium text-brand-700 hover:text-brand-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {project.isPublished ? (
+                        <>
+                          <EyeOff size={13} /> Unpublish
+                        </>
+                      ) : (
+                        <>
+                          <Eye size={13} /> Publish
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+
+      {isFormModalOpen && (
+        <ProjectFormModal
+          isOpen={isFormModalOpen}
+          project={editingProject}
+          onClose={() => setIsFormModalOpen(false)}
+          onSaved={() => {
+            setIsFormModalOpen(false);
+            loadProjects();
+          }}
+        />
       )}
+
+      {isSitePickerOpen && (
+        <SitePickerModal
+          isOpen={isSitePickerOpen}
+          sites={sites}
+          loading={sitesLoading}
+          convertedSiteIds={convertedSiteIds}
+          onClose={() => setIsSitePickerOpen(false)}
+          onSelect={(site) => {
+            setIsSitePickerOpen(false);
+            setConvertingSite(site);
+          }}
+        />
+      )}
+
+      {convertingSite && (
+        <ConvertToPortfolioModal
+          isOpen={!!convertingSite}
+          site={convertingSite}
+          onClose={() => setConvertingSite(null)}
+          onConverted={() => {
+            setConvertingSite(null);
+            loadProjects();
+          }}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDelete}
+        title="Delete this project?"
+        message={`"${deleteTarget?.title}" will be permanently removed from the portfolio.`}
+        variant="danger"
+        confirmText="Delete"
+        isLoading={deleting}
+      />
     </div>
   );
 };
