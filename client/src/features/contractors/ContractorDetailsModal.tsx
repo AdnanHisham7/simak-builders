@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { getContractorTransactions } from "@/services/contractorService";
 import AddTransactionModal from "./AddContractorTransactionModal";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Contractor {
   id: string;
@@ -55,6 +56,7 @@ const ContractorDetailsModal: React.FC<ContractorDetailsModalProps> = ({
   isAnimating,
   handleAddTransaction,
 }) => {
+  const { formatDecimal } = usePreferences();
   const [isAddTransactionModalOpen, setIsAddTransactionModalOpen] =
     useState(false);
 
@@ -176,7 +178,7 @@ const ContractorDetailsModal: React.FC<ContractorDetailsModalProps> = ({
                                   : "text-red-600"
                               }`}
                             >
-                              Balance: ₹{assignment.balance.toFixed(2)}
+                              Balance: ₹{formatDecimal(assignment.balance)}
                             </p>
                           </div>
                         </div>

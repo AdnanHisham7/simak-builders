@@ -35,6 +35,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Tooltip from "@/components/ui/Tooltip";
 import CopyButton from "@/components/ui/CopyButton";
 import GradientStatCard from "@/components/ui/GradientStatCard";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface EmployeeFormData {
   name: string;
@@ -59,6 +60,7 @@ interface Attendance {
 type SortField = "name" | "email" | "position";
 
 const Employees: React.FC = () => {
+  const { formatNumber, formatDate, formatDateTime, formatDecimal } = usePreferences();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -334,10 +336,7 @@ const Employees: React.FC = () => {
       filtered = filtered.filter(
         (record) =>
           record.site.name.toLowerCase().includes(lowerSearch) ||
-          new Date(record.date)
-            .toLocaleDateString()
-            .toLowerCase()
-            .includes(lowerSearch) ||
+          formatDate(record.date).toLowerCase().includes(lowerSearch) ||
           record.markedBy.name.toLowerCase().includes(lowerSearch)
       );
     }
@@ -384,7 +383,7 @@ const Employees: React.FC = () => {
             <StatCard label="Total Employees" value={employees.length} icon={Users} />
             <StatCard
               label="Total Daily Wage"
-              value={`₹${employees.reduce((sum, e) => sum + (e.dailyWage || 0), 0).toLocaleString()}`}
+              value={`₹${formatNumber(employees.reduce((sum, e) => sum + (e.dailyWage || 0), 0))}`}
               icon={BarChart3}
             />
             <GradientStatCard
@@ -506,7 +505,7 @@ const Employees: React.FC = () => {
                           <div className="flex items-center gap-3">
                             <div
                               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-800"
-                              title={`Total paid salary: ₹${(employee.totalPaidSalary || 0).toLocaleString("en-IN")}`}
+                              title={`Total paid salary: ₹${formatNumber(employee.totalPaidSalary || 0)}`}
                             >
                               {employee.name.charAt(0).toUpperCase()}
                             </div>
@@ -697,7 +696,7 @@ const Employees: React.FC = () => {
         {totalSalary !== null && (
           <div className="mb-6 rounded-console border border-success-100 bg-success-50 p-4">
             <p className="text-sm font-semibold text-success-700">
-              Total salary: ₹{totalSalary.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+              Total salary: ₹{formatDecimal(totalSalary)}
             </p>
             <Button size="sm" variant="secondary" className="mt-3" onClick={handleConfirmPayment}>
               Confirm payment
@@ -761,21 +760,21 @@ const Employees: React.FC = () => {
                   <tr key={record.id}>
                     <td className="px-4 py-3 text-sm text-console-text">{record.site.name}</td>
                     <td className="px-4 py-3 text-sm text-console-text">
-                      {new Date(record.date).toLocaleDateString()}
+                      {formatDate(record.date)}
                     </td>
                     <td className="px-4 py-3">{getStatusBadge(record.status)}</td>
                     <td className="px-4 py-3 text-sm text-console-text">
-                      ₹{record.dailyWage.toLocaleString("en-IN")}
+                      ₹{formatNumber(record.dailyWage)}
                     </td>
                     <td className="px-4 py-3 text-sm text-console-text">
                       {record.isPaid ? "Yes" : "No"}
                     </td>
                     <td className="px-4 py-3 text-sm text-console-muted">
-                      {record.isPaid ? new Date(record.updatedAt).toLocaleString() : "-"}
+                      {record.isPaid ? formatDateTime(record.updatedAt) : "-"}
                     </td>
                     <td className="px-4 py-3 text-sm text-console-text">{record.markedBy.name}</td>
                     <td className="px-4 py-3 text-sm text-console-muted">
-                      {new Date(record.createdAt).toLocaleString()}
+                      {formatDateTime(record.createdAt)}
                     </td>
                   </tr>
                 ))}

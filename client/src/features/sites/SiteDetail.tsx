@@ -51,6 +51,7 @@ import {
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
+import { usePreferences } from "@/hooks/usePreferences";
 import {
   getPurchasesBySite,
   verifyPurchase,
@@ -137,6 +138,7 @@ const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> =
 );
 
 const SiteDetail: React.FC = () => {
+  const { formatDate, formatNumber, formatDecimal } = usePreferences();
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
   const { user, userType } = useSelector((state: RootState) => state.auth);
@@ -916,7 +918,7 @@ const SiteDetail: React.FC = () => {
     return colors[level] || colors[0];
   };
 
-  const formatDate = (dateString: string) => {
+  const formatHeatmapDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       weekday: "short",
       year: "numeric",
@@ -1198,7 +1200,7 @@ const SiteDetail: React.FC = () => {
           prefix="₹"
           tone="success"
           icon={DollarSign}
-          helperText={`Balance: ₹${(site.budget - (site.expenses || 0)).toLocaleString("en-IN")}`}
+          helperText={`Balance: ₹${formatNumber(site.budget - (site.expenses || 0))}`}
           onClick={() => setIsClientPaymentsModalOpen(true)}
           action={
             userType === "admin" || userType === "siteManager"
@@ -1508,7 +1510,7 @@ const SiteDetail: React.FC = () => {
                             onClick={() => day && handleDayClick(day.date)}
                             title={
                               day
-                                ? `${formatDate(day.date)}: ${day.count?.toFixed(1)} effective attendance`
+                                ? `${formatHeatmapDate(day.date)}: ${day.count?.toFixed(1)} effective attendance`
                                 : ""
                             }
                           />
@@ -1559,7 +1561,7 @@ const SiteDetail: React.FC = () => {
                 <div>
                   <span className="text-sm text-console-muted">Total amount of matching items:</span>
                   <span className="ml-2 font-semibold text-info-800">
-                    ₹{purchaseSearchAggregates.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    ₹{formatDecimal(purchaseSearchAggregates.totalAmount)}
                   </span>
                 </div>
                 <button
@@ -1607,10 +1609,10 @@ const SiteDetail: React.FC = () => {
                             )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                            {new Date(purchase.date || purchase.createdAt).toLocaleDateString()}
+                            {formatDate(purchase.date || purchase.createdAt)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-console-text">
-                            ₹{purchase.totalAmount.toLocaleString("en-IN")}
+                            ₹{formatNumber(purchase.totalAmount)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
                             {purchase.vendor?.name || purchase.vendor}
@@ -1837,11 +1839,11 @@ const SiteDetail: React.FC = () => {
                                           <div>
                                             <div className="text-xs text-console-muted">Unit price</div>
                                             <div className="text-sm font-medium text-console-text">
-                                              ₹{parseFloat(item.price).toFixed(2)}
+                                              ₹{formatDecimal(parseFloat(item.price))}
                                             </div>
                                           </div>
                                           <div className="text-base font-bold text-success-700">
-                                            ₹{parseFloat(item.totalAmount).toFixed(2)}
+                                            ₹{formatDecimal(parseFloat(item.totalAmount))}
                                           </div>
                                         </div>
                                       )}
@@ -1865,9 +1867,7 @@ const SiteDetail: React.FC = () => {
                                   </div>
                                   <span className="text-lg font-semibold text-warning-800">
                                     ₹
-                                    {parseFloat(purchase.transportationFee || 0).toLocaleString("en-IN", {
-                                      minimumFractionDigits: 2,
-                                    })}
+                                    {formatDecimal(parseFloat(purchase.transportationFee || 0))}
                                   </span>
                                 </div>
                               )}
@@ -2013,7 +2013,7 @@ const SiteDetail: React.FC = () => {
                   {filteredMiscExpenses.map((exp: any) => (
                     <tr key={exp._id}>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        {new Date(exp.date).toLocaleDateString()}
+                        {formatDate(exp.date)}
                       </td>
                       <td className="px-4 py-3.5 text-sm capitalize text-console-text">
                         {editingMiscId === exp._id ? (
@@ -2045,13 +2045,13 @@ const SiteDetail: React.FC = () => {
                         )}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        ₹{exp.amount.toLocaleString()}
+                        ₹{formatNumber(exp.amount)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        ₹{(exp.tip || 0).toLocaleString()}
+                        ₹{formatNumber(exp.tip || 0)}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm font-medium text-console-text">
-                        ₹{(exp.amount + (exp.tip || 0)).toLocaleString()}
+                        ₹{formatNumber(exp.amount + (exp.tip || 0))}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5">
                         <Badge variant={exp.status === "verified" ? "success" : "warning"}>
@@ -2126,7 +2126,7 @@ const SiteDetail: React.FC = () => {
                             {exp.notes === "from purchase" && exp.purchaseId ? (
                               <span
                                 className="inline-flex cursor-help items-center gap-1 underline decoration-dotted transition-colors hover:text-brand-700"
-                                title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${exp.purchaseId.totalAmount?.toLocaleString()}\nDate: ${new Date(exp.purchaseId.date).toLocaleDateString()}`}
+                                title={`Purchase ID: ${exp.purchaseId._id}\nAmount: ₹${formatNumber(exp.purchaseId.totalAmount)}\nDate: ${formatDate(exp.purchaseId.date)}`}
                               >
                                 from purchase
                                 <span className="rounded-full bg-info-100 px-1.5 py-0.5 font-mono text-[10px] text-info-700">
@@ -2238,7 +2238,7 @@ const SiteDetail: React.FC = () => {
                               <span>{doc.uploadedBy.name}</span>
                               <span>•</span>
                               <Calendar size={11} />
-                              <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
+                              <span>{formatDate(doc.uploadDate)}</span>
                             </div>
                           </div>
                         </div>

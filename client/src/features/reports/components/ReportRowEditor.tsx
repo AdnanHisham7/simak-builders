@@ -12,6 +12,7 @@ import {
   updateRowAmount,
 } from "./editableReport";
 import EditableAmountField from "./EditableAmountField";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface ReportRowEditorProps {
   rows: EditableReportRow[];
@@ -28,6 +29,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
   onToggleRoundAmounts,
   disabled = false,
 }) => {
+  const { formatNumber } = usePreferences();
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [mergeModalOpen, setMergeModalOpen] = useState(false);
   const [mergeName, setMergeName] = useState("");
@@ -305,7 +307,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                     onCommit={(amount) => onRowsChange(updateRowAmount(rows, row.id, amount))}
                     hint={
                       roundAmounts && roundToCents(row.amount) !== displayAmount(row.amount, true)
-                        ? `rounds to ₹${displayAmount(row.amount, true).toLocaleString("en-IN")}`
+                        ? `rounds to ₹${formatNumber(displayAmount(row.amount, true))}`
                         : undefined
                     }
                   />

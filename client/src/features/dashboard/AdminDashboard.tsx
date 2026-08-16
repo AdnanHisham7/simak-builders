@@ -52,6 +52,7 @@ import GradientStatCard from "@/components/ui/GradientStatCard";
 import HoverTooltip from "@/components/ui/Tooltip";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface DashboardData {
   totalEmployees: number;
@@ -157,11 +158,8 @@ const ECOSYSTEM_ICON_BG: Record<string, string> = {
   danger: "bg-danger-50 text-danger-700",
 };
 
-const formatNumber = (num: number | undefined) => {
-  return num?.toLocaleString("en-IN") || "0";
-};
-
 const AdminDashboard = () => {
+  const { formatNumber, formatDate } = usePreferences();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -592,7 +590,7 @@ const AdminDashboard = () => {
                               ₹{formatNumber(transaction.amount)}
                             </span>
                             <span className="rounded-full bg-console-bg px-2 py-0.5 text-xs text-console-muted">
-                              {new Date(transaction.createdAt).toLocaleDateString()}
+                              {formatDate(transaction.createdAt)}
                             </span>
                           </div>
                         </div>

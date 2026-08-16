@@ -38,6 +38,7 @@ import Tooltip from "@/components/ui/Tooltip";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Vendor {
   id: string;
@@ -81,10 +82,12 @@ interface VendorFormData {
   phone: string;
 }
 
-const formatCurrency = (amount: number | undefined) =>
-  `₹${(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrencyBase = (amount: number | undefined, numberFormat: string) =>
+  `₹${(amount || 0).toLocaleString(numberFormat, { maximumFractionDigits: 2 })}`;
 
 const Vendors: React.FC = () => {
+  const { numberFormat, formatDate } = usePreferences();
+  const formatCurrency = (amount: number | undefined) => formatCurrencyBase(amount, numberFormat);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -400,7 +403,7 @@ const Vendors: React.FC = () => {
                       <CopyButton value={vendor.phone} label="Phone" />
                     </div>
                     <div className="flex items-center gap-2 text-sm text-console-muted">
-                      <Calendar size={13} /> Since {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : "N/A"}
+                      <Calendar size={13} /> Since {vendor.createdAt ? formatDate(vendor.createdAt) : "N/A"}
                     </div>
                   </div>
                   <div className="mb-4 grid grid-cols-3 gap-2 rounded-console bg-console-bg p-3 text-center">
@@ -478,7 +481,7 @@ const Vendors: React.FC = () => {
                             <div>
                               <div className="text-sm font-medium text-console-text">{vendor.name}</div>
                               <div className="text-xs text-console-muted">
-                                Since {vendor.createdAt ? new Date(vendor.createdAt).toLocaleDateString() : "N/A"}
+                                Since {vendor.createdAt ? formatDate(vendor.createdAt) : "N/A"}
                               </div>
                             </div>
                           </div>

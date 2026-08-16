@@ -21,6 +21,7 @@ import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
 import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface AddPurchaseModalProps {
   siteId: string | null;
@@ -47,6 +48,7 @@ const fieldClass = (hasError?: boolean) =>
   );
 
 const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({ siteId, isAdmin = false, onClose }) => {
+  const { formatDecimal } = usePreferences();
   const [currentStep, setCurrentStep] = useState(1);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [selectedVendor, setSelectedVendor] = useState<string>("");
@@ -709,7 +711,7 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({ siteId, isAdmin = f
             <div className="flex items-center justify-between">
               <span className="text-base font-semibold text-console-text">Total purchase amount:</span>
               <span className="text-2xl font-bold text-success-700">
-                ₹{totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                ₹{formatDecimal(totalAmount)}
               </span>
             </div>
           </div>

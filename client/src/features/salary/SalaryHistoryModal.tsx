@@ -15,6 +15,7 @@ import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import Avatar from "@/components/ui/Avatar";
 import { UserWithSalary } from "@/services/userService";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface SalaryHistoryModalProps {
   isOpen: boolean;
@@ -35,8 +36,8 @@ interface SalaryHistoryModalProps {
   loadingStates: { [key: string]: boolean };
 }
 
-const formatCurrency = (amount: number | undefined) =>
-  `₹${(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrencyBase = (amount: number | undefined, numberFormat: string) =>
+  `₹${(amount || 0).toLocaleString(numberFormat, { maximumFractionDigits: 2 })}`;
 
 const SalaryHistoryModal: React.FC<SalaryHistoryModalProps> = ({
   isOpen,
@@ -46,6 +47,8 @@ const SalaryHistoryModal: React.FC<SalaryHistoryModalProps> = ({
   onVerify,
   loadingStates,
 }) => {
+  const { numberFormat, formatDate } = usePreferences();
+  const formatCurrency = (amount: number | undefined) => formatCurrencyBase(amount, numberFormat);
   const [editableAmounts, setEditableAmounts] = useState<{
     [key: string]: number;
   }>({});
@@ -180,11 +183,7 @@ const SalaryHistoryModal: React.FC<SalaryHistoryModalProps> = ({
                           <Calendar size={13} /> Date
                         </span>
                         <p className="mt-1 text-sm font-medium text-console-text">
-                          {new Date(sa.date).toLocaleDateString("en-IN", {
-                            year: "numeric",
-                            month: "short",
-                            day: "numeric",
-                          })}
+                          {formatDate(sa.date)}
                         </p>
                       </div>
 

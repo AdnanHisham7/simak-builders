@@ -8,6 +8,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import Badge from "@/components/ui/Badge";
 import Tooltip from "@/components/ui/Tooltip";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface ClientPayment {
   _id: string;
@@ -30,6 +31,7 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
   onClose,
   onPaymentChanged,
 }) => {
+  const { formatNumber, formatDate } = usePreferences();
   const [payments, setPayments] = useState<ClientPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
@@ -105,10 +107,10 @@ const ClientPaymentsModal: React.FC<ClientPaymentsModalProps> = ({
                 {payments.map((payment) => (
                   <tr key={payment._id}>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                      {new Date(payment.transactionDate || payment.createdAt).toLocaleDateString()}
+                      {formatDate(payment.transactionDate || payment.createdAt)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-console-text">
-                      ₹{payment.amount.toLocaleString("en-IN")}
+                      ₹{formatNumber(payment.amount)}
                     </td>
                     <td className="max-w-xs truncate px-4 py-3.5 text-sm text-console-muted">
                       {payment.notes || "-"}

@@ -4,14 +4,10 @@ import { toast } from "sonner";
 import { Card } from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { LoginActivityEntry, getLoginActivity } from "@/services/authService";
-
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+import { usePreferences } from "@/hooks/usePreferences";
 
 const LoginActivityCard: React.FC = () => {
+  const { formatDateTime } = usePreferences();
   const [logins, setLogins] = useState<LoginActivityEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,7 +64,7 @@ const LoginActivityCard: React.FC = () => {
               {logins.map((entry) => (
                 <tr key={entry.id} className="border-b border-console-border last:border-b-0">
                   <td className="py-2.5 pr-4 text-console-text">
-                    {formatDate(entry.timestamp)}
+                    {formatDateTime(entry.timestamp)}
                   </td>
                   <td className="py-2.5 pr-4 text-console-text">{entry.device}</td>
                   <td className="py-2.5 pr-4 font-mono text-xs text-console-muted">

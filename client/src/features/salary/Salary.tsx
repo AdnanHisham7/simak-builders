@@ -41,9 +41,10 @@ import GradientStatCard from "@/components/ui/GradientStatCard";
 import CopyButton from "@/components/ui/CopyButton";
 import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
-const formatCurrency = (amount: number | undefined) =>
-  `₹${(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrencyBase = (amount: number | undefined, numberFormat: string) =>
+  `₹${(amount || 0).toLocaleString(numberFormat, { maximumFractionDigits: 2 })}`;
 
 const roleBadgeVariant = (
   role: string
@@ -78,6 +79,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 ];
 
 const Salary: React.FC = () => {
+  const { numberFormat } = usePreferences();
+  const formatCurrency = (amount: number | undefined) => formatCurrencyBase(amount, numberFormat);
   const [users, setUsers] = useState<UserWithSalary[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);

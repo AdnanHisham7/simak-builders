@@ -3,6 +3,7 @@ import { Receipt } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Transaction {
   date: string;
@@ -39,6 +40,7 @@ const TransactionsModal: React.FC<TransactionsModalProps> = ({
   transactions,
   onClose,
 }) => {
+  const { formatDate, formatNumber } = usePreferences();
   const sortedTransactions = useMemo(() => {
     return [...(transactions || [])].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
@@ -70,7 +72,7 @@ const TransactionsModal: React.FC<TransactionsModalProps> = ({
               {sortedTransactions.map((transaction, index) => (
                 <tr key={index} className="hover:bg-console-bg">
                   <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                    {new Date(transaction.date).toLocaleDateString()}
+                    {formatDate(transaction.date)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3.5">
                     <Badge variant="neutral">{typeLabels[transaction.type] ?? transaction.type}</Badge>
@@ -84,7 +86,7 @@ const TransactionsModal: React.FC<TransactionsModalProps> = ({
                     }`}
                   >
                     {transaction.amount >= 0 ? "+" : "-"}₹
-                    {Math.abs(transaction.amount).toLocaleString()}
+                    {formatNumber(Math.abs(transaction.amount))}
                   </td>
                 </tr>
               ))}

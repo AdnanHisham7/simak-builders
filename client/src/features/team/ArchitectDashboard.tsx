@@ -23,6 +23,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Document {
   id: string;
@@ -53,6 +54,7 @@ const TABS = [
 ] as const;
 
 const ArchitectDashboard: React.FC = () => {
+  const { formatDate, formatNumber } = usePreferences();
   const [sites, setSites] = useState<Site[]>([]);
   const [currentUser, setCurrentUser] = useState<UserWithSalary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -225,7 +227,7 @@ const ArchitectDashboard: React.FC = () => {
                             <span>{doc.uploadedBy.name}</span>
                             <span>•</span>
                             <Calendar size={11} />
-                            <span>{new Date(doc.uploadDate).toLocaleDateString()}</span>
+                            <span>{formatDate(doc.uploadDate)}</span>
                           </div>
                         </div>
                       </div>
@@ -260,7 +262,7 @@ const ArchitectDashboard: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="text-right">
             <p className="text-sm font-semibold text-console-text">
-              ₹{currentUser.totalSalary?.toLocaleString() || "0"}
+              ₹{formatNumber(currentUser.totalSalary || 0)}
             </p>
             <p className="text-xs text-console-muted">Total earnings</p>
           </div>
@@ -326,7 +328,7 @@ const ArchitectDashboard: React.FC = () => {
                         <div className="flex-1">
                           <p className="text-sm font-medium text-console-text">{doc.name}</p>
                           <p className="text-xs text-console-muted">
-                            Uploaded {new Date(doc.uploadDate).toLocaleDateString()}
+                            Uploaded {formatDate(doc.uploadDate)}
                           </p>
                         </div>
                       </div>
@@ -375,7 +377,7 @@ const ArchitectDashboard: React.FC = () => {
                             <span>
                               Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
                             </span>
-                            <span>Uploaded {new Date(doc.uploadDate).toLocaleDateString()}</span>
+                            <span>Uploaded {formatDate(doc.uploadDate)}</span>
                           </div>
                         </div>
                       </div>
@@ -414,7 +416,7 @@ const ArchitectDashboard: React.FC = () => {
                 />
                 <DashStatCard
                   title="Pending Verification"
-                  value={`₹${((currentUser.totalSalary || 0) - verifiedSalary).toLocaleString()}`}
+                  value={`₹${formatNumber((currentUser.totalSalary || 0) - verifiedSalary)}`}
                   icon={XCircle}
                   subtitle="Awaiting confirmation"
                 />
@@ -444,12 +446,12 @@ const ArchitectDashboard: React.FC = () => {
                             </div>
                             <div>
                               <p className="text-sm font-medium text-console-text">
-                                ₹{assignment.amount.toLocaleString()}
+                                ₹{formatNumber(assignment.amount)}
                               </p>
                               <div className="mt-0.5 flex items-center gap-3 text-xs text-console-muted">
                                 <span className="flex items-center gap-1">
                                   <Calendar size={11} />
-                                  {new Date(assignment.date).toLocaleDateString()}
+                                  {formatDate(assignment.date)}
                                 </span>
                                 <span className="flex items-center gap-1">
                                   <User size={11} />

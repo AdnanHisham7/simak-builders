@@ -28,6 +28,7 @@ router.delete("/me/deactivation-request", authMiddleware, userController.cancelO
 
 // Admin review of deactivation requests
 router.get("/deactivation-requests", authMiddleware, userController.listDeactivationRequests);
+router.get("/deactivation-requests/count", authMiddleware, userController.getPendingDeactivationCount);
 router.post("/deactivation-requests/:id/review", authMiddleware, userController.reviewDeactivationRequest);
 
 // Managers

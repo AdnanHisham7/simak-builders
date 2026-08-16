@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Check, ChevronRight, PackageSearch, ArrowRightLeft } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface RequestTransferModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
   stocks,
   allowedToSites,
 }) => {
+  const { formatDecimal } = usePreferences();
   const [fromSite, setFromSite] = useState("");
   const [toSite, setToSite] = useState("");
   const [stock, setStock] = useState<any>(null);
@@ -224,7 +226,7 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
                     <option value="">Select stock item</option>
                     {filteredStocks.map((s) => (
                       <option key={s._id} value={s._id}>
-                        {s.name} (Available: {s.quantity || 0}) • ₹{(s.averagePrice || 0).toFixed(2)}/{s.unit}
+                        {s.name} (Available: {s.quantity || 0}) • ₹{formatDecimal(s.averagePrice || 0)}/{s.unit}
                       </option>
                     ))}
                   </select>
@@ -241,7 +243,7 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
                     <h4 className="font-semibold text-console-text">Selected item: {stock.name}</h4>
                     <p className="text-sm text-console-muted">Available quantity: {stock.quantity || 0} units</p>
                     <p className="text-sm text-console-muted">
-                      Unit price: ₹{(stock.averagePrice || 0).toFixed(2)} / {stock.unit}
+                      Unit price: ₹{formatDecimal(stock.averagePrice || 0)} / {stock.unit}
                     </p>
                   </div>
                 </div>
@@ -289,7 +291,7 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
                   <div className="flex items-center justify-between border-t border-console-border pt-2">
                     <span className="text-console-muted">Estimated value:</span>
                     <span className="font-semibold text-success-700">
-                      ₹{((stock.averagePrice || 0) * (quantity || 0)).toFixed(2)}
+                      ₹{formatDecimal((stock.averagePrice || 0) * (quantity || 0))}
                     </span>
                   </div>
                 </div>
@@ -351,13 +353,13 @@ const RequestTransferModal: React.FC<RequestTransferModalProps> = ({
                     <div className="flex justify-between">
                       <span className="text-success-700">Unit price:</span>
                       <span className="font-medium text-console-text">
-                        ₹{(stock.averagePrice || 0).toFixed(2)} / {stock.unit}
+                        ₹{formatDecimal(stock.averagePrice || 0)} / {stock.unit}
                       </span>
                     </div>
                     <div className="flex justify-between border-t border-success-200 pt-2">
                       <span className="text-success-700">Estimated value:</span>
                       <span className="font-semibold text-success-800">
-                        ₹{((stock.averagePrice || 0) * (quantity || 0)).toFixed(2)}
+                        ₹{formatDecimal((stock.averagePrice || 0) * (quantity || 0))}
                       </span>
                     </div>
                   </div>

@@ -23,6 +23,7 @@ import { SkeletonTable } from "@/components/ui/Skeleton";
 import Modal from "@/components/ui/Modal";
 import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Enquiry {
   _id: string;
@@ -50,6 +51,7 @@ const ListEnquiries: React.FC = () => {
   const [filterSeen, setFilterSeen] = useState<SeenFilter>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const { unseenCount, setUnseenCount } = useDashboardContext();
+  const { formatDate, formatDateTime } = usePreferences();
 
   useEffect(() => {
     const fetchEnquiries = async () => {
@@ -277,7 +279,7 @@ const ListEnquiries: React.FC = () => {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-console-muted">
                       <Calendar size={14} className="shrink-0 text-brand-400" />
-                      {new Date(enquiry.createdAt).toLocaleDateString()}
+                      {formatDate(enquiry.createdAt)}
                     </div>
                     <p className="line-clamp-2 pt-1 text-sm text-console-muted">{enquiry.message}</p>
                   </div>
@@ -326,7 +328,7 @@ const ListEnquiries: React.FC = () => {
                         </td>
                         <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">{enquiry.phone}</td>
                         <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-muted">
-                          {new Date(enquiry.createdAt).toLocaleDateString()}
+                          {formatDate(enquiry.createdAt)}
                         </td>
                         <td className="px-4 py-3.5">
                           {enquiry.isSeen ? (
@@ -396,7 +398,7 @@ const ListEnquiries: React.FC = () => {
                   <span className="text-sm font-medium text-console-text">Date</span>
                 </div>
                 <p className="text-sm text-console-muted">
-                  {new Date(selectedEnquiry.createdAt).toLocaleString()}
+                  {formatDateTime(selectedEnquiry.createdAt)}
                 </p>
               </div>
             </div>

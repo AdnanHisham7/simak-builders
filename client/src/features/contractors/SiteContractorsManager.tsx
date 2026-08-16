@@ -23,6 +23,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import Modal from "@/components/ui/Modal";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Tooltip from "@/components/ui/Tooltip";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Contractor {
   id: string;
@@ -44,6 +45,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
   siteId,
   userType,
 }) => {
+  const { formatNumber, formatDate } = usePreferences();
   const [allContractors, setAllContractors] = useState<Contractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -349,7 +351,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                   </div>
                   <div className="text-sm text-console-muted">{contractor.email}</div>
                   <div className="mt-0.5 text-sm font-medium text-success-700">
-                    Total amount: ₹{getTotalAmountForSite(contractor).toLocaleString("en-IN")}
+                    Total amount: ₹{formatNumber(getTotalAmountForSite(contractor))}
                   </div>
                 </div>
               </div>
@@ -528,12 +530,12 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                     <tr key={tx.id}>
                       <td className="px-4 py-3 text-sm capitalize text-console-text">{tx.type}</td>
                       <td className="px-4 py-3 text-sm font-medium text-console-text">
-                        ₹{tx.amount.toLocaleString("en-IN")}
+                        ₹{formatNumber(tx.amount)}
                       </td>
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.category || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">
-                        {new Date(tx.date).toLocaleDateString()}
+                        {formatDate(tx.date)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Tooltip label="Delete transaction">

@@ -9,6 +9,7 @@ import {
   listDeactivationRequests,
   reviewDeactivationRequest,
 } from "@/services/userService";
+import { useDashboardContext } from "@/context/DashboardContext";
 
 const DeactivationRequestsCard: React.FC = () => {
   const [requests, setRequests] = useState<PendingDeactivationRequest[]>([]);
@@ -18,18 +19,20 @@ const DeactivationRequestsCard: React.FC = () => {
     userId: string;
     decision: "approve" | "reject";
   } | null>(null);
+  const { pendingDeactivationCount, setPendingDeactivationCount } = useDashboardContext();
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await listDeactivationRequests();
       setRequests(data);
+      setPendingDeactivationCount(data.length);
     } catch (err) {
       toast.error("Failed to load deactivation requests");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setPendingDeactivationCount]);
 
   useEffect(() => {
     load();
@@ -46,6 +49,7 @@ const DeactivationRequestsCard: React.FC = () => {
           : "Request rejected",
       );
       setRequests((prev) => prev.filter((r) => r.id !== confirmTarget.userId));
+      setPendingDeactivationCount(Math.max(0, pendingDeactivationCount - 1));
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed to process request");
     } finally {

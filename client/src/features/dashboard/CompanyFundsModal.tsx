@@ -12,6 +12,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import { DollarSign } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface CompanyFundsModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ const CompanyFundsModal: React.FC<CompanyFundsModalProps> = ({
   onClose,
   onUpdated,
 }) => {
+  const { formatNumber, formatDate } = usePreferences();
   const [totalAmount, setTotalAmount] = useState(0);
   const [transactions, setTransactions] = useState<CompanyTransaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,7 @@ const CompanyFundsModal: React.FC<CompanyFundsModalProps> = ({
       onClose={onClose}
       size="lg"
       title="Company Funds"
-      description={`₹${totalAmount.toLocaleString()} available`}
+      description={`₹${formatNumber(totalAmount)} available`}
     >
       <div className="mb-5 flex justify-end">
         <Button variant="secondary" size="sm" onClick={() => setShowAddForm((v) => !v)}>
@@ -152,14 +154,14 @@ const CompanyFundsModal: React.FC<CompanyFundsModalProps> = ({
                 <div>
                   <p className="text-sm font-medium text-console-text">{tx.description || tx.type}</p>
                   <p className="text-xs text-console-muted">
-                    {new Date(tx.date).toLocaleDateString()}
+                    {formatDate(tx.date)}
                     {tx.site?.name ? ` • ${tx.site.name}` : ""}
                   </p>
                 </div>
               </div>
               <p className={cn("font-semibold", tx.amount >= 0 ? "text-success-700" : "text-danger-700")}>
                 {tx.amount >= 0 ? "+" : ""}
-                {tx.amount.toLocaleString()}
+                {formatNumber(tx.amount)}
               </p>
             </div>
           ))}

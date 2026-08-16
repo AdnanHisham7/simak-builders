@@ -19,10 +19,12 @@ import PageLoader from "@/components/ui/PageLoader";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 const ITEMS_PER_PAGE = 10;
 
 const SiteManagerDashboard: React.FC = () => {
+  const { formatDate, formatNumber } = usePreferences();
   const { managerId } = useParams<{ managerId: string }>();
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -167,10 +169,10 @@ const SiteManagerDashboard: React.FC = () => {
                       className="hover:bg-console-bg"
                     >
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        {transaction.date ? new Date(transaction.date).toLocaleDateString() : "-"}
+                        {transaction.date ? formatDate(transaction.date) : "-"}
                       </td>
                       <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-success-700">
-                        ₹{(transaction.amount ?? 0).toLocaleString()}
+                        ₹{formatNumber(transaction.amount ?? 0)}
                       </td>
                       {type === "salary" ? (
                         <>

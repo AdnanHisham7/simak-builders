@@ -44,6 +44,7 @@ import Tooltip from "@/components/ui/Tooltip";
 import CopyButton from "@/components/ui/CopyButton";
 import Avatar from "@/components/ui/Avatar";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface SiteManager {
   id: string;
@@ -58,6 +59,7 @@ interface SiteManager {
 }
 
 const SiteManagers: React.FC = () => {
+  const { formatNumber } = usePreferences();
   const [siteManagers, setSiteManagers] = useState<SiteManager[]>([]);
   const [allSites, setAllSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
@@ -356,7 +358,7 @@ const SiteManagers: React.FC = () => {
             <StatCard label="Total Sites" value={allSites.length} icon={Building2} />
             <StatCard
               label="Total Expenses Balance"
-              value={`₹${siteManagers.reduce((sum, m) => sum + m.siteExpensesBalance, 0).toLocaleString("en-IN")}`}
+              value={`₹${formatNumber(siteManagers.reduce((sum, m) => sum + m.siteExpensesBalance, 0))}`}
               icon={Wallet}
             />
           </div>
@@ -474,7 +476,7 @@ const SiteManagers: React.FC = () => {
                               </Link>
                               <div className="text-xs text-console-muted">ID: {manager.id.slice(-8)}</div>
                               <div className="text-xs font-medium text-success-700">
-                                ₹{manager.siteExpensesBalance.toLocaleString("en-IN")} balance
+                                ₹{formatNumber(manager.siteExpensesBalance)} balance
                               </div>
                             </div>
                           </div>

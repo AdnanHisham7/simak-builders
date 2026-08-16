@@ -5,6 +5,7 @@ import Header from "./Header";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { getUnseenEnquiriesCount } from "@/services/messageService";
+import { getPendingDeactivationCount } from "@/services/userService";
 import { DashboardContext } from "../../context/DashboardContext";
 
 interface MenuSection {
@@ -25,6 +26,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unseenCount, setUnseenCount] = useState(0);
+  const [pendingDeactivationCount, setPendingDeactivationCount] = useState(0);
   const { userType } = useSelector((state: RootState) => state.auth);
 
   const memoizedMenus = useMemo(() => menus, [menus]);
@@ -60,6 +62,25 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
     };
   }, [userType]);
 
+  useEffect(() => {
+    if (userType !== "admin") return;
+
+    let isMounted = true;
+    const fetchPendingDeactivationCount = async () => {
+      try {
+        const count = await getPendingDeactivationCount();
+        if (isMounted) setPendingDeactivationCount(count);
+      } catch (error) {
+        // Non-critical: the badge simply stays at its last known value.
+      }
+    };
+
+    fetchPendingDeactivationCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [userType]);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setSidebarOpen((prev) => !prev);
@@ -72,7 +93,14 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   const springTransition = { type: "spring" as const, stiffness: 320, damping: 34 };
 
   return (
-    <DashboardContext.Provider value={{ unseenCount, setUnseenCount }}>
+    <DashboardContext.Provider
+      value={{
+        unseenCount,
+        setUnseenCount,
+        pendingDeactivationCount,
+        setPendingDeactivationCount,
+      }}
+    >
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-console-bg via-console-bg to-brand-50/40">
         <AnimatePresence>
           {isMobile && sidebarOpen && (
@@ -100,7 +128,12 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
           }}
           transition={springTransition}
         >
-          <Sidebar collapsed={!isMobile && sidebarCollapsed} menus={memoizedMenus} unseenCount={unseenCount} />
+          <Sidebar
+            collapsed={!isMobile && sidebarCollapsed}
+            menus={memoizedMenus}
+            unseenCount={unseenCount}
+            pendingDeactivationCount={pendingDeactivationCount}
+          />
         </motion.aside>
 
         <div className="flex flex-1 flex-col overflow-hidden">

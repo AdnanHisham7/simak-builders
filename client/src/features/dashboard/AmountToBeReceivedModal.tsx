@@ -9,6 +9,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import { Building } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface AmountToBeReceivedModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ const AmountToBeReceivedModal: React.FC<AmountToBeReceivedModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const { formatNumber } = usePreferences();
   const [data, setData] = useState<AmountToBeReceivedSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +39,7 @@ const AmountToBeReceivedModal: React.FC<AmountToBeReceivedModalProps> = ({
       onClose={onClose}
       size="xl"
       title="Amount To Be Received"
-      description={`₹${(data?.total ?? 0).toLocaleString()} · Sum of (site expenses − amount received) across all sites`}
+      description={`₹${formatNumber(data?.total ?? 0)} · Sum of (site expenses − amount received) across all sites`}
     >
       {loading ? (
         <PageLoader label="Loading receivables" fullHeight={false} />
@@ -72,10 +74,10 @@ const AmountToBeReceivedModal: React.FC<AmountToBeReceivedModalProps> = ({
                     <td className="px-4 py-3 font-medium text-console-text">{site.siteName}</td>
                     <td className="px-4 py-3 text-console-muted">{site.clientName}</td>
                     <td className="px-4 py-3 text-right text-console-text">
-                      ₹{site.expenses.toLocaleString()}
+                      ₹{formatNumber(site.expenses)}
                     </td>
                     <td className="px-4 py-3 text-right text-console-text">
-                      ₹{site.amountReceived.toLocaleString()}
+                      ₹{formatNumber(site.amountReceived)}
                     </td>
                     <td
                       className={cn(
@@ -87,7 +89,7 @@ const AmountToBeReceivedModal: React.FC<AmountToBeReceivedModalProps> = ({
                             : "text-console-muted",
                       )}
                     >
-                      ₹{site.amountToBeReceived.toLocaleString()}
+                      ₹{formatNumber(site.amountToBeReceived)}
                     </td>
                   </tr>
                 ))}

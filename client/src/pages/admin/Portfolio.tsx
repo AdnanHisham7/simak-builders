@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -27,10 +28,13 @@ import ProjectFormModal from "./components/ProjectFormModal";
 import SitePickerModal from "./components/SitePickerModal";
 
 const Portfolio: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all");
+  const [highlightedProjectId, setHighlightedProjectId] = useState<string | null>(null);
+  const projectCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -59,6 +63,48 @@ const Portfolio: React.FC = () => {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  useEffect(() => {
+    const targetProjectId = searchParams.get("projectId");
+    if (!targetProjectId) return;
+    setStatusFilter("all");
+    setSearchTerm("");
+  }, [searchParams]);
+
+  useEffect(() => {
+    const targetProjectId = searchParams.get("projectId");
+    if (!targetProjectId || loading) return;
+
+    const projectExists = projects.some((project) => project.id === targetProjectId);
+    if (!projectExists) return;
+
+    const frame = requestAnimationFrame(() => {
+      const cardEl = projectCardRefs.current[targetProjectId];
+      if (!cardEl) return;
+      cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightedProjectId(targetProjectId);
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [searchParams, loading, projects, statusFilter, searchTerm]);
+
+  useEffect(() => {
+    if (!highlightedProjectId) return;
+
+    const timer = setTimeout(() => {
+      setHighlightedProjectId(null);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("projectId");
+          return next;
+        },
+        { replace: true },
+      );
+    }, 2600);
+
+    return () => clearTimeout(timer);
+  }, [highlightedProjectId, setSearchParams]);
 
   const convertedSiteIds = useMemo(
     () =>
@@ -195,7 +241,14 @@ const Portfolio: React.FC = () => {
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
-                className="overflow-hidden rounded-glass border border-console-border bg-console-surface"
+                ref={(el) => {
+                  projectCardRefs.current[project.id] = el;
+                }}
+                className={`overflow-hidden rounded-glass border bg-console-surface ${
+                  highlightedProjectId === project.id
+                    ? "border-brand-400 animate-highlight-fade"
+                    : "border-console-border"
+                }`}
               >
                 <div className="relative aspect-video">
                   <img

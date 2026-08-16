@@ -83,10 +83,25 @@ export default {
           "0%": { opacity: "0", transform: "scale(0.96) translateY(6px)" },
           "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
         },
+        "highlight-fade": {
+          "0%": {
+            boxShadow: "0 0 0 4px rgba(140, 100, 36, 0.35)",
+            backgroundColor: "rgba(251, 247, 236, 0.9)",
+          },
+          "65%": {
+            boxShadow: "0 0 0 4px rgba(140, 100, 36, 0.35)",
+            backgroundColor: "rgba(251, 247, 236, 0.9)",
+          },
+          "100%": {
+            boxShadow: "0 0 0 0 rgba(140, 100, 36, 0)",
+            backgroundColor: "rgba(255, 255, 255, 0)",
+          },
+        },
       },
       animation: {
         shimmer: "shimmer 2.4s linear infinite",
         "fade-scale-in": "fade-scale-in 0.28s cubic-bezier(0.22, 1, 0.36, 1)",
+        "highlight-fade": "highlight-fade 2.4s ease-out",
       },
     },
   },

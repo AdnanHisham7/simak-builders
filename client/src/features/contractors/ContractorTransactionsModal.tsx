@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { X, Activity, AlertCircle } from "lucide-react";
 import { getContractorTransactions } from "@/services/contractorService";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Contractor {
   id: string;
@@ -33,6 +34,7 @@ const ContractorTransactionsModal: React.FC<ContractorTransactionsModalProps> = 
   setError,
   isAnimating,
 }) => {
+  const { formatDecimal, formatDate } = usePreferences();
   const [currentSiteId, setCurrentSiteId] = useState(selectedSiteId);
 
   useEffect(() => {
@@ -136,10 +138,10 @@ const ContractorTransactionsModal: React.FC<ContractorTransactionsModalProps> = 
                       {transactions.map((tx) => (
                         <tr key={tx.id}>
                           <td className="px-6 py-4 whitespace-nowrap">{tx.type}</td>
-                          <td className="px-6 py-4 whitespace-nowrap">${tx.amount.toFixed(2)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">${formatDecimal(tx.amount)}</td>
                           <td className="px-6 py-4">{tx.description || "N/A"}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {new Date(tx.date).toLocaleDateString()}
+                            {formatDate(tx.date)}
                           </td>
                         </tr>
                       ))}

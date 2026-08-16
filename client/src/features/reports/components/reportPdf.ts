@@ -74,14 +74,26 @@ export interface ReportPdfOptions {
   headerImage: LoadedImage;
   footerImage: LoadedImage;
   fileName: string;
+  numberFormat?: string;
 }
 
-const formatCurrency = (value: number): string =>
-  `Rs. ${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrency = (value: number, numberFormat = "en-IN"): string =>
+  `Rs. ${Number(value || 0).toLocaleString(numberFormat, { maximumFractionDigits: 2 })}`;
 
 export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF => {
-  const { title, siteName, address, clientName, periodLabel, rows, summaryRows, headerImage, footerImage, fileName } =
-    options;
+  const {
+    title,
+    siteName,
+    address,
+    clientName,
+    periodLabel,
+    rows,
+    summaryRows,
+    headerImage,
+    footerImage,
+    fileName,
+    numberFormat = "en-IN",
+  } = options;
 
   const doc = new jsPDF();
   let yOffset = 48;
@@ -122,7 +134,7 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
     String(index + 1),
     row.itemOfWork,
     row.quantity === null || row.quantity === undefined || row.quantity === "" ? "-" : String(row.quantity),
-    formatCurrency(row.amount),
+    formatCurrency(row.amount, numberFormat),
   ]);
   const itemRowCount = bodyRows.length;
 
@@ -130,7 +142,7 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
     "",
     summaryRow.label,
     "",
-    formatCurrency(summaryRow.amount),
+    formatCurrency(summaryRow.amount, numberFormat),
   ]);
 
   autoTable(doc, {

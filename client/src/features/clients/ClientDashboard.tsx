@@ -26,6 +26,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import PageLoader from "@/components/ui/PageLoader";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface SectionState {
   data: any[];
@@ -58,6 +59,7 @@ const badgeVariant = (status: string | undefined): "success" | "warning" | "erro
 };
 
 const ClientDashboard: React.FC = () => {
+  const { formatDate, formatNumber } = usePreferences();
   const [site, setSite] = useState<any>(null);
   const [sites, setSites] = useState<any[]>([]);
   const [selectedSite, setSelectedSite] = useState<any>(null);
@@ -403,7 +405,7 @@ const ClientDashboard: React.FC = () => {
                             {pur.vendor?.name || "N/A"}
                           </td>
                           <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                            ₹{pur.totalAmount?.toLocaleString() || 0}
+                            ₹{formatNumber(pur.totalAmount || 0)}
                           </td>
                           <td className="px-4 py-3.5">
                             <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
@@ -467,10 +469,10 @@ const ClientDashboard: React.FC = () => {
                             {expense.description || "N/A"}
                           </td>
                           <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                            ₹{expense.amount?.toLocaleString() || 0}
+                            ₹{formatNumber(expense.amount || 0)}
                           </td>
                           <td className="px-4 py-3.5 text-sm text-console-muted">
-                            {expense.date ? new Date(expense.date).toLocaleDateString() : "N/A"}
+                            {expense.date ? formatDate(expense.date) : "N/A"}
                           </td>
                         </tr>
                       ))}
@@ -499,13 +501,13 @@ const ClientDashboard: React.FC = () => {
                       {transactions.data?.map((trans: any) => (
                         <tr key={trans._id}>
                           <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                            ₹{trans.amount?.toLocaleString() || 0}
+                            ₹{formatNumber(trans.amount || 0)}
                           </td>
                           <td className="px-4 py-3.5">
                             <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
                           </td>
                           <td className="px-4 py-3.5 text-sm text-console-muted">
-                            {trans.createdAt ? new Date(trans.createdAt).toLocaleDateString() : "N/A"}
+                            {trans.createdAt ? formatDate(trans.createdAt) : "N/A"}
                           </td>
                         </tr>
                       ))}
@@ -523,7 +525,7 @@ const ClientDashboard: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onConfirm={handleConfirmSendMoney}
         title="Confirm Send Money"
-        description={`Are you sure you want to send ₹${parseFloat(amountStr || "0").toLocaleString()} to the admin for ${selectedSite?.name}?`}
+        description={`Are you sure you want to send ₹${formatNumber(parseFloat(amountStr || "0"))} to the admin for ${selectedSite?.name}?`}
         confirmText="Send"
         cancelText="Cancel"
         isLoading={isSending}

@@ -21,9 +21,10 @@ interface SidebarProps {
   collapsed: boolean;
   menus: MenuSection[];
   unseenCount: number;
+  pendingDeactivationCount?: number;
 }
 
-function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
+function Sidebar({ collapsed, menus, unseenCount, pendingDeactivationCount = 0 }: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { userType } = useSelector((state: RootState) => state.auth);
@@ -33,6 +34,16 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
 
   const handleItemClick = (item: MenuItem) => {
     navigate(item.path);
+  };
+
+  const getBadgeCount = (item: MenuItem): number | undefined => {
+    if (item.name === "Enquiries" && unseenCount > 0) {
+      return unseenCount;
+    }
+    if (item.path === "/admin/settings" && pendingDeactivationCount > 0) {
+      return pendingDeactivationCount;
+    }
+    return undefined;
   };
 
   const formatRoleName = (role: string) => {
@@ -96,7 +107,7 @@ function Sidebar({ collapsed, menus, unseenCount }: SidebarProps) {
                 active={currentPath === item.path}
                 collapsed={collapsed}
                 onClick={() => handleItemClick(item)}
-                badge={item.name === "Enquiries" && unseenCount > 0 ? unseenCount : undefined}
+                badge={getBadgeCount(item)}
                 layoutId="sidebar-active-pill"
               />
             ))}

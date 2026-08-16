@@ -3,6 +3,8 @@ import { createContext, useContext } from "react";
 interface DashboardContextType {
   unseenCount: number;
   setUnseenCount: (count: number) => void;
+  pendingDeactivationCount: number;
+  setPendingDeactivationCount: (count: number) => void;
 }
 
 export const DashboardContext = createContext<DashboardContextType | undefined>(

@@ -1,7 +1,9 @@
 import { motion, useMotionValue, animate } from "framer-motion";
 import { useEffect, useState } from "react";
+import { usePreferences } from "@/hooks/usePreferences";
 
 export default function StatCard({ title, value, subtitle, icon: Icon }: any) {
+  const { numberFormat } = usePreferences();
   // Extract number and prefix (e.g. ₹)
   const match =
     typeof value === "string" ? value.match(/^([^0-9.-]*)([0-9,.-]+)/) : null;
@@ -20,7 +22,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon }: any) {
       const controls = animate(motionValue, numericValue!, {
         duration: 1.5,
         onUpdate(latest) {
-          const formatted = new Intl.NumberFormat("en-IN").format(
+          const formatted = new Intl.NumberFormat(numberFormat).format(
             Math.floor(latest)
           );
           setDisplayValue(`${prefix}${formatted}`);
@@ -31,7 +33,7 @@ export default function StatCard({ title, value, subtitle, icon: Icon }: any) {
     } else {
       setDisplayValue(value);
     }
-  }, [value]);
+  }, [value, numberFormat]);
 
   return (
     <motion.div

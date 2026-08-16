@@ -17,6 +17,7 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface AssignSitesModalProps {
   isOpen: boolean;
@@ -33,6 +34,7 @@ const AssignSitesModal: React.FC<AssignSitesModalProps> = ({
   assignedSites,
   onAssign,
 }) => {
+  const { formatNumber, formatDate } = usePreferences();
   const [selectedSites, setSelectedSites] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -204,7 +206,7 @@ const AssignSitesModal: React.FC<AssignSitesModalProps> = ({
                           <span className="text-xs font-medium text-console-muted">Budget</span>
                         </div>
                         <p className="text-sm font-semibold text-console-text">
-                          ₹{site.budget.toLocaleString("en-IN")}
+                          ₹{formatNumber(site.budget)}
                         </p>
                       </div>
                       <div className="rounded-lg bg-console-bg p-3">
@@ -213,7 +215,7 @@ const AssignSitesModal: React.FC<AssignSitesModalProps> = ({
                           <span className="text-xs font-medium text-console-muted">Expenses</span>
                         </div>
                         <p className="text-sm font-semibold text-console-text">
-                          ₹{site.expenses.toLocaleString("en-IN")}
+                          ₹{formatNumber(site.expenses)}
                         </p>
                       </div>
                       <div className="rounded-lg bg-console-bg p-3">
@@ -239,7 +241,7 @@ const AssignSitesModal: React.FC<AssignSitesModalProps> = ({
                           <span className="text-xs font-medium text-console-muted">Created</span>
                         </div>
                         <p className="text-sm font-semibold text-console-text">
-                          {new Date(site.createdAt).toLocaleDateString()}
+                          {formatDate(site.createdAt)}
                         </p>
                       </div>
                     </div>

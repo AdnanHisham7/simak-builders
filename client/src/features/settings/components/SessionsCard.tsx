@@ -13,6 +13,7 @@ import {
   revokeSession,
 } from "@/services/authService";
 import { clearUser } from "@/store/slices/authSlice";
+import { usePreferences } from "@/hooks/usePreferences";
 
 const deviceIcon = (device: string) => {
   const normalized = device.toLowerCase();
@@ -22,13 +23,8 @@ const deviceIcon = (device: string) => {
   return Laptop;
 };
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-
 const SessionsCard: React.FC = () => {
+  const { formatDateTime } = usePreferences();
   const dispatch = useDispatch();
   const [sessions, setSessions] = useState<UserSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,7 +135,7 @@ const SessionsCard: React.FC = () => {
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-console-muted">
-                      {session.ip} &middot; Last active {formatDate(session.lastUsedAt)}
+                      {session.ip} &middot; Last active {formatDateTime(session.lastUsedAt)}
                     </p>
                   </div>
                 </div>

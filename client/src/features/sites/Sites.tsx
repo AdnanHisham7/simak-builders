@@ -39,6 +39,7 @@ import { SkeletonStatCards, SkeletonTable } from "@/components/ui/Skeleton";
 import Tooltip from "@/components/ui/Tooltip";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface User {
   id: string;
@@ -71,7 +72,7 @@ const mapSiteForDisplay = (site: Site): MappedSite => ({
   clientName: site.client?.name || "Unknown",
   budget: site.budget,
   expenses: site.expenses,
-  createdAt: new Date(site.createdAt).toLocaleDateString(),
+  createdAt: site.createdAt,
   siteManagerCount: site.siteManagerCount || 0,
   architectCount: site.architectCount || 0,
   completedPhases: site.phases?.filter((p) => p.status === "completed").length || 0,
@@ -131,6 +132,7 @@ const getActionsForRole = (role: UserType): string[] => {
 };
 
 const Sites: React.FC = () => {
+  const { formatDate, formatNumber } = usePreferences();
   const { userType } = useSelector((state: RootState) => state.auth);
   const navigate = useNavigate();
   const [sites, setSites] = useState<MappedSite[]>([]);
@@ -410,10 +412,10 @@ const Sites: React.FC = () => {
                               <td className="px-6 py-4">
                                 <div className="space-y-1">
                                   <div className="text-sm font-semibold text-console-text">
-                                    ₹{site.budget.toLocaleString()}
+                                    ₹{formatNumber(site.budget)}
                                   </div>
                                   <div className="text-xs text-console-muted">
-                                    Spent: ₹{site.expenses.toLocaleString()}
+                                    Spent: ₹{formatNumber(site.expenses)}
                                   </div>
                                   <div className="h-1.5 w-full rounded-full bg-console-bg">
                                     <div
@@ -437,7 +439,7 @@ const Sites: React.FC = () => {
                                     </span>
                                     <span className="flex items-center gap-1">
                                       <Calendar size={13} />
-                                      {site.createdAt}
+                                      {formatDate(site.createdAt)}
                                     </span>
                                   </div>
                                   <div className="flex items-center gap-2">

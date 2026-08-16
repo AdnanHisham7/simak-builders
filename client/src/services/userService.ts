@@ -428,6 +428,11 @@ export const listDeactivationRequests = async (): Promise<
   return response.data;
 };
 
+export const getPendingDeactivationCount = async (): Promise<number> => {
+  const response = await privateClient.get("/users/deactivation-requests/count");
+  return response.data.count;
+};
+
 export const reviewDeactivationRequest = async (
   userId: string,
   decision: "approve" | "reject",

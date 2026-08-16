@@ -11,6 +11,7 @@ import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { StatCard } from "@/components/ui/Card";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface PurchaseItem {
   name: string;
@@ -50,8 +51,8 @@ type StatusFilter = "all" | "pending" | "verified";
 type PaymentFilter = "all" | "paid" | "unpaid";
 type SortKey = "date_desc" | "date_asc" | "amount_desc" | "amount_asc";
 
-const formatCurrency = (amount: number | undefined) =>
-  `₹${(amount || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+const formatCurrencyBase = (amount: number | undefined, numberFormat: string) =>
+  `₹${(amount || 0).toLocaleString(numberFormat, { maximumFractionDigits: 2 })}`;
 
 const VendorPurchaseHistoryModal: React.FC<VendorPurchaseHistoryModalProps> = ({
   isOpen,
@@ -60,6 +61,8 @@ const VendorPurchaseHistoryModal: React.FC<VendorPurchaseHistoryModalProps> = ({
   purchases,
   loading = false,
 }) => {
+  const { numberFormat, formatDate } = usePreferences();
+  const formatCurrency = (amount: number | undefined) => formatCurrencyBase(amount, numberFormat);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [paymentFilter, setPaymentFilter] = useState<PaymentFilter>("all");
@@ -254,7 +257,7 @@ const VendorPurchaseHistoryModal: React.FC<VendorPurchaseHistoryModalProps> = ({
                             {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                            {new Date(purchase.createdAt).toLocaleDateString()}
+                            {formatDate(purchase.createdAt)}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
                             {purchase.site ? purchase.site.name : "N/A"}

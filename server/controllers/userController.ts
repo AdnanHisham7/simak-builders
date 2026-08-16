@@ -1360,6 +1360,26 @@ const listDeactivationRequests = async (
   }
 };
 
+const getPendingDeactivationCount = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (req.user?.role !== UserRole.CompanyAdmin) {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
+    const count = await UserModel.countDocuments({
+      "deactivationRequest.status": "pending",
+    });
+
+    res.status(HttpStatus.OK).json({ count });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const reviewDeactivationRequest = async (
   req: Request,
   res: Response,
@@ -1516,5 +1536,6 @@ export default {
   requestOwnDeactivation,
   cancelOwnDeactivationRequest,
   listDeactivationRequests,
+  getPendingDeactivationCount,
   reviewDeactivationRequest,
 };

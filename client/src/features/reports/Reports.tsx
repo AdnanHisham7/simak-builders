@@ -29,6 +29,7 @@ import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import Tooltip from "@/components/ui/Tooltip";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface ReportSite {
   _id: string;
@@ -141,6 +142,7 @@ const Reports = () => {
 };
 
 const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
+  const { formatNumber, numberFormat } = usePreferences();
   const [filters, setFilters] = useState({
     siteId: "",
     supervisionPercentage: "",
@@ -237,6 +239,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
         headerImage: headerData,
         footerImage: footerData,
         fileName: `expense-report-${reportData.site.name}-${new Date().toISOString().split("T")[0]}.pdf`,
+        numberFormat,
       });
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -327,7 +330,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Total amount (without supervision)</p>
               <p className="mt-1 text-xl font-semibold text-console-text">
-                ₹{totals.totalAmount.toLocaleString("en-IN")}
+                ₹{formatNumber(totals.totalAmount)}
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
@@ -363,7 +366,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Net total (with supervision)</p>
               <p className="mt-1 text-xl font-semibold text-success-700">
-                ₹{totals.netTotal.toLocaleString("en-IN")}
+                ₹{formatNumber(totals.netTotal)}
               </p>
             </div>
           </div>
@@ -392,6 +395,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
 };
 
 const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
+  const { formatNumber, numberFormat } = usePreferences();
   const [filters, setFilters] = useState({
     siteId: "",
     supervisionPercentage: "",
@@ -499,6 +503,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
         headerImage: headerData,
         footerImage: footerData,
         fileName: `client-report-${reportData.site.name}-${new Date().toISOString().split("T")[0]}.pdf`,
+        numberFormat,
       });
     } catch (error) {
       console.error("Error generating PDF:", error);
@@ -589,7 +594,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Total</p>
               <p className="mt-1 text-xl font-semibold text-console-text">
-                ₹{totals.totalAmount.toLocaleString("en-IN")}
+                ₹{formatNumber(totals.totalAmount)}
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
@@ -625,13 +630,13 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Net total</p>
               <p className="mt-1 text-xl font-semibold text-console-text">
-                ₹{totals.netTotal.toLocaleString("en-IN")}
+                ₹{formatNumber(totals.netTotal)}
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
               <p className="text-sm text-console-muted">Varav (Received)</p>
               <p className="mt-1 text-xl font-semibold text-success-700">
-                ₹{reportData.varav.toLocaleString("en-IN")}
+                ₹{formatNumber(reportData.varav)}
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">

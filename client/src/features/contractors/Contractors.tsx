@@ -50,6 +50,7 @@ import Tooltip from "@/components/ui/Tooltip";
 import GradientStatCard from "@/components/ui/GradientStatCard";
 import CopyButton from "@/components/ui/CopyButton";
 import { cn } from "@/lib/cn";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface Contractor {
   id: string;
@@ -69,6 +70,7 @@ interface Site {
 type SortField = "name" | "company" | "email" | "status";
 
 const Contractors: React.FC = () => {
+  const { formatDecimal, formatDate } = usePreferences();
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState<string | null>(null);
@@ -442,7 +444,7 @@ const Contractors: React.FC = () => {
           <div className="text-sm text-console-muted">
             Total balance:{" "}
             <span className="font-semibold text-console-text">
-              ₹{totalBalance.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+              ₹{formatDecimal(totalBalance)}
             </span>
           </div>
           <div className="flex gap-1">
@@ -626,9 +628,7 @@ const Contractors: React.FC = () => {
                                   )}
                                 >
                                   Total amount: ₹
-                                  {assignment.totalAmount?.toLocaleString("en-IN", {
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  {formatDecimal(assignment.totalAmount)}
                                 </p>
                               </div>
                             </div>
@@ -718,11 +718,11 @@ const Contractors: React.FC = () => {
                             <tr key={tx.id}>
                               <td className="px-4 py-3 text-sm text-console-text capitalize">{tx.type.replace("_", " ")}</td>
                               <td className="px-4 py-3 text-sm font-medium text-console-text">
-                                ₹{tx.amount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                                ₹{formatDecimal(tx.amount)}
                               </td>
                               <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "N/A"}</td>
                               <td className="px-4 py-3 text-sm text-console-muted">
-                                {new Date(tx.date).toLocaleDateString()}
+                                {formatDate(tx.date)}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <Tooltip label="Delete transaction">

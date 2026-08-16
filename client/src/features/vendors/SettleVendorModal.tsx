@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { settleVendorPayments } from "@/services/vendorService";
 import Modal from "@/components/ui/Modal";
 import Button from "@/components/ui/Button";
+import { usePreferences } from "@/hooks/usePreferences";
 
 interface SettleVendorModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
   outstandingAmount,
   onSettled,
 }) => {
+  const { formatDecimal } = usePreferences();
   const [amount, setAmount] = useState<number | "">("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
     }
     if (numAmount > outstandingAmount) {
       setError(
-        `This exceeds the outstanding balance of ₹${outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}. Enter an amount at or below that.`,
+        `This exceeds the outstanding balance of ₹${formatDecimal(outstandingAmount)}. Enter an amount at or below that.`,
       );
       return;
     }
@@ -63,7 +65,7 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
         notes: notes.trim(),
       });
       toast.success(
-        `Settled ₹${numAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}. Remaining outstanding: ₹${result.remainingOutstanding.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`,
+        `Settled ₹${formatDecimal(numAmount)}. Remaining outstanding: ₹${formatDecimal(result.remainingOutstanding)}`,
       );
       onSettled();
       onClose();
@@ -99,7 +101,7 @@ const SettleVendorModal: React.FC<SettleVendorModalProps> = ({
         <div className="flex items-center justify-between rounded-console border border-info-100 bg-info-50 p-4">
           <span className="text-sm text-info-700">Outstanding balance</span>
           <span className="text-lg font-semibold text-info-700">
-            ₹{outstandingAmount.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+            ₹{formatDecimal(outstandingAmount)}
           </span>
         </div>
 
