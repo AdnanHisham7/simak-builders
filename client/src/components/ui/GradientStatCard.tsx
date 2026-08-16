@@ -12,6 +12,7 @@ interface GradientStatCardProps {
   suffix?: string;
   decimals?: number;
   locale?: string;
+  loading?: boolean;
   helperText?: string;
   icon?: LucideIcon;
   tone?: GradientTone;
@@ -42,6 +43,7 @@ const GradientStatCard: React.FC<GradientStatCardProps> = ({
   suffix = "",
   decimals = 0,
   locale,
+  loading = false,
   helperText,
   icon: Icon,
   tone = "dark",
@@ -69,7 +71,14 @@ const GradientStatCard: React.FC<GradientStatCardProps> = ({
         <div>
           <p className="text-xs font-medium uppercase tracking-wider text-white/55">{label}</p>
           <div className="mt-2 text-[26px] font-semibold leading-none text-white sm:text-3xl">
-            <AnimatedCounter value={value} prefix={prefix} suffix={suffix} decimals={decimals} locale={locale} />
+            {loading ? (
+              <span
+                className="inline-block h-7 w-24 animate-pulse rounded-md bg-white/20 sm:h-8 sm:w-28"
+                aria-hidden="true"
+              />
+            ) : (
+              <AnimatedCounter value={value} prefix={prefix} suffix={suffix} decimals={decimals} locale={locale} />
+            )}
           </div>
           {helperText && <p className="mt-2 text-xs text-white/50">{helperText}</p>}
         </div>

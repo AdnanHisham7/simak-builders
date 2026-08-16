@@ -175,6 +175,7 @@ const AdminDashboard = () => {
   const [contractors, setContractors] = useState<Contractor[]>([]);
   const [companyTotalAmount, setCompanyTotalAmount] = useState<number | null>(null);
   const [amountToBeReceived, setAmountToBeReceived] = useState<number | null>(null);
+  const [financialSummaryLoading, setFinancialSummaryLoading] = useState(true);
   const [isCompanyFundsModalOpen, setIsCompanyFundsModalOpen] = useState(false);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
 
@@ -211,6 +212,8 @@ const AdminDashboard = () => {
           setAmountToBeReceived(receivableSummary.total);
         } catch (financialErr) {
           toast.error("Failed to load company financial summary");
+        } finally {
+          setFinancialSummaryLoading(false);
         }
       } catch (err) {
         setError("Failed to fetch dashboard data");
@@ -370,6 +373,7 @@ const AdminDashboard = () => {
                   label="Company Funds"
                   value={companyTotalAmount ?? 0}
                   prefix="₹"
+                  loading={financialSummaryLoading}
                   helperText="View transaction history"
                   icon={DollarSign}
                   onClick={() => setIsCompanyFundsModalOpen(true)}
@@ -383,6 +387,7 @@ const AdminDashboard = () => {
                   label="Amount to be received"
                   value={amountToBeReceived !== null ? Math.round(amountToBeReceived) : 0}
                   prefix="₹"
+                  loading={financialSummaryLoading}
                   helperText="View per-site breakdown"
                   icon={AlertCircle}
                   onClick={() => setIsReceivableModalOpen(true)}

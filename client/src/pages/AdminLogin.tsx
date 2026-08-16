@@ -23,7 +23,7 @@ const AdminLogin = () => {
 
   useEffect(() => {
     if (isAuthenticated && user?.isAdmin) {
-      navigate("/admin/dashboard");
+      navigate(getLandingPagePath("admin", user?.preferences?.defaultLandingPage));
     }
   }, [isAuthenticated, user, navigate]);
 
