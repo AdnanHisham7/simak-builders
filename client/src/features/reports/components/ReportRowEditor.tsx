@@ -10,8 +10,10 @@ import {
   removeRow,
   roundToCents,
   updateRowAmount,
+  updateRowItemOfWork,
 } from "./editableReport";
 import EditableAmountField from "./EditableAmountField";
+import EditableTextField from "./EditableTextField";
 import { usePreferences } from "@/hooks/usePreferences";
 
 interface ReportRowEditorProps {
@@ -40,32 +42,29 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
   const [newRowAmount, setNewRowAmount] = useState("");
   const [addRowError, setAddRowError] = useState("");
 
+  const orderedSelectedRows = rows.filter((row) => selectedForMerge.includes(row.id));
 
   const toggleSelectForMerge = (id: string) => {
     if (disabled) return;
-    setSelectedForMerge((prev) => {
-      if (prev.includes(id)) return prev.filter((rowId) => rowId !== id);
-      if (prev.length >= 2) return [prev[1], id];
-      return [...prev, id];
-    });
+    setSelectedForMerge((prev) =>
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id],
+    );
   };
 
   const clearSelection = () => setSelectedForMerge([]);
 
   const openMergeModal = () => {
-    if (selectedForMerge.length !== 2) return;
-    const firstRow = rows.find((row) => row.id === selectedForMerge[0]);
-    setMergeName(firstRow ? firstRow.itemOfWork : "");
+    if (selectedForMerge.length < 2) return;
+    setMergeName(orderedSelectedRows[0] ? orderedSelectedRows[0].itemOfWork : "");
     setMergeModalOpen(true);
   };
 
   const confirmMerge = () => {
-    if (selectedForMerge.length !== 2) return;
+    if (selectedForMerge.length < 2) return;
     const trimmedName = mergeName.trim();
     if (!trimmedName) return;
 
-    const [firstId, secondId] = selectedForMerge;
-    onRowsChange(mergeRows(rows, firstId, secondId, trimmedName));
+    onRowsChange(mergeRows(rows, selectedForMerge, trimmedName));
     setSelectedForMerge([]);
     setMergeModalOpen(false);
     setMergeName("");
@@ -140,7 +139,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
         </label>
 
         <div className="flex items-center gap-2">
-          {selectedForMerge.length === 2 && (
+          {selectedForMerge.length >= 2 && (
             <>
               <button
                 type="button"
@@ -148,7 +147,7 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                 disabled={disabled}
                 className="flex items-center px-3 py-2 text-sm font-medium bg-brand-700 text-white rounded-lg hover:bg-brand-800 transition-colors disabled:opacity-50"
               >
-                <Combine className="w-4 h-4 mr-1.5" /> Merge Selected (2)
+                <Combine className="w-4 h-4 mr-1.5" /> Merge Selected ({selectedForMerge.length})
               </button>
               <button
                 type="button"
@@ -221,9 +220,16 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-1">Merge Rows</h3>
               <p className="text-sm text-gray-500 mb-4">
-                The amounts (and quantities, where present) of the two selected rows will be summed
-                into a single row. Give the merged row a name.
+                The amounts (and quantities, where present) of the {selectedForMerge.length}{" "}
+                selected rows will be summed into a single row. Give the merged row a name.
               </p>
+              <ul className="mb-4 max-h-32 overflow-y-auto text-sm text-gray-600 border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {orderedSelectedRows.map((row) => (
+                  <li key={row.id} className="px-3 py-1.5 truncate">
+                    {row.itemOfWork}
+                  </li>
+                ))}
+              </ul>
               <input
                 type="text"
                 autoFocus
@@ -290,12 +296,20 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{idx + 1}</td>
                 <td className="px-4 py-3 text-sm text-gray-900">
-                  {row.itemOfWork}
-                  {row.isCustom && (
-                    <span className="ml-2 inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-50 rounded">
-                      Custom
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <EditableTextField
+                      value={row.itemOfWork}
+                      disabled={disabled}
+                      onCommit={(itemOfWork) =>
+                        onRowsChange(updateRowItemOfWork(rows, row.id, itemOfWork))
+                      }
+                    />
+                    {row.isCustom && (
+                      <span className="shrink-0 inline-block px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-700 bg-brand-50 rounded">
+                        Custom
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
                   {row.quantity !== null && row.quantity !== undefined ? row.quantity : "-"}

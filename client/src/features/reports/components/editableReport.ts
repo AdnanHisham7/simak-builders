@@ -58,6 +58,16 @@ export const updateRowAmount = (
 ): EditableReportRow[] =>
   rows.map((row) => (row.id === id ? { ...row, amount: roundToCents(amount) } : row));
 
+export const updateRowItemOfWork = (
+  rows: EditableReportRow[],
+  id: string,
+  itemOfWork: string,
+): EditableReportRow[] => {
+  const trimmed = itemOfWork.trim();
+  if (!trimmed) return rows;
+  return rows.map((row) => (row.id === id ? { ...row, itemOfWork: trimmed } : row));
+};
+
 export const moveRow = (
   rows: EditableReportRow[],
   id: string,
@@ -84,41 +94,46 @@ export const moveRow = (
 
 export const mergeRows = (
   rows: EditableReportRow[],
-  firstId: string,
-  secondId: string,
+  ids: string[],
   mergedName: string,
 ): EditableReportRow[] => {
-  if (firstId === secondId) return rows;
+  const uniqueIds = Array.from(new Set(ids));
+  if (uniqueIds.length < 2) return rows;
 
-  const firstIndex = rows.findIndex((row) => row.id === firstId);
-  const secondIndex = rows.findIndex((row) => row.id === secondId);
-  if (firstIndex === -1 || secondIndex === -1) return rows;
+  const selectedIndexed = uniqueIds
+    .map((id) => ({ id, index: rows.findIndex((row) => row.id === id) }))
+    .filter((entry) => entry.index !== -1)
+    .sort((a, b) => a.index - b.index);
 
-  const first = rows[firstIndex];
-  const second = rows[secondIndex];
+  if (selectedIndexed.length < 2) return rows;
 
-  const hasQuantity = first.quantity !== null || second.quantity !== null;
+  const selectedRows = selectedIndexed.map((entry) => rows[entry.index]);
+  const selectedIdSet = new Set(selectedRows.map((row) => row.id));
+
+  const hasQuantity = selectedRows.some((row) => row.quantity !== null);
   const mergedQuantity = hasQuantity
-    ? (Number(first.quantity) || 0) + (Number(second.quantity) || 0)
+    ? selectedRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0)
     : null;
-  const mergedAmount = roundToCents(Number(first.amount || 0) + Number(second.amount || 0));
+  const mergedAmount = roundToCents(
+    selectedRows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0),
+  );
 
   const trimmedName = mergedName.trim();
   const mergedRow: EditableReportRow = {
     id: generateRowId(),
-    itemOfWork: trimmedName || `${first.itemOfWork} + ${second.itemOfWork}`,
+    itemOfWork: trimmedName || selectedRows.map((row) => row.itemOfWork).join(" + "),
     quantity: mergedQuantity,
     amount: mergedAmount,
     isCustom: true,
   };
 
-  const earlierIndex = Math.min(firstIndex, secondIndex);
-  const rowsBeforeEarlier = rows
-    .slice(0, earlierIndex)
-    .filter((row) => row.id !== firstId && row.id !== secondId);
-  const insertAt = rowsBeforeEarlier.length;
+  const earliestIndex = selectedIndexed[0].index;
+  const rowsBeforeEarliest = rows
+    .slice(0, earliestIndex)
+    .filter((row) => !selectedIdSet.has(row.id));
+  const insertAt = rowsBeforeEarliest.length;
 
-  const remaining = rows.filter((row) => row.id !== firstId && row.id !== secondId);
+  const remaining = rows.filter((row) => !selectedIdSet.has(row.id));
   const result = [...remaining];
   result.splice(insertAt, 0, mergedRow);
   return result;
