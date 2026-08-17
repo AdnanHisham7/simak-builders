@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
 import {
@@ -16,6 +17,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   DollarSign,
+  MessageSquare,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 
@@ -37,6 +39,13 @@ interface NotificationPanelProps {
   loading: boolean;
 }
 
+const NAVIGABLE_NOTIFICATION_ROUTES: Record<string, string> = {
+  client_feedback_submitted: "/admin/feedback",
+  client_feedback_responded: "/client/feedback",
+  expense_request_submitted: "/admin/expense-requests",
+  expense_request_reviewed: "/architect/expense-requests",
+};
+
 const NotificationPanel: React.FC<NotificationPanelProps> = ({
   isOpen,
   onClose,
@@ -45,6 +54,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
   fetchNotifications,
   loading,
 }) => {
+  const navigate = useNavigate();
   const [isAnimating, setIsAnimating] = useState(false);
   const [filter, setFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
@@ -134,6 +144,13 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     }
   };
 
+  const handleNavigateToSource = (notification: Notification) => {
+    const path = NAVIGABLE_NOTIFICATION_ROUTES[notification.type];
+    if (!path) return;
+    onClose();
+    navigate(`${path}?highlight=${notification.relatedId}`);
+  };
+
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "stock_transfer":
@@ -148,6 +165,12 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         return <DollarSign className="w-5 h-5 text-green-500" />;
       case "payment_verified":
         return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case "client_feedback_submitted":
+      case "client_feedback_responded":
+        return <MessageSquare className="w-5 h-5 text-brand-500" />;
+      case "expense_request_submitted":
+      case "expense_request_reviewed":
+        return <DollarSign className="w-5 h-5 text-brand-500" />;
       default:
         return <Bell className="w-5 h-5 text-gray-500" />;
     }
@@ -336,10 +359,33 @@ return createPortal(
           ) : (
             <div className="h-full overflow-y-auto">
               <div className="p-4 space-y-3">
-                {filteredNotifications.map((notif) => (
+                {filteredNotifications.map((notif) => {
+                  const isNavigable = Boolean(
+                    NAVIGABLE_NOTIFICATION_ROUTES[notif.type],
+                  );
+                  return (
                   <div
                     key={notif._id}
+                    onClick={
+                      isNavigable
+                        ? () => handleNavigateToSource(notif)
+                        : undefined
+                    }
+                    role={isNavigable ? "button" : undefined}
+                    tabIndex={isNavigable ? 0 : undefined}
+                    onKeyDown={
+                      isNavigable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleNavigateToSource(notif);
+                            }
+                          }
+                        : undefined
+                    }
                     className={`relative bg-white border rounded-xl p-4 transition-all duration-200 hover:shadow-md ${
+                      isNavigable ? "cursor-pointer hover:border-brand-300" : ""
+                    } ${
                       notif.status === "pending"
                         ? "border-yellow-200 bg-yellow-50/30"
                         : "border-gray-200"
@@ -461,7 +507,8 @@ return createPortal(
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}

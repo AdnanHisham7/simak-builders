@@ -7,8 +7,10 @@ export const Card: React.FC<{
   title?: string;
   description?: string;
   action?: React.ReactNode;
-}> = ({ children, className, title, description, action }) => (
+  id?: string;
+}> = ({ children, className, title, description, action, id }) => (
   <div
+    id={id}
     className={cn(
       "rounded-glass border border-console-border bg-console-surface shadow-console",
       className,

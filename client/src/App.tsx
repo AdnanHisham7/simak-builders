@@ -39,11 +39,16 @@ import SiteDetail from "./features/sites/SiteDetail.tsx";
 import Salary from "./features/salary/Salary.tsx";
 import SiteManagerDashboard from "./pages/siteManager/SiteManagerDashboard.tsx";
 import ArchitectDashboard from "./features/team/ArchitectDashboard.tsx";
+import ArchitectExpenseRequests from "./features/team/ArchitectExpenseRequests.tsx";
 import ArchitectProtected from "./router/ArchitectProtected.tsx";
 import ClientDashboard from "./features/clients/ClientDashboard.tsx";
+import ClientSiteProgress from "./features/clients/ClientSiteProgress.tsx";
+import ClientFeedback from "./features/clients/ClientFeedback.tsx";
 import Clients from "./features/clients/Clients.tsx";
 import ClientProtected from "./router/ClientProtected.tsx";
 import ListEnquiries from "./features/enquiries/ListEnquiries.tsx";
+import AdminFeedback from "./features/feedback/AdminFeedback.tsx";
+import AdminExpenseRequests from "./features/expenseRequests/AdminExpenseRequests.tsx";
 import AboutUs from "./pages/AboutUs.tsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy.tsx";
 import RedirectHandler from "./router/RedirectHandler.tsx";
@@ -109,6 +114,8 @@ const App: React.FC = () => {
             <Route path="dashboard" element={<AdminDashboard />} />
             <Route path="employees" element={<Employees />} />
             <Route path="enquiries" element={<ListEnquiries />} />
+            <Route path="feedback" element={<AdminFeedback />} />
+            <Route path="expense-requests" element={<AdminExpenseRequests />} />
             <Route path="contractors" element={<Contractors />} />
             <Route path="vendors" element={<Vendors />} />
             <Route path="salary" element={<Salary />} />
@@ -145,12 +152,18 @@ const App: React.FC = () => {
 
           <Route path="architect" element={<ArchitectProtected />}>
             <Route path="dashboard" element={<ArchitectDashboard />} />
+            <Route
+              path="expense-requests"
+              element={<ArchitectExpenseRequests />}
+            />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="profile" element={<Profile />} />
           </Route>
 
           <Route path="client" element={<ClientProtected />}>
             <Route path="dashboard" element={<ClientDashboard />} />
+            <Route path="site-progress" element={<ClientSiteProgress />} />
+            <Route path="feedback" element={<ClientFeedback />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="profile" element={<Profile />} />
           </Route>

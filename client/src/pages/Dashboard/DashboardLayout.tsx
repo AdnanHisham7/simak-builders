@@ -6,6 +6,8 @@ import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { getUnseenEnquiriesCount } from "@/services/messageService";
 import { getPendingDeactivationCount } from "@/services/userService";
+import { getOpenFeedbackCount } from "@/services/feedbackService";
+import { getPendingExpenseRequestCount } from "@/services/expenseRequestService";
 import { DashboardContext } from "../../context/DashboardContext";
 
 interface MenuSection {
@@ -27,6 +29,8 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unseenCount, setUnseenCount] = useState(0);
   const [pendingDeactivationCount, setPendingDeactivationCount] = useState(0);
+  const [feedbackOpenCount, setFeedbackOpenCount] = useState(0);
+  const [expenseRequestPendingCount, setExpenseRequestPendingCount] = useState(0);
   const { userType } = useSelector((state: RootState) => state.auth);
 
   const memoizedMenus = useMemo(() => menus, [menus]);
@@ -81,6 +85,44 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
     };
   }, [userType]);
 
+  useEffect(() => {
+    if (userType !== "admin") return;
+
+    let isMounted = true;
+    const fetchFeedbackOpenCount = async () => {
+      try {
+        const count = await getOpenFeedbackCount();
+        if (isMounted) setFeedbackOpenCount(count);
+      } catch (error) {
+        // Non-critical: the badge simply stays at its last known value.
+      }
+    };
+
+    fetchFeedbackOpenCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [userType]);
+
+  useEffect(() => {
+    if (userType !== "admin") return;
+
+    let isMounted = true;
+    const fetchExpenseRequestPendingCount = async () => {
+      try {
+        const count = await getPendingExpenseRequestCount();
+        if (isMounted) setExpenseRequestPendingCount(count);
+      } catch (error) {
+        // Non-critical: the badge simply stays at its last known value.
+      }
+    };
+
+    fetchExpenseRequestPendingCount();
+    return () => {
+      isMounted = false;
+    };
+  }, [userType]);
+
   const toggleSidebar = () => {
     if (isMobile) {
       setSidebarOpen((prev) => !prev);
@@ -99,6 +141,10 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
         setUnseenCount,
         pendingDeactivationCount,
         setPendingDeactivationCount,
+        feedbackOpenCount,
+        setFeedbackOpenCount,
+        expenseRequestPendingCount,
+        setExpenseRequestPendingCount,
       }}
     >
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-console-bg via-console-bg to-brand-50/40">
@@ -133,6 +179,8 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
             menus={memoizedMenus}
             unseenCount={unseenCount}
             pendingDeactivationCount={pendingDeactivationCount}
+            feedbackOpenCount={feedbackOpenCount}
+            expenseRequestPendingCount={expenseRequestPendingCount}
           />
         </motion.aside>
 

@@ -22,9 +22,18 @@ interface SidebarProps {
   menus: MenuSection[];
   unseenCount: number;
   pendingDeactivationCount?: number;
+  feedbackOpenCount?: number;
+  expenseRequestPendingCount?: number;
 }
 
-function Sidebar({ collapsed, menus, unseenCount, pendingDeactivationCount = 0 }: SidebarProps) {
+function Sidebar({
+  collapsed,
+  menus,
+  unseenCount,
+  pendingDeactivationCount = 0,
+  feedbackOpenCount = 0,
+  expenseRequestPendingCount = 0,
+}: SidebarProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const { userType } = useSelector((state: RootState) => state.auth);
@@ -42,6 +51,15 @@ function Sidebar({ collapsed, menus, unseenCount, pendingDeactivationCount = 0 }
     }
     if (item.path === "/admin/settings" && pendingDeactivationCount > 0) {
       return pendingDeactivationCount;
+    }
+    if (item.path === "/admin/feedback" && feedbackOpenCount > 0) {
+      return feedbackOpenCount;
+    }
+    if (
+      item.path === "/admin/expense-requests" &&
+      expenseRequestPendingCount > 0
+    ) {
+      return expenseRequestPendingCount;
     }
     return undefined;
   };

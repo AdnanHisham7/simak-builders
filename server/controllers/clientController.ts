@@ -191,28 +191,40 @@ const verifyClientTransaction = async (
   next: NextFunction,
 ) => {
   try {
-    const { transactionId } = req.params;
-    const adminId = req.user?.userId;
-
-    const transaction: any =
-      await ClientTransactionModel.findById(transactionId).populate("site");
-    if (!transaction) {
-      throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
-    if (transaction.status === "verified") {
+
+    const { transactionId } = req.params;
+    const adminId = req.user.userId;
+
+    const admin = await UserModel.findById(adminId);
+    if (!admin) throw new ApiError("Admin not found", HttpStatus.NOT_FOUND);
+
+    const transaction: any = await ClientTransactionModel.findOneAndUpdate(
+      { _id: transactionId, status: { $ne: "verified" } },
+      {
+        $set: {
+          status: "verified",
+          verifiedBy: adminId,
+          verifiedAt: new Date(),
+        },
+      },
+      { new: true },
+    ).populate("site");
+
+    if (!transaction) {
+      const stillExists = await ClientTransactionModel.exists({
+        _id: transactionId,
+      });
+      if (!stillExists) {
+        throw new ApiError("Transaction not found", HttpStatus.NOT_FOUND);
+      }
       throw new ApiError(
         "Transaction already verified",
         HttpStatus.BAD_REQUEST,
       );
     }
-
-    const admin = await UserModel.findById(adminId);
-    if (!admin) throw new ApiError("Admin not found", HttpStatus.NOT_FOUND);
-
-    transaction.status = "verified";
-    transaction.verifiedBy = adminId;
-    transaction.verifiedAt = new Date();
-    await transaction.save();
 
     const company = await CompanyModel.findOne();
     if (!company) {
@@ -266,6 +278,13 @@ const getTransactionsForReport = async (
 ) => {
   try {
     const { clientId } = req.params;
+    const requesterId = req.user?.userId;
+    const requesterRole = req.user?.role;
+
+    if (requesterRole !== "admin" && requesterId !== clientId) {
+      throw new ApiError("Not authorized", HttpStatus.FORBIDDEN);
+    }
+
     const transactions = await ClientTransactionModel.find({
       client: clientId,
     }).populate("verifiedBy", "name");
@@ -282,10 +301,30 @@ const getSiteClientTransactions = async (
 ) => {
   try {
     const { siteId } = req.params;
-    console.log("Fetching client transactions for site:", siteId);
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+
     const site = await SiteModel.findById(siteId);
     if (!site) {
       throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+    }
+
+    let isAuthorized = false;
+    if (userRole === "admin") {
+      isAuthorized = true;
+    } else if (userRole === "client") {
+      isAuthorized = site.client.toString() === userId;
+    } else if (userRole === "siteManager") {
+      const user = await UserModel.findById(userId).select("assignedSites");
+      isAuthorized = Boolean(
+        user?.assignedSites.some(
+          (assignedSiteId: any) => assignedSiteId.toString() === siteId,
+        ),
+      );
+    }
+
+    if (!isAuthorized) {
+      throw new ApiError("Not authorized", HttpStatus.FORBIDDEN);
     }
 
     const transactions = await ClientTransactionModel.find({ site: siteId })

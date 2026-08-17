@@ -5,6 +5,10 @@ interface DashboardContextType {
   setUnseenCount: (count: number) => void;
   pendingDeactivationCount: number;
   setPendingDeactivationCount: (count: number) => void;
+  feedbackOpenCount: number;
+  setFeedbackOpenCount: (count: number) => void;
+  expenseRequestPendingCount: number;
+  setExpenseRequestPendingCount: (count: number) => void;
 }
 
 export const DashboardContext = createContext<DashboardContextType | undefined>(

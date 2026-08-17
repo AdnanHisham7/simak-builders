@@ -4,7 +4,7 @@ import { RootState } from "@/store/store";
 import { store } from "@/store/store";
 import { clearUser } from "@/store/slices/authSlice";
 import { toast } from "sonner";
-import DashboardLayout from "@/pages/Dashboard/DashboardLayout";
+import PortalLayout from "@/pages/Dashboard/PortalLayout";
 import { architectMenus } from "@/constants/menu";
 
 const ArchitectProtected = () => {
@@ -26,9 +26,9 @@ const ArchitectProtected = () => {
   }
 
   return (
-    <DashboardLayout menus={architectMenus}>
+    <PortalLayout menus={architectMenus} roleLabel="Architect Portal">
       <Outlet />
-    </DashboardLayout>
+    </PortalLayout>
   );
 };
 

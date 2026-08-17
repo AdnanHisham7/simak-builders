@@ -504,11 +504,15 @@ const approvePhase = async (
   next: NextFunction,
 ) => {
   try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
     const { phaseId } = req.params;
     const site = await SiteModel.findOne({ "phases._id": phaseId });
     if (!site) throw new ApiError("Phase not found", HttpStatus.NOT_FOUND);
 
-    const phase = site.phases.find((p) => p._id === phaseId);
+    const phase = site.phases.find((p) => p._id?.toString() === phaseId);
     if (!phase || phase.status !== "pending") {
       throw new ApiError("Invalid phase status", HttpStatus.BAD_REQUEST);
     }
@@ -536,11 +540,15 @@ const approvePhase = async (
 
 const rejectPhase = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+
     const { phaseId } = req.params;
     const site = await SiteModel.findOne({ "phases._id": phaseId });
     if (!site) throw new ApiError("Phase not found", HttpStatus.NOT_FOUND);
 
-    const phase = site.phases.find((p) => p._id === phaseId);
+    const phase = site.phases.find((p) => p._id?.toString() === phaseId);
     if (!phase || phase.status !== "pending") {
       throw new ApiError("Invalid phase status", HttpStatus.BAD_REQUEST);
     }

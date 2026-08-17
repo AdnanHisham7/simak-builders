@@ -4,7 +4,7 @@ import { RootState } from "@/store/store";
 import { store } from "@/store/store";
 import { clearUser } from "@/store/slices/authSlice";
 import { toast } from "sonner";
-import DashboardLayout from "@/pages/Dashboard/DashboardLayout";
+import PortalLayout from "@/pages/Dashboard/PortalLayout";
 import { clientMenus } from "@/constants/menu";
 
 const ClientProtected = () => {
@@ -26,9 +26,9 @@ const ClientProtected = () => {
   }
 
   return (
-    <DashboardLayout menus={clientMenus}>
+    <PortalLayout menus={clientMenus} roleLabel="Client Portal">
       <Outlet />
-    </DashboardLayout>
+    </PortalLayout>
   );
 };
 

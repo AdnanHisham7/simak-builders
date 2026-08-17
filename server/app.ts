@@ -19,6 +19,8 @@ import notificationRoutes from "@routes/notificationRoutes";
 import enquiryRoutes from "@routes/enquiryRoutes";
 import projectRoutes from "@routes/projectRoutes";
 import itemRoutes from "@routes/itemRoutes";
+import feedbackRoutes from "@routes/feedbackRoutes";
+import expenseRequestRoutes from "@routes/expenseRequestRoutes";
 import { env } from "./config/env";
 import morgan from "morgan";
 
@@ -65,6 +67,8 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/items", itemRoutes);
+app.use("/api/feedback", feedbackRoutes);
+app.use("/api/expense-requests", expenseRequestRoutes);
 
 // Error Handler
 app.use(errorMiddleware);

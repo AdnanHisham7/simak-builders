@@ -8,7 +8,6 @@ import {
   Settings,
   DollarSign,
   CheckSquare,
-  FileText,
   Activity,
   MessageCircle,
   Package,
@@ -45,6 +44,17 @@ export const adminMenus = [
   {
     title: "Finance",
     items: [{ name: "Salary", icon: DollarSign, path: "/admin/salary" }],
+  },
+  {
+    title: "Client Care",
+    items: [
+      { name: "Feedback", icon: MessageCircle, path: "/admin/feedback" },
+      {
+        name: "Expense Requests",
+        icon: DollarSign,
+        path: "/admin/expense-requests",
+      },
+    ],
   },
   {
     title: "Insights",
@@ -87,8 +97,6 @@ export const architectMenus = [
     title: "Main",
     items: [
       { name: "Dashboard", icon: Grid, path: "/architect/dashboard" },
-      { name: "Sites", icon: Building, path: "/architect/sites" },
-      { name: "Documents", icon: FileText, path: "/architect/documents" },
       {
         name: "Expense Requests",
         icon: DollarSign,
