@@ -85,4 +85,8 @@ const UserSchema = new Schema<User>(
   { timestamps: true }
 );
 
+UserSchema.index({ role: 1 });
+UserSchema.index({ assignedSites: 1 });
+UserSchema.index({ role: 1, isDeleted: 1 });
+
 export const UserModel = model<User>("User", UserSchema);

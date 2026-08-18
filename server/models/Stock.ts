@@ -13,4 +13,6 @@ const StockSchema = new Schema<Stock>(
   { timestamps: true }
 );
 
+StockSchema.index({ site: 1, category: 1 });
+
 export const StockModel = model<Stock>("Stock", StockSchema);

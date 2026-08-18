@@ -26,8 +26,6 @@ const Login: React.FC = () => {
     handleLogin(email, password);
   };
 
-  console.log(loginIllustration);
-
   return (
     <div className="flex h-screen">
       {/* Left Side - Form */}

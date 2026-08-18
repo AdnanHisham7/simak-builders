@@ -1,6 +1,9 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import compression from "compression";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { errorMiddleware } from "./middleware/errorMiddleware";
 import authRoutes from "@routes/authRoutes";
 import userRoutes from "@routes/userRoutes";
@@ -26,10 +29,23 @@ import morgan from "morgan";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 // Middleware
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
+app.use(compression());
 app.use(express.json());
 app.use(cookieParser());
-app.use(morgan("dev"));
+if (process.env.NODE_ENV !== "production") {
+  app.use(morgan("dev"));
+} else {
+  app.use(morgan("combined"));
+}
+
 const allowedOrigins = [
   "https://simakbuilders.com",
   "https://www.simakbuilders.com",
@@ -47,6 +63,35 @@ app.use(
     credentials: true,
   }),
 );
+
+const generalApiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests. Please try again later." },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many attempts. Please try again later." },
+});
+
+const publicFormLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many submissions. Please try again later." },
+});
+
+app.use("/api", generalApiLimiter);
+app.use("/api/auth", authLimiter);
+app.use("/api/enquiries", publicFormLimiter);
+app.use("/api/feedback", publicFormLimiter);
 
 
 // Routes

@@ -12,6 +12,15 @@ import { join } from "path";
 import * as fs from "fs/promises";
 import axios from "axios";
 import cloudinary from "../services/cloudinaryService";
+import {
+  cacheGet,
+  cacheSet,
+  bumpCacheVersion,
+  getCacheVersion,
+} from "@config/redis";
+
+const SITES_CACHE_NAMESPACE = "sites";
+const SITES_CACHE_TTL_SECONDS = 20;
 
 const createSite = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -97,6 +106,8 @@ const createSite = async (req: Request, res: Response, next: NextFunction) => {
       );
     }
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
     res
       .status(HttpStatus.CREATED)
       .json({ message: "Site created", siteId: site._id });
@@ -176,6 +187,7 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
       );
 
     await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Site updated" });
   } catch (error) {
     next(error);
@@ -227,6 +239,8 @@ const updateSupervisionPercentage = async (
       details: `Updated supervision percentage to ${parsed}% for site: ${site.name}`,
     });
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
     res.status(HttpStatus.OK).json({
       message: "Supervision percentage updated",
       supervisionPercentage: site.supervisionPercentage,
@@ -243,24 +257,18 @@ const getSiteDetails = async (
 ) => {
   try {
     const { siteId } = req.params;
-    const site = await SiteModel.findById(siteId).populate(
-      "documents.uploadedBy",
-      "name",
-    );
+    const site = await SiteModel.findById(siteId)
+      .populate("documents.uploadedBy", "name")
+      .lean();
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
-    const siteManagers = await UserModel.find({
-      role: "siteManager",
-      assignedSites: siteId,
-    });
-    const architects = await UserModel.find({
-      role: "architect",
-      assignedSites: siteId,
-    });
-    const supervisors = await UserModel.find({
-      role: "supervisor",
-      assignedSites: siteId,
-    });
-    const client = await UserModel.findById(site.client);
+    const [siteManagers, architects, supervisors, client] = await Promise.all(
+      [
+        UserModel.find({ role: "siteManager", assignedSites: siteId }).lean(),
+        UserModel.find({ role: "architect", assignedSites: siteId }).lean(),
+        UserModel.find({ role: "supervisor", assignedSites: siteId }).lean(),
+        UserModel.findById(site.client).lean(),
+      ],
+    );
 
     res.status(HttpStatus.OK).json({
       site,
@@ -277,16 +285,67 @@ const getSiteDetails = async (
 
 const getSites = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await UserModel.findById(req.user?.userId);
+    const user = req.authUser;
     let sites;
 
-    if (
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 0;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const status =
+      typeof req.query.status === "string" &&
+      req.query.status !== "All Statuses"
+        ? req.query.status
+        : "";
+    const isPaginated = page > 0 && limit > 0;
+
+    const version = await getCacheVersion(SITES_CACHE_NAMESPACE);
+    const isRestrictedRole =
       user?.role === "siteManager" ||
       user?.role === "supervisor" ||
-      user?.role === "architect"
-    ) {
+      user?.role === "architect";
+    const paginationSuffix = isPaginated
+      ? `:page:${page}:limit:${limit}:search:${search}:status:${status}`
+      : "";
+    const cacheKey = isRestrictedRole
+      ? `${SITES_CACHE_NAMESPACE}:v${version}:user:${req.user?.userId}${paginationSuffix}`
+      : `${SITES_CACHE_NAMESPACE}:v${version}:all${paginationSuffix}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const searchMatchStage =
+      search.length > 0
+        ? [
+            {
+              $match: {
+                $or: [
+                  { name: { $regex: search, $options: "i" } },
+                  { address: { $regex: search, $options: "i" } },
+                  { city: { $regex: search, $options: "i" } },
+                  { state: { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : [];
+    const statusMatchStage =
+      status.length > 0 ? [{ $match: { status } }] : [];
+    const paginationStages = isPaginated
+      ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
+      : [];
+
+    if (isRestrictedRole) {
       sites = await SiteModel.aggregate([
         { $match: { _id: { $in: user?.assignedSites } } },
+        ...searchMatchStage,
+        ...statusMatchStage,
+        ...paginationStages,
         {
           $lookup: {
             from: "users",
@@ -350,6 +409,9 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
       ]);
     } else {
       sites = await SiteModel.aggregate([
+        ...searchMatchStage,
+        ...statusMatchStage,
+        ...paginationStages,
         {
           $lookup: {
             from: "users",
@@ -419,7 +481,38 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
       select: "name",
     });
 
-    res.status(HttpStatus.OK).json(sites);
+    let responseBody: unknown = sites;
+
+    if (isPaginated) {
+      const countMatch: Record<string, any> = {};
+      if (isRestrictedRole) {
+        countMatch._id = { $in: user?.assignedSites };
+      }
+      if (search.length > 0) {
+        countMatch.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { address: { $regex: search, $options: "i" } },
+          { city: { $regex: search, $options: "i" } },
+          { state: { $regex: search, $options: "i" } },
+        ];
+      }
+      if (status.length > 0) {
+        countMatch.status = status;
+      }
+      const total = await SiteModel.countDocuments(countMatch);
+
+      responseBody = {
+        sites,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      };
+    }
+
+    await cacheSet(cacheKey, responseBody, SITES_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
   } catch (error) {
     next(error);
   }
@@ -463,7 +556,6 @@ const updatePhaseStatus = async (
         await notification.save();
       }
     } else if (user.role === "admin") {
-      console.log(phase.status, status);
       if (status === "completed" || status === "not started") {
         phase.status = status;
         if (status === "completed") {
@@ -492,6 +584,7 @@ const updatePhaseStatus = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Phase status updated" });
   } catch (error) {
     next(error);
@@ -532,6 +625,7 @@ const approvePhase = async (
       await notification.save();
     }
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Phase approved" });
   } catch (error) {
     next(error);
@@ -567,6 +661,7 @@ const rejectPhase = async (req: Request, res: Response, next: NextFunction) => {
       await notification.save();
     }
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Phase rejected" });
   } catch (error) {
     next(error);
@@ -580,7 +675,7 @@ const uploadDocument = async (
 ) => {
   try {
     const { siteId } = req.params;
-    const user = await UserModel.findById(req.user?.userId);
+    const user = req.authUser;
     if (
       user?.role !== "admin" &&
       !user?.assignedSites.some((id: any) => id.toString() === siteId)
@@ -790,6 +885,7 @@ const markSiteAsCompleted = async (
       details: `Marked site as completed: ${site.name}`,
     });
 
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Site marked as completed" });
   } catch (error) {
     next(error);

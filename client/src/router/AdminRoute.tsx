@@ -8,12 +8,9 @@ interface Props {
 }
 
 const AdminRoute: React.FC<Props> = ({ children }) => {
-  const { isAuthenticated, user, userType } = useSelector(
+  const { isAuthenticated, user } = useSelector(
     (state: RootState) => state.auth
   );
-
-  console.log("role:", userType);
-  console.log("email:", user?.email);
 
   if (!isAuthenticated || !user?.isAdmin) {
     return <Navigate to="/admin" replace />;

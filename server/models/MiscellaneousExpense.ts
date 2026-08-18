@@ -32,6 +32,8 @@ const MiscellaneousExpenseSchema = new Schema(
   { timestamps: true },
 );
 
+MiscellaneousExpenseSchema.index({ site: 1, createdAt: -1 });
+
 export const MiscellaneousExpenseModel = model(
   "MiscellaneousExpense",
   MiscellaneousExpenseSchema

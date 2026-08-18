@@ -10,4 +10,6 @@ const VendorSchema = new Schema<Vendor>(
   { timestamps: true }
 );
 
+VendorSchema.index({ name: 1 });
+
 export const VendorModel = model<Vendor>("Vendor", VendorSchema);

@@ -67,4 +67,7 @@ const SiteSchema = new Schema<Site>(
   { timestamps: true }
 );
 
+SiteSchema.index({ client: 1 });
+SiteSchema.index({ status: 1 });
+
 export const SiteModel = model<Site>("Site", SiteSchema);

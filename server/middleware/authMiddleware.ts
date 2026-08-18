@@ -55,6 +55,8 @@ export const authMiddleware = async (
       return;
     }
 
+    req.authUser = user;
+
     next();
   } catch (error) {
     next(new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED));

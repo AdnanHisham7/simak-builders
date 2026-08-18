@@ -9,4 +9,5 @@ export const env = {
   EMAIL_PASS: process.env.EMAIL_PASS!,
   FRONTEND_URL: process.env.FRONTEND_URL!,
   GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID!,
+  REDIS_URL: process.env.REDIS_URL || "",
 };

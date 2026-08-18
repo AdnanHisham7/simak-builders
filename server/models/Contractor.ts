@@ -18,4 +18,7 @@ const ContractorSchema = new Schema(
   { timestamps: true }
 );
 
+ContractorSchema.index({ status: 1 });
+ContractorSchema.index({ "siteAssignments.site": 1 });
+
 export const ContractorModel = model("Contractor", ContractorSchema);

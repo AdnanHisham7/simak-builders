@@ -14,4 +14,7 @@ const AttendanceSchema = new Schema<Attendance>(
   { timestamps: true }
 );
 
+AttendanceSchema.index({ site: 1, createdAt: -1 });
+AttendanceSchema.index({ employee: 1, date: -1 });
+
 export const AttendanceModel = model<Attendance>("Attendance", AttendanceSchema);

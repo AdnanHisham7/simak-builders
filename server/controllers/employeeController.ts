@@ -4,6 +4,15 @@ import { HttpStatus } from "@utils/enums/httpStatus";
 import { ApiError } from "@utils/errors/ApiError";
 import { AttendanceModel } from "@models/Attendance";
 import { ActivityLogModel } from "@models/ActivityLog";
+import {
+  cacheGet,
+  cacheSet,
+  bumpCacheVersion,
+  getCacheVersion,
+} from "@config/redis";
+
+const EMPLOYEES_CACHE_NAMESPACE = "employees";
+const EMPLOYEES_CACHE_TTL_SECONDS = 20;
 
 const getEmployees = async (
   req: Request,
@@ -11,7 +20,64 @@ const getEmployees = async (
   next: NextFunction
 ) => {
   try {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 0;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const position =
+      typeof req.query.position === "string" ? req.query.position.trim() : "";
+    const sortField = ["name", "email", "position"].includes(
+      req.query.sortBy as string
+    )
+      ? (req.query.sortBy as "name" | "email" | "position")
+      : "name";
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const isPaginated = page > 0 && limit > 0;
+
+    const version = await getCacheVersion(EMPLOYEES_CACHE_NAMESPACE);
+    const paginationSuffix = isPaginated
+      ? `:page:${page}:limit:${limit}:search:${search}:position:${position}:sort:${sortField}:${sortOrder}`
+      : "";
+    const cacheKey = `${EMPLOYEES_CACHE_NAMESPACE}:v${version}${paginationSuffix}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const searchMatchStage =
+      search.length > 0
+        ? [
+            {
+              $match: {
+                $or: [
+                  { name: { $regex: search, $options: "i" } },
+                  { email: { $regex: search, $options: "i" } },
+                  { position: { $regex: search, $options: "i" } },
+                  { phone: { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : [];
+    const positionMatchStage =
+      position.length > 0 ? [{ $match: { position } }] : [];
+    const sortStage = isPaginated
+      ? [{ $sort: { [sortField]: sortOrder as 1 | -1 } }]
+      : [];
+    const paginationStages = isPaginated
+      ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
+      : [];
+
     const employees = await EmployeeModel.aggregate([
+      ...searchMatchStage,
+      ...positionMatchStage,
+      ...sortStage,
+      ...paginationStages,
+      ...paginationStages,
       // Step 1: Lookup paid attendance records for each employee
       {
         $lookup: {
@@ -54,7 +120,34 @@ const getEmployees = async (
       },
     ]);
 
-    res.status(HttpStatus.OK).json(employees);
+    let responseBody: unknown = employees;
+
+    if (isPaginated) {
+      const countMatch: Record<string, any> = {};
+      if (search.length > 0) {
+        countMatch.$or = [
+          { name: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { position: { $regex: search, $options: "i" } },
+          { phone: { $regex: search, $options: "i" } },
+        ];
+      }
+      if (position.length > 0) {
+        countMatch.position = position;
+      }
+      const total = await EmployeeModel.countDocuments(countMatch);
+      responseBody = {
+        employees,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      };
+    }
+
+    await cacheSet(cacheKey, responseBody, EMPLOYEES_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
   } catch (error) {
     next(error);
   }
@@ -67,7 +160,7 @@ const getEmployeeById = async (
 ) => {
   try {
     const { id } = req.params;
-    const employee = await EmployeeModel.findById(id);
+    const employee = await EmployeeModel.findById(id).lean();
     if (!employee)
       throw new ApiError("Employee not found", HttpStatus.NOT_FOUND);
     res.status(HttpStatus.OK).json(employee);
@@ -101,6 +194,8 @@ const createEmployee = async (
       resourceId: newEmployee._id,
       details: `Created employee: ${newEmployee.name}`,
     });
+
+    await bumpCacheVersion(EMPLOYEES_CACHE_NAMESPACE);
 
     res.status(HttpStatus.CREATED).json(newEmployee);
   } catch (error) {
@@ -138,6 +233,8 @@ const updateEmployee = async (
       );
     }
 
+    await bumpCacheVersion(EMPLOYEES_CACHE_NAMESPACE);
+
     res.status(HttpStatus.OK).json(updatedEmployee);
   } catch (error) {
     next(error);
@@ -154,6 +251,7 @@ const deleteEmployee = async (
     const deletedEmployee = await EmployeeModel.findByIdAndDelete(id);
     if (!deletedEmployee)
       throw new ApiError("Employee not found", HttpStatus.NOT_FOUND);
+    await bumpCacheVersion(EMPLOYEES_CACHE_NAMESPACE);
     res.status(HttpStatus.NO_CONTENT).send();
   } catch (error) {
     next(error);
@@ -211,6 +309,7 @@ const markAttendancesPaid = async (
       { _id: { $in: attendanceIds } },
       { isPaid: true }
     );
+    await bumpCacheVersion(EMPLOYEES_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Attendances marked as paid" });
   } catch (error) {
     next(error);

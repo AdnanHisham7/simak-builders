@@ -48,4 +48,7 @@ const PurchaseSchema = new Schema<Purchase>(
   { timestamps: true },
 );
 
+PurchaseSchema.index({ site: 1, createdAt: -1 });
+PurchaseSchema.index({ vendor: 1 });
+
 export const PurchaseModel = model<Purchase>("Purchase", PurchaseSchema);

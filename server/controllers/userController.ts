@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { UserModel } from "@models/User";
 import { UserRole } from "@entities/user";
-// import { SiteModel } from "@models/Site";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
 import * as authService from "../services/authService";
@@ -12,6 +11,9 @@ import { sendInitialPasswordEmail } from "../services/emailService";
 import { CompanyModel } from "@models/Company";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { Types } from "mongoose";
+import { cacheGet, cacheSet } from "@config/redis";
+
+const USERS_BY_ROLE_CACHE_TTL_SECONDS = 20;
 
 const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -58,7 +60,17 @@ const getUsersByRole = async (
     if (!includeDeleted) {
       query.isDeleted = { $ne: true };
     }
-    const users = await UserModel.find(query).populate("assignedSites");
+
+    const cacheKey = `users:role:${role}:${includeDeleted ? "withDeleted" : "active"}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const users = await UserModel.find(query)
+      .populate("assignedSites", "name")
+      .lean();
     // Map to the expected response format
     const response = users.map((user) => ({
       id: user._id.toString(),
@@ -76,6 +88,8 @@ const getUsersByRole = async (
       password: user.password,
       siteExpensesBalance: user.siteExpensesBalance,
     }));
+
+    await cacheSet(cacheKey, response, USERS_BY_ROLE_CACHE_TTL_SECONDS);
 
     res.status(HttpStatus.OK).json(response);
   } catch (error) {

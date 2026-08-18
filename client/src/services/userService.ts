@@ -1,5 +1,8 @@
 import { privateClient } from "@/api";
 import { Site } from "./siteService";
+import { withCache, invalidateCache } from "@/helpers/requestCache";
+
+const USERS_BY_ROLE_CACHE_TTL_MS = 15_000;
 
 export interface User {
   id: string;
@@ -46,25 +49,28 @@ export const getUsersByRole = async (
   role: string,
   includeDeleted = false,
 ): Promise<User[]> => {
-  const response = await privateClient.get("/users", {
-    params: { role, ...(includeDeleted ? { includeDeleted: "true" } : {}) },
+  const cacheKey = `users-by-role:${role}:${includeDeleted}`;
+  return withCache(cacheKey, USERS_BY_ROLE_CACHE_TTL_MS, async () => {
+    const response = await privateClient.get("/users", {
+      params: { role, ...(includeDeleted ? { includeDeleted: "true" } : {}) },
+    });
+    return response.data.map((user: any) => ({
+      id: user.id, // Corrected from user.id to user._id
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      assignedSites:
+        user.assignedSites?.map((site: any) => ({
+          id: site.id, // Ensure this matches the site's ID from siteService
+          name: site.name,
+        })) || [],
+      isBlocked: user.isBlocked,
+      isDeleted: user.isDeleted || false,
+      password: user.password,
+      siteExpensesBalance: user.siteExpensesBalance,
+      profileImage: user.profileImage,
+    }));
   });
-  return response.data.map((user: any) => ({
-    id: user.id, // Corrected from user.id to user._id
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    assignedSites:
-      user.assignedSites?.map((site: any) => ({
-        id: site.id, // Ensure this matches the site's ID from siteService
-        name: site.name,
-      })) || [],
-    isBlocked: user.isBlocked,
-    isDeleted: user.isDeleted || false,
-    password: user.password,
-    siteExpensesBalance: user.siteExpensesBalance,
-    profileImage: user.profileImage,
-  }));
 };
 
 export const toggleUserStatus = async (
@@ -74,6 +80,7 @@ export const toggleUserStatus = async (
   const response = await privateClient.put(`/users/toggleStatus/${userId}`, {
     isBlocked, // Send isBlocked instead of status
   });
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -102,6 +109,7 @@ export const createSiteManager = async (userData: {
   role: string;
 }) => {
   const response = await privateClient.post("/users/managers", userData);
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -116,6 +124,7 @@ export const updateSiteManager = async (
     `/users/managers/${userId}`,
     updateData
   );
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -132,6 +141,7 @@ export const assignSitesToManager = async (
   siteIds: string[]
 ) => {
   await privateClient.put(`/users/manager/${userId}/assign-sites`, { siteIds });
+  invalidateCache("users-by-role:");
 };
 
 export const assignSitesToClients = async (
@@ -139,6 +149,7 @@ export const assignSitesToClients = async (
   siteIds: string[]
 ) => {
   await privateClient.put(`/users/clients/${userId}/assign-sites`, { siteIds });
+  invalidateCache("users-by-role:");
 };
 
 export const createSupervisor = async (userData: {
@@ -149,6 +160,7 @@ export const createSupervisor = async (userData: {
     ...userData,
     role: "supervisor",
   });
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -163,6 +175,7 @@ export const updateSupervisor = async (
     `/users/supervisors/${userId}`,
     updateData
   );
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -181,6 +194,7 @@ export const assignSitesToSupervisor = async (
   await privateClient.put(`/users/supervisor/${userId}/assign-sites`, {
     siteIds,
   });
+  invalidateCache("users-by-role:");
 };
 
 // Updated userService.ts (append these functions)
@@ -192,6 +206,7 @@ export const createArchitect = async (userData: {
     ...userData,
     role: "architect",
   });
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -206,6 +221,7 @@ export const updateArchitect = async (
     `/users/architects/${userId}`,
     updateData
   );
+  invalidateCache("users-by-role:");
   return {
     id: response.data._id,
     ...response.data,
@@ -224,6 +240,7 @@ export const assignSitesToArchitect = async (
   await privateClient.put(`/users/architect/${userId}/assign-sites`, {
     siteIds,
   });
+  invalidateCache("users-by-role:");
 };
 
 export const assignSalary = async (
@@ -283,6 +300,7 @@ export const createClient = async (userData: {
     ...userData,
     role: "client",
   });
+  invalidateCache("users-by-role:");
   return {
     id: response.data.user.id,
     name: response.data.user.name,
@@ -300,6 +318,7 @@ export const updateClient = async (
     `/users/clients/${userId}`,
     updateData
   );
+  invalidateCache("users-by-role:");
   return {
     id: userId,
     name: response.data.name || updateData.name,
@@ -311,10 +330,12 @@ export const updateClient = async (
 
 export const deleteClient = async (userId: string): Promise<void> => {
   await privateClient.delete(`/users/clients/${userId}`);
+  invalidateCache("users-by-role:");
 };
 
 export const restoreClient = async (userId: string): Promise<void> => {
   await privateClient.patch(`/users/clients/${userId}/restore`);
+  invalidateCache("users-by-role:");
 };
 
 export type StaffRolePathPrefix = "architects" | "managers" | "supervisors";
@@ -324,6 +345,7 @@ export const deleteStaffMember = async (
   userId: string,
 ): Promise<void> => {
   await privateClient.delete(`/users/${rolePathPrefix}/${userId}`);
+  invalidateCache("users-by-role:");
 };
 
 export const restoreStaffMember = async (
@@ -331,6 +353,7 @@ export const restoreStaffMember = async (
   userId: string,
 ): Promise<void> => {
   await privateClient.patch(`/users/${rolePathPrefix}/${userId}/restore`);
+  invalidateCache("users-by-role:");
 };
 
 export const assignSiteExpenses = async (
