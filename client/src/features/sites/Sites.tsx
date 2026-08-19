@@ -24,9 +24,10 @@ import {
   ShoppingCart,
   Inbox,
 } from "lucide-react";
-import { createSite, getSites, Site } from "@/services/siteService";
+import { createSite, getSites, getSitesPaginated, Site } from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
 import { UserRole } from "@/types/user";
+import debounce from "lodash/debounce";
 import AddSiteModal from "./AddSiteModal";
 import AddPurchaseModal from "./AddPurchaseModal";
 import { useNavigate } from "react-router-dom";
@@ -135,10 +136,15 @@ const Sites: React.FC = () => {
   const { formatDate, formatNumber } = usePreferences();
   const { userType } = useSelector((state: RootState) => state.auth);
   const navigate = useNavigate();
-  const [sites, setSites] = useState<MappedSite[]>([]);
+  const [pageSites, setPageSites] = useState<MappedSite[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [portfolioStats, setPortfolioStats] = useState<MappedSite[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
@@ -163,55 +169,87 @@ const Sites: React.FC = () => {
   };
 
   useEffect(() => {
-    const fetchData = async () => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+      setCurrentPage(1);
+    }, 350);
+    debounced(searchTerm);
+    return () => debounced.cancel();
+  }, [searchTerm]);
+
+  useEffect(() => {
+    const fetchInitialData = async () => {
       try {
-        const [fetchedSites, clientList, managerList, architectList] =
+        const [allSites, clientList, managerList, architectList] =
           await Promise.all([
             getSites(),
             getUsersByRole(UserRole.Client),
             getUsersByRole(UserRole.SiteManager),
             getUsersByRole(UserRole.Architect),
           ]);
-        const mappedSites = fetchedSites.map(mapSiteForDisplay);
-        setSites(mappedSites);
-        setProjectStatuses(getProjectStatuses(mappedSites));
+        const mappedAllSites = allSites.map(mapSiteForDisplay);
+        setPortfolioStats(mappedAllSites);
+        setProjectStatuses(getProjectStatuses(mappedAllSites));
         setClients(clientList);
         setSiteManagers(managerList);
         setArchitects(architectList);
-        setLoading(false);
       } catch (err) {
         toast.error("Failed to fetch sites");
         setError("Failed to fetch data. Please try again later.");
         setLoading(false);
       }
     };
-    fetchData();
+    fetchInitialData();
   }, []);
 
-  const filteredSites = sites.filter((site) => {
-    const matchesSearch =
-      site.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      site.location.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus =
-      selectedProjectStatus === "All Statuses" ||
-      site.status === selectedProjectStatus;
-    return matchesSearch && matchesStatus;
-  });
+  useEffect(() => {
+    const fetchPage = async () => {
+      setTableLoading(true);
+      try {
+        const result = await getSitesPaginated({
+          page: currentPage,
+          limit: itemsPerPage,
+          search: debouncedSearchTerm,
+          status: selectedProjectStatus,
+        });
+        setPageSites(result.sites.map(mapSiteForDisplay));
+        setTotal(result.total);
+        setTotalPages(result.totalPages);
+      } catch (err) {
+        toast.error("Failed to fetch sites");
+        setError("Failed to fetch data. Please try again later.");
+      } finally {
+        setLoading(false);
+        setTableLoading(false);
+      }
+    };
+    fetchPage();
+  }, [currentPage, debouncedSearchTerm, selectedProjectStatus]);
 
-  const totalPages = Math.ceil(filteredSites.length / itemsPerPage) || 1;
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentSites = filteredSites.slice(indexOfFirstItem, indexOfLastItem);
+  const refetchCurrentPage = async () => {
+    const result = await getSitesPaginated({
+      page: currentPage,
+      limit: itemsPerPage,
+      search: debouncedSearchTerm,
+      status: selectedProjectStatus,
+    });
+    setPageSites(result.sites.map(mapSiteForDisplay));
+    setTotal(result.total);
+    setTotalPages(result.totalPages);
+  };
 
-  const totalBudget = sites.reduce((sum, site) => sum + site.budget, 0);
-  const completedSites = sites.filter(
+  const totalBudget = portfolioStats.reduce((sum, site) => sum + site.budget, 0);
+  const completedSites = portfolioStats.filter(
     (site) => site.status.toLowerCase() === "completed"
   ).length;
-  const activeSites = sites.filter(
+  const activeSites = portfolioStats.filter(
     (site) =>
       site.status.toLowerCase() === "active" ||
       site.status.toLowerCase() === "in progress"
   ).length;
+
+  const indexOfFirstItem = total === 0 ? 0 : (currentPage - 1) * itemsPerPage;
+  const indexOfLastItem = currentPage * itemsPerPage;
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) {
@@ -223,12 +261,13 @@ const Sites: React.FC = () => {
     try {
       const createdSite = await createSite(siteData);
       const mappedSite = mapSiteForDisplay(createdSite);
-      setSites((prevSites) => [...prevSites, mappedSite]);
+      setPortfolioStats((prev) => [...prev, mappedSite]);
       if (!projectStatuses.includes(mappedSite.status)) {
         setProjectStatuses((prev) => [...prev, mappedSite.status]);
       }
       setIsModalOpen(false);
       toast.success("Site created successfully");
+      await refetchCurrentPage();
     } catch (err) {
       toast.error("Failed to create site");
     }
@@ -288,7 +327,7 @@ const Sites: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total Sites" value={sites.length} icon={Building2} />
+            <StatCard label="Total Sites" value={total} icon={Building2} />
             <StatCard label="Active Sites" value={activeSites} icon={TrendingUp} />
             <GradientStatCard label="Total Budget" value={totalBudget} prefix="₹" icon={DollarSign} />
             <StatCard label="Completed" value={completedSites} icon={CheckCircle2} />
@@ -334,7 +373,7 @@ const Sites: React.FC = () => {
               </div>
             </div>
 
-            {filteredSites.length === 0 ? (
+            {!tableLoading && pageSites.length === 0 ? (
               <EmptyState
                 icon={Inbox}
                 title="No sites found"
@@ -376,7 +415,7 @@ const Sites: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-console-border bg-white">
-                        {currentSites.map((site) => {
+                        {pageSites.map((site) => {
                           const actions = getActionsForRole(userType);
                           return (
                             <tr
@@ -528,9 +567,9 @@ const Sites: React.FC = () => {
                     Showing{" "}
                     <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
                     <span className="font-semibold text-console-text">
-                      {Math.min(indexOfLastItem, filteredSites.length)}
+                      {Math.min(indexOfLastItem, total)}
                     </span>{" "}
-                    of <span className="font-semibold text-console-text">{filteredSites.length}</span> sites
+                    of <span className="font-semibold text-console-text">{total}</span> sites
                   </p>
                   <div className="flex items-center gap-1">
                     <button

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   getEmployees,
+  getEmployeesPaginated,
   createEmployee,
   updateEmployee,
   deleteEmployee,
@@ -9,6 +10,7 @@ import {
   markAttendancesPaid,
   Employee,
 } from "@/services/employeeService";
+import debounce from "lodash/debounce";
 import MarkEmployeeAttendanceModal from "./MarkEmployeeAttendanceModal";
 import { toast } from "sonner";
 import {
@@ -23,6 +25,8 @@ import {
   Trash2,
   Users,
   Inbox,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -62,7 +66,12 @@ type SortField = "name" | "email" | "position";
 const Employees: React.FC = () => {
   const { formatNumber, formatDate, formatDateTime, formatDecimal } = usePreferences();
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [portfolioEmployees, setPortfolioEmployees] = useState<Employee[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [tableLoading, setTableLoading] = useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
@@ -78,7 +87,9 @@ const Employees: React.FC = () => {
     dailyWage: 0,
   });
 
+  const itemsPerPage = 10;
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
   const [positionFilter, setPositionFilter] = useState<string>("");
   const [sortBy, setSortBy] = useState<SortField>("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
@@ -110,8 +121,21 @@ const Employees: React.FC = () => {
   } | null>(null);
 
   useEffect(() => {
-    fetchEmployees();
+    fetchPortfolioStats();
   }, []);
+
+  useEffect(() => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+      setCurrentPage(1);
+    }, 350);
+    debounced(searchTerm);
+    return () => debounced.cancel();
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchPage();
+  }, [currentPage, debouncedSearchTerm, positionFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     if (isAttendanceModalOpen && selectedEmployeeId) {
@@ -119,17 +143,46 @@ const Employees: React.FC = () => {
     }
   }, [isAttendanceModalOpen, selectedEmployeeId]);
 
-  const fetchEmployees = async () => {
+  const fetchPortfolioStats = async () => {
     try {
-      setLoading(true);
       const data = await getEmployees();
-      setEmployees(data);
+      setPortfolioEmployees(data);
+      setPageError(null);
+    } catch (err) {
+      setPageError("Failed to fetch employees");
+    }
+  };
+
+  const fetchPage = async () => {
+    setTableLoading(true);
+    try {
+      const result = await getEmployeesPaginated({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearchTerm,
+        position: positionFilter,
+        sortBy,
+        sortOrder,
+      });
+      setEmployees(result.employees);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
       setPageError(null);
     } catch (err) {
       setPageError("Failed to fetch employees");
     } finally {
       setLoading(false);
+      setTableLoading(false);
     }
+  };
+
+  const refreshAfterMutation = async () => {
+    if (currentPage === 1) {
+      await fetchPage();
+    } else {
+      setCurrentPage(1);
+    }
+    await fetchPortfolioStats();
   };
 
   const fetchAttendance = async (employeeId: string) => {
@@ -146,34 +199,14 @@ const Employees: React.FC = () => {
   };
 
   const uniquePositions = useMemo(() => {
-    return Array.from(new Set(employees.map((emp) => emp.position))).sort();
-  }, [employees]);
+    return Array.from(new Set(portfolioEmployees.map((emp) => emp.position))).sort();
+  }, [portfolioEmployees]);
 
-  const filteredAndSortedEmployees = useMemo(() => {
-    let filtered = employees.filter((employee) => {
-      const matchesSearch =
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.phone.includes(searchTerm);
-      const matchesPosition =
-        !positionFilter || employee.position === positionFilter;
-      return matchesSearch && matchesPosition;
-    });
-
-    filtered = [...filtered].sort((a, b) => {
-      const aValue = a[sortBy].toLowerCase();
-      const bValue = b[sortBy].toLowerCase();
-      return sortOrder === "asc"
-        ? aValue < bValue
-          ? -1
-          : 1
-        : aValue > bValue
-        ? -1
-        : 1;
-    });
-
-    return filtered;
-  }, [employees, searchTerm, positionFilter, sortBy, sortOrder]);
+  const paginate = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
 
   const openCreateModal = () => {
     setIsEditMode(false);
@@ -241,7 +274,7 @@ const Employees: React.FC = () => {
         toast.success("Employee created");
       }
       closeModal();
-      fetchEmployees();
+      await refreshAfterMutation();
     } catch (err) {
       toast.error("Operation failed");
     } finally {
@@ -256,7 +289,7 @@ const Employees: React.FC = () => {
       await deleteEmployee(deleteTarget.id);
       toast.success("Employee deleted");
       setDeleteTarget(null);
-      fetchEmployees();
+      await refreshAfterMutation();
     } catch (err) {
       toast.error("Failed to delete employee");
     } finally {
@@ -290,6 +323,11 @@ const Employees: React.FC = () => {
     } catch (err) {
       toast.error("Failed to mark attendances as paid");
     }
+  };
+
+  const handlePositionFilterChange = (value: string) => {
+    setPositionFilter(value);
+    setCurrentPage(1);
   };
 
   const handleSort = (field: SortField) => {
@@ -332,12 +370,12 @@ const Employees: React.FC = () => {
     }
 
     if (searchTermAttendance) {
-      const lowerSearch = searchTermAttendance.toLowerCase();
+      const lowerSearch = searchTermAttendance?.toLowerCase();
       filtered = filtered.filter(
         (record) =>
-          record.site.name.toLowerCase().includes(lowerSearch) ||
-          formatDate(record.date).toLowerCase().includes(lowerSearch) ||
-          record.markedBy.name.toLowerCase().includes(lowerSearch)
+          record.site.name?.toLowerCase().includes(lowerSearch) ||
+          formatDate(record.date)?.toLowerCase().includes(lowerSearch) ||
+          record.markedBy.name?.toLowerCase().includes(lowerSearch)
       );
     }
 
@@ -350,7 +388,7 @@ const Employees: React.FC = () => {
         <Card className="max-w-md text-center">
           <h3 className="text-lg font-semibold text-console-text">Something went wrong</h3>
           <p className="mt-1 text-sm text-console-muted">{pageError}</p>
-          <Button className="mt-5" onClick={fetchEmployees}>
+          <Button className="mt-5" onClick={() => { fetchPortfolioStats(); fetchPage(); }}>
             Try again
           </Button>
         </Card>
@@ -380,15 +418,15 @@ const Employees: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <StatCard label="Total Employees" value={employees.length} icon={Users} />
+            <StatCard label="Total Employees" value={portfolioEmployees.length} icon={Users} />
             <StatCard
               label="Total Daily Wage"
-              value={`₹${formatNumber(employees.reduce((sum, e) => sum + (e.dailyWage || 0), 0))}`}
+              value={`₹${formatNumber(portfolioEmployees.reduce((sum, e) => sum + (e.dailyWage || 0), 0))}`}
               icon={BarChart3}
             />
             <GradientStatCard
               label="Total Paid Salary"
-              value={employees.reduce((sum, e) => sum + (e.totalPaidSalary || 0), 0)}
+              value={portfolioEmployees.reduce((sum, e) => sum + (e.totalPaidSalary || 0), 0)}
               prefix="₹"
               tone="success"
               icon={CalendarCheck}
@@ -418,7 +456,7 @@ const Employees: React.FC = () => {
                 </label>
                 <select
                   value={positionFilter}
-                  onChange={(e) => setPositionFilter(e.target.value)}
+                  onChange={(e) => handlePositionFilterChange(e.target.value)}
                   className="w-full rounded-lg border border-console-border px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
                 >
                   <option value="">All Positions</option>
@@ -435,7 +473,9 @@ const Employees: React.FC = () => {
                   className="w-full"
                   onClick={() => {
                     setSearchTerm("");
+                    setDebouncedSearchTerm("");
                     setPositionFilter("");
+                    setCurrentPage(1);
                   }}
                 >
                   Clear filters
@@ -444,14 +484,14 @@ const Employees: React.FC = () => {
             </div>
             <div className="mt-4 flex items-center justify-between text-sm text-console-muted">
               <span>
-                Showing {filteredAndSortedEmployees.length} of {employees.length} employees
+                Showing {employees.length} of {total} employees
               </span>
               <span>Total positions: {uniquePositions.length}</span>
             </div>
           </Card>
 
           <Card>
-            {filteredAndSortedEmployees.length === 0 ? (
+            {!tableLoading && employees.length === 0 ? (
               <EmptyState
                 icon={Users}
                 title="No employees found"
@@ -499,7 +539,7 @@ const Employees: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-console-border">
-                    {filteredAndSortedEmployees.map((employee) => (
+                    {employees.map((employee) => (
                       <tr key={employee.id} className="hover:bg-console-bg">
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-3">
@@ -577,6 +617,70 @@ const Employees: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {employees.length > 0 && (
+              <div className="mt-4 flex flex-col items-center justify-between gap-4 rounded-console bg-console-bg px-4 py-3 sm:flex-row">
+                <p className="text-sm text-console-muted">
+                  Showing{" "}
+                  <span className="font-semibold text-console-text">
+                    {(currentPage - 1) * itemsPerPage + 1}
+                  </span>{" "}
+                  to{" "}
+                  <span className="font-semibold text-console-text">
+                    {Math.min(currentPage * itemsPerPage, total)}
+                  </span>{" "}
+                  of <span className="font-semibold text-console-text">{total}</span> employees
+                </p>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => paginate(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  {[...Array(totalPages)].map((_, i) => {
+                    const pageNum = i + 1;
+                    if (
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          type="button"
+                          key={pageNum}
+                          onClick={() => paginate(pageNum)}
+                          className={
+                            currentPage === pageNum
+                              ? "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium bg-brand-700 text-white transition-colors"
+                              : "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium text-console-muted transition-colors hover:bg-white"
+                          }
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    }
+                    if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                      return (
+                        <span key={pageNum} className="px-1 text-console-muted">
+                          …
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => paginate(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
               </div>
             )}
           </Card>
@@ -803,7 +907,8 @@ const Employees: React.FC = () => {
           employeeName={markAttendanceTarget.name}
           onClose={() => setMarkAttendanceTarget(null)}
           onMarked={() => {
-            fetchEmployees();
+            fetchPortfolioStats();
+            fetchPage();
           }}
         />
       )}

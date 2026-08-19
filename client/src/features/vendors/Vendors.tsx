@@ -15,15 +15,19 @@ import {
   List,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   AlertCircle,
 } from "lucide-react";
 import {
   getVendors,
+  getVendorsPaginated,
   createVendor,
   updateVendor,
   deleteVendor,
   getPurchasesByVendor,
 } from "@/services/vendorService";
+import debounce from "lodash/debounce";
 import SettleVendorModal from "./SettleVendorModal";
 import VendorPurchaseHistoryModal from "./VendorPurchaseHistoryModal";
 import { toast } from "sonner";
@@ -88,8 +92,13 @@ const formatCurrencyBase = (amount: number | undefined, numberFormat: string) =>
 const Vendors: React.FC = () => {
   const { numberFormat, formatDate } = usePreferences();
   const formatCurrency = (amount: number | undefined) => formatCurrencyBase(amount, numberFormat);
-  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [pageVendors, setPageVendors] = useState<Vendor[]>([]);
+  const [portfolioVendors, setPortfolioVendors] = useState<Vendor[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState<boolean>(true);
+  const [tableLoading, setTableLoading] = useState<boolean>(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [isEditMode, setIsEditMode] = useState<boolean>(false);
@@ -110,41 +119,86 @@ const Vendors: React.FC = () => {
   const [purchaseModalVendorName, setPurchaseModalVendorName] = useState("");
   const [isLoadingPurchases, setIsLoadingPurchases] = useState(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [expandedStats, setExpandedStats] = useState<boolean>(true);
 
-  const fetchVendors = async () => {
+  const itemsPerPage = 10;
+
+  const fetchPortfolioStats = async () => {
     try {
-      setLoading(true);
       const data = await getVendors();
-      setVendors(data);
+      setPortfolioVendors(data);
+      setPageError(null);
+    } catch (err) {
+      setPageError("Failed to fetch vendors");
+    }
+  };
+
+  const fetchPage = async () => {
+    setTableLoading(true);
+    try {
+      const result = await getVendorsPaginated({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearchTerm,
+      });
+      setPageVendors(result.vendors);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
       setPageError(null);
     } catch (err) {
       setPageError("Failed to fetch vendors");
     } finally {
       setLoading(false);
+      setTableLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchVendors();
+    fetchPortfolioStats();
   }, []);
 
-  const filteredVendors = vendors.filter((vendor) => {
-    const matchesSearch =
-      vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.email.toLowerCase().includes(searchTerm.toLowerCase());
+  useEffect(() => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+      setCurrentPage(1);
+    }, 350);
+    debounced(searchTerm);
+    return () => debounced.cancel();
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchPage();
+  }, [currentPage, debouncedSearchTerm]);
+
+  const paginate = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
+
+  const refreshAfterMutation = async () => {
+    if (currentPage === 1) {
+      await fetchPage();
+    } else {
+      setCurrentPage(1);
+    }
+    await fetchPortfolioStats();
+  };
+
+  const filteredVendors = pageVendors.filter((vendor) => {
     const matchesFilter =
       filterStatus === "all" || vendor.status === filterStatus;
-    return matchesSearch && matchesFilter;
+    return matchesFilter;
   });
 
   const stats = {
-    total: vendors.length,
-    totalAmount: vendors.reduce((sum, v) => sum + (v.totalAmount || 0), 0),
-    totalPurchases: vendors.reduce((sum, v) => sum + (v.totalPurchases || 0), 0),
-    totalOutstanding: vendors.reduce(
+    total: portfolioVendors.length,
+    totalAmount: portfolioVendors.reduce((sum, v) => sum + (v.totalAmount || 0), 0),
+    totalPurchases: portfolioVendors.reduce((sum, v) => sum + (v.totalPurchases || 0), 0),
+    totalOutstanding: portfolioVendors.reduce(
       (sum, v) => sum + (v.outstandingAmount || 0),
       0
     ),
@@ -192,7 +246,7 @@ const Vendors: React.FC = () => {
         toast.success("Vendor created");
       }
       closeModal();
-      fetchVendors();
+      await refreshAfterMutation();
     } catch (err) {
       toast.error("Operation failed");
     } finally {
@@ -207,7 +261,7 @@ const Vendors: React.FC = () => {
       await deleteVendor(deleteTarget.id);
       toast.success("Vendor deleted");
       setDeleteTarget(null);
-      fetchVendors();
+      await refreshAfterMutation();
     } catch (err) {
       toast.error("Failed to delete vendor");
     } finally {
@@ -258,7 +312,7 @@ const Vendors: React.FC = () => {
           </div>
           <h3 className="text-lg font-semibold text-console-text">Something went wrong</h3>
           <p className="mt-1 text-sm text-console-muted">{pageError}</p>
-          <Button className="mt-5" onClick={fetchVendors}>
+          <Button className="mt-5" onClick={() => { fetchPortfolioStats(); fetchPage(); }}>
             Try again
           </Button>
         </Card>
@@ -372,7 +426,7 @@ const Vendors: React.FC = () => {
             </div>
           </Card>
 
-          {filteredVendors.length === 0 ? (
+          {!tableLoading && filteredVendors.length === 0 ? (
             <Card>
               <EmptyState icon={Users} title="No vendors found" description="Try adjusting your search or filters." />
             </Card>
@@ -556,6 +610,70 @@ const Vendors: React.FC = () => {
               </div>
             </Card>
           )}
+          {total > 0 && (
+            <div className="flex flex-col items-center justify-between gap-4 rounded-console bg-white px-4 py-3 shadow-sm sm:flex-row">
+              <p className="text-sm text-console-muted">
+                Showing{" "}
+                <span className="font-semibold text-console-text">
+                  {(currentPage - 1) * itemsPerPage + 1}
+                </span>{" "}
+                to{" "}
+                <span className="font-semibold text-console-text">
+                  {Math.min(currentPage * itemsPerPage, total)}
+                </span>{" "}
+                of <span className="font-semibold text-console-text">{total}</span> vendors
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => paginate(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                {[...Array(totalPages)].map((_, i) => {
+                  const pageNum = i + 1;
+                  if (
+                    pageNum === 1 ||
+                    pageNum === totalPages ||
+                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        type="button"
+                        key={pageNum}
+                        onClick={() => paginate(pageNum)}
+                        className={
+                          currentPage === pageNum
+                            ? "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium bg-brand-700 text-white transition-colors"
+                            : "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium text-console-muted transition-colors hover:bg-console-bg"
+                        }
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                    return (
+                      <span key={pageNum} className="px-1 text-console-muted">
+                        …
+                      </span>
+                    );
+                  }
+                  return null;
+                })}
+                <button
+                  type="button"
+                  onClick={() => paginate(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
@@ -638,7 +756,7 @@ const Vendors: React.FC = () => {
           vendorId={settleTarget.id}
           vendorName={settleTarget.name}
           outstandingAmount={settleTarget.outstandingAmount}
-          onSettled={fetchVendors}
+          onSettled={refreshAfterMutation}
         />
       )}
     </div>

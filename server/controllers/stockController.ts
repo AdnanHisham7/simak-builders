@@ -12,6 +12,15 @@ import { NotificationModel } from "@models/Notification";
 import { Types } from "mongoose";
 import { resolveItem } from "@utils/itemMaster";
 import { computeWeightedAveragePrice } from "@utils/stockPricing";
+import {
+  cacheGet,
+  cacheSet,
+  bumpCacheVersion,
+  getCacheVersion,
+} from "@config/redis";
+
+const STOCKS_CACHE_NAMESPACE = "stocks";
+const STOCKS_CACHE_TTL_SECONDS = 20;
 
 const addStock = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -76,6 +85,8 @@ const addStock = async (req: Request, res: Response, next: NextFunction) => {
       resourceId: stock._id,
       details: `Added stock: ${stock.name}`,
     });
+
+    await bumpCacheVersion(STOCKS_CACHE_NAMESPACE);
 
     res
       .status(HttpStatus.CREATED)
@@ -240,6 +251,7 @@ const approveStockTransfer = async (
     });
     await notification.save();
 
+    await bumpCacheVersion(STOCKS_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Stock transfer approved" });
   } catch (error) {
     next(error);
@@ -325,6 +337,7 @@ const logStockUsage = async (
     });
     await usage.save();
 
+    await bumpCacheVersion(STOCKS_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({ message: "Stock usage logged" });
   } catch (error) {
     next(error);
@@ -333,11 +346,67 @@ const logStockUsage = async (
 
 const getStocks = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = req.user;
-    let filter: any = {};
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 0;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const category =
+      typeof req.query.category === "string"
+        ? req.query.category.trim()
+        : "";
+    const siteScope =
+      typeof req.query.site === "string" ? req.query.site.trim() : "";
+    const isPaginated = page > 0 && limit > 0;
 
-    const stocks = await StockModel.find(filter).populate("site");
-    res.status(HttpStatus.OK).json(stocks);
+    const version = await getCacheVersion(STOCKS_CACHE_NAMESPACE);
+    const paginationSuffix = isPaginated
+      ? `:page:${page}:limit:${limit}:search:${search}:category:${category}:site:${siteScope}`
+      : "";
+    const cacheKey = `${STOCKS_CACHE_NAMESPACE}:v${version}${paginationSuffix}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const filter: Record<string, any> = {};
+    if (search.length > 0) {
+      filter.name = { $regex: search, $options: "i" };
+    }
+    if (category.length > 0) {
+      filter.category = category;
+    }
+    if (siteScope === "company") {
+      filter.site = null;
+    } else if (siteScope.length > 0 && Types.ObjectId.isValid(siteScope)) {
+      filter.site = siteScope;
+    }
+
+    let query = StockModel.find(filter).populate("site").sort({ name: 1 });
+    if (isPaginated) {
+      query = query.skip((page - 1) * limit).limit(limit);
+    }
+    const stocks = await query.lean();
+
+    let responseBody: unknown = stocks;
+
+    if (isPaginated) {
+      const total = await StockModel.countDocuments(filter);
+      responseBody = {
+        stocks,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      };
+    }
+
+    await cacheSet(cacheKey, responseBody, STOCKS_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
   } catch (error) {
     next(error);
   }

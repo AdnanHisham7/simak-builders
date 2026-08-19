@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   getStocks,
+  getStocksPaginated,
   getStockTransfers,
   approveStockTransfer,
   rejectStockTransfer,
@@ -10,6 +11,7 @@ import {
   Stock,
   StockTransfer,
 } from "@/services/stockService";
+import debounce from "lodash/debounce";
 import { getSites, Site } from "@/services/siteService";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -33,6 +35,8 @@ import {
   Clock,
   Boxes,
   DollarSign,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -73,6 +77,14 @@ const Stocks: React.FC = () => {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
+  const [scopedStocks, setScopedStocks] = useState<Stock[]>([]);
+  const [scopedTotal, setScopedTotal] = useState(0);
+  const [scopedTotalPages, setScopedTotalPages] = useState(1);
+  const [scopedPage, setScopedPage] = useState(1);
+  const [scopedLoading, setScopedLoading] = useState(false);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
+  const scopedItemsPerPage = 12;
+
   const { userType } = useSelector((state: RootState) => state.auth);
 
   const fetchData = async () => {
@@ -97,6 +109,48 @@ const Stocks: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+    }, 350);
+    debounced(searchTerm);
+    return () => debounced.cancel();
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setScopedPage(1);
+  }, [filterSite, debouncedSearchTerm]);
+
+  useEffect(() => {
+    if (!filterSite) return;
+
+    const fetchScopedPage = async () => {
+      setScopedLoading(true);
+      try {
+        const result = await getStocksPaginated({
+          page: scopedPage,
+          limit: scopedItemsPerPage,
+          search: debouncedSearchTerm,
+          site: filterSite,
+        });
+        setScopedStocks(result.stocks);
+        setScopedTotal(result.total);
+        setScopedTotalPages(result.totalPages);
+      } catch (err) {
+        toast.error("Failed to fetch stocks");
+      } finally {
+        setScopedLoading(false);
+      }
+    };
+    fetchScopedPage();
+  }, [filterSite, debouncedSearchTerm, scopedPage]);
+
+  const paginateScoped = (pageNumber: number) => {
+    if (pageNumber > 0 && pageNumber <= scopedTotalPages) {
+      setScopedPage(pageNumber);
+    }
+  };
 
   const handleApproveTransfer = async (transferId: string) => {
     setApprovingId(transferId);
@@ -141,11 +195,32 @@ const Stocks: React.FC = () => {
     }
   };
 
+  const refetchScopedIfActive = async () => {
+    if (!filterSite) return;
+    setScopedLoading(true);
+    try {
+      const result = await getStocksPaginated({
+        page: scopedPage,
+        limit: scopedItemsPerPage,
+        search: debouncedSearchTerm,
+        site: filterSite,
+      });
+      setScopedStocks(result.stocks);
+      setScopedTotal(result.total);
+      setScopedTotalPages(result.totalPages);
+    } catch (err) {
+      toast.error("Failed to fetch stocks");
+    } finally {
+      setScopedLoading(false);
+    }
+  };
+
   const handleLogUsage = async (usageData: any) => {
     try {
       await logStockUsage(usageData);
       const updatedStocks = await getStocks();
       setStocks(updatedStocks);
+      await refetchScopedIfActive();
       setIsLogUsageOpen(false);
       toast.success("Usage logged");
     } catch (err) {
@@ -158,6 +233,7 @@ const Stocks: React.FC = () => {
       await addStock(stockData);
       const updatedStocks = await getStocks();
       setStocks(updatedStocks);
+      await refetchScopedIfActive();
       setIsAddStockOpen(false);
       toast.success("Stock added");
     } catch (err) {
@@ -180,8 +256,6 @@ const Stocks: React.FC = () => {
 
   const companyStocks = filteredStocks.filter((s) => !s.site);
   const siteStocksList = filteredStocks.filter((s) => s.site);
-  const showCompanySection = !filterSite || filterSite === "company";
-  const showSiteSection = !filterSite || filterSite !== "company";
 
   const renderInventorySection = (title: string, icon: React.ReactNode, list: Stock[]) => (
     <Card>
@@ -434,19 +508,107 @@ const Stocks: React.FC = () => {
             </div>
           </Card>
 
-          {showCompanySection &&
-            renderInventorySection(
-              "Company Stocks",
-              <Building2 size={18} className="text-brand-600" />,
-              companyStocks,
-            )}
+          {!filterSite && (
+            <>
+              {renderInventorySection(
+                "Company Stocks",
+                <Building2 size={18} className="text-brand-600" />,
+                companyStocks,
+              )}
+              {renderInventorySection(
+                "Site Stocks",
+                <MapPin size={18} className="text-success-600" />,
+                siteStocksList,
+              )}
+            </>
+          )}
 
-          {showSiteSection &&
-            renderInventorySection(
-              "Site Stocks",
-              <MapPin size={18} className="text-success-600" />,
-              siteStocksList,
-            )}
+          {filterSite && (
+            <>
+              {scopedLoading && scopedStocks.length === 0 ? (
+                <Card>
+                  <SkeletonTable rows={4} />
+                </Card>
+              ) : (
+                renderInventorySection(
+                  filterSite === "company" ? "Company Stocks" : "Site Stocks",
+                  filterSite === "company" ? (
+                    <Building2 size={18} className="text-brand-600" />
+                  ) : (
+                    <MapPin size={18} className="text-success-600" />
+                  ),
+                  scopedStocks,
+                )
+              )}
+              {scopedTotal > 0 && (
+                <div className="flex flex-col items-center justify-between gap-4 rounded-console bg-white px-4 py-3 shadow-sm sm:flex-row">
+                  <p className="text-sm text-console-muted">
+                    Showing{" "}
+                    <span className="font-semibold text-console-text">
+                      {(scopedPage - 1) * scopedItemsPerPage + 1}
+                    </span>{" "}
+                    to{" "}
+                    <span className="font-semibold text-console-text">
+                      {Math.min(scopedPage * scopedItemsPerPage, scopedTotal)}
+                    </span>{" "}
+                    of <span className="font-semibold text-console-text">{scopedTotal}</span> items
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => paginateScoped(scopedPage - 1)}
+                      disabled={scopedPage === 1}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    {[...Array(scopedTotalPages)].map((_, i) => {
+                      const pageNum = i + 1;
+                      if (
+                        pageNum === 1 ||
+                        pageNum === scopedTotalPages ||
+                        (pageNum >= scopedPage - 1 && pageNum <= scopedPage + 1)
+                      ) {
+                        return (
+                          <button
+                            type="button"
+                            key={pageNum}
+                            onClick={() => paginateScoped(pageNum)}
+                            className={
+                              scopedPage === pageNum
+                                ? "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium bg-brand-700 text-white transition-colors"
+                                : "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium text-console-muted transition-colors hover:bg-console-bg"
+                            }
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                      if (
+                        pageNum === scopedPage - 2 ||
+                        pageNum === scopedPage + 2
+                      ) {
+                        return (
+                          <span key={pageNum} className="px-1 text-console-muted">
+                            …
+                          </span>
+                        );
+                      }
+                      return null;
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => paginateScoped(scopedPage + 1)}
+                      disabled={scopedPage === scopedTotalPages}
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
 
           {userType === "admin" && (
             <Card>

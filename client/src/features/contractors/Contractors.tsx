@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Plus,
@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import {
   getAllContractors,
+  getContractorsPaginated,
   createContractor,
   assignSiteToContractor,
   getContractorTransactions,
@@ -34,6 +35,7 @@ import {
   deleteContractorTransaction,
   ContractorTransaction,
 } from "@/services/contractorService";
+import debounce from "lodash/debounce";
 import { getSites } from "@/services/siteService";
 import AddContractorModal from "./AddContractorModal";
 import ContractorAssignSiteModal from "./ContractorAssignSiteModal";
@@ -76,6 +78,11 @@ const Contractors: React.FC = () => {
   const [pageError, setPageError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageContractors, setPageContractors] = useState<Contractor[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [tableLoading, setTableLoading] = useState(false);
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAssignSiteModalOpen, setIsAssignSiteModalOpen] = useState(false);
   const [isAddTransactionModalOpen, setIsAddTransactionModalOpen] =
@@ -124,7 +131,7 @@ const Contractors: React.FC = () => {
   const itemsPerPage = 6;
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchPortfolioData = async () => {
       try {
         const contractorsData = await getAllContractors();
         const sitesData = await getSites();
@@ -134,63 +141,64 @@ const Contractors: React.FC = () => {
           new Set(contractorsData.map((c) => c.company).filter(Boolean)),
         );
         setCompanies(["All Companies", ...uniqueCompanies]);
-        setLoading(false);
       } catch (err) {
         setPageError("Failed to fetch data. Please try again later.");
-        setLoading(false);
       }
     };
-    fetchData();
+    fetchPortfolioData();
   }, []);
 
-  const filteredAndSortedContractors = useMemo(() => {
-    let filtered = contractors.filter((contractor) => {
-      const matchesSearch =
-        contractor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contractor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (contractor.phone && contractor.phone.includes(searchTerm));
+  useEffect(() => {
+    const debounced = debounce((value: string) => {
+      setDebouncedSearchTerm(value);
+      setCurrentPage(1);
+    }, 350);
+    debounced(searchTerm);
+    return () => debounced.cancel();
+  }, [searchTerm]);
 
-      const matchesCompany =
-        selectedCompany === "All Companies" ||
-        contractor.company === selectedCompany;
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCompany, statusFilter, sortBy, sortOrder]);
 
-      const matchesStatus =
-        statusFilter === "All Statuses" || contractor.status === statusFilter;
+  const fetchPage = async () => {
+    setTableLoading(true);
+    try {
+      const result = await getContractorsPaginated({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: debouncedSearchTerm,
+        status: statusFilter === "All Statuses" ? "" : statusFilter,
+        company: selectedCompany === "All Companies" ? "" : selectedCompany,
+        sortBy,
+        sortOrder,
+      });
+      setPageContractors(result.contractors);
+      setTotal(result.total);
+      setTotalPages(result.totalPages);
+      setPageError(null);
+    } catch (err) {
+      setPageError("Failed to fetch data. Please try again later.");
+    } finally {
+      setLoading(false);
+      setTableLoading(false);
+    }
+  };
 
-      return matchesSearch && matchesCompany && matchesStatus;
-    });
-
-    filtered = [...filtered].sort((a, b) => {
-      const aValue = (a[sortBy] || "").toLowerCase();
-      const bValue = (b[sortBy] || "").toLowerCase();
-      return sortOrder === "asc"
-        ? aValue < bValue
-          ? -1
-          : 1
-        : aValue > bValue
-          ? -1
-          : 1;
-    });
-
-    return filtered;
+  useEffect(() => {
+    fetchPage();
   }, [
-    contractors,
-    searchTerm,
+    currentPage,
+    debouncedSearchTerm,
     selectedCompany,
     statusFilter,
     sortBy,
     sortOrder,
   ]);
 
-  const totalPages = Math.ceil(
-    filteredAndSortedContractors.length / itemsPerPage,
-  ) || 1;
+  const currentContractors = pageContractors;
+  const indexOfFirstItem = total === 0 ? 0 : (currentPage - 1) * itemsPerPage;
   const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentContractors = filteredAndSortedContractors.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
 
   const paginate = (pageNumber: number) => {
     if (pageNumber > 0 && pageNumber <= totalPages) setCurrentPage(pageNumber);
@@ -219,6 +227,11 @@ const Contractors: React.FC = () => {
       setNewContractor({ name: "", email: "", phone: "", company: "" });
       setIsAddModalOpen(false);
       toast.success("Contractor added");
+      if (currentPage === 1) {
+        fetchPage();
+      } else {
+        setCurrentPage(1);
+      }
     } catch (err) {
       toast.error("Failed to add contractor");
     }
@@ -265,6 +278,7 @@ const Contractors: React.FC = () => {
       );
       setIsAssignSiteModalOpen(false);
       toast.success("Site assigned");
+      fetchPage();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to assign site");
       throw err;
@@ -284,6 +298,7 @@ const Contractors: React.FC = () => {
     ) {
       setSelectedContractor(response.updatedContractor);
     }
+    fetchPage();
     return response;
   };
 
@@ -304,6 +319,7 @@ const Contractors: React.FC = () => {
       }
       toast.success("Transaction deleted");
       setDeleteTxTarget(null);
+      fetchPage();
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Failed to delete transaction");
     } finally {
@@ -368,6 +384,7 @@ const Contractors: React.FC = () => {
       setContractorToEdit(null);
       setNewContractor({ name: "", email: "", phone: "", company: "" });
       toast.success("Contractor updated");
+      fetchPage();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to update contractor");
     }
@@ -393,6 +410,12 @@ const Contractors: React.FC = () => {
       if (selectedContractor?.id === contractorToDelete.id) {
         setViewMode("list");
         setSelectedContractor(null);
+      }
+
+      if (currentPage === 1) {
+        fetchPage();
+      } else {
+        setCurrentPage(1);
       }
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to delete contractor");
@@ -856,7 +879,7 @@ const Contractors: React.FC = () => {
                 </div>
               </Card>
 
-              {filteredAndSortedContractors.length === 0 ? (
+              {!tableLoading && total === 0 ? (
                 <Card>
                   <EmptyState
                     icon={Users}
@@ -990,11 +1013,11 @@ const Contractors: React.FC = () => {
                   Showing{" "}
                   <span className="font-semibold text-console-text">{indexOfFirstItem + 1}</span> to{" "}
                   <span className="font-semibold text-console-text">
-                    {Math.min(indexOfLastItem, filteredAndSortedContractors.length)}
+                    {Math.min(indexOfLastItem, total)}
                   </span>{" "}
                   of{" "}
                   <span className="font-semibold text-console-text">
-                    {filteredAndSortedContractors.length}
+                    {total}
                   </span>{" "}
                   contractors
                 </p>

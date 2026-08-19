@@ -1,4 +1,8 @@
 import { privateClient } from "@/api";
+import { withCache, invalidateCache } from "@/helpers/requestCache";
+
+const CONTRACTORS_FULL_LIST_CACHE_KEY = "contractors-full-list";
+const CONTRACTORS_FULL_LIST_CACHE_TTL_MS = 15_000;
 
 export interface Contractor {
   id: string;
@@ -38,8 +42,51 @@ const mapContractor = (raw: any): Contractor => ({
 });
 
 export const getAllContractors = async (): Promise<Contractor[]> => {
-  const response = await privateClient.get("/contractors");
-  return response.data.map(mapContractor);
+  return withCache(
+    CONTRACTORS_FULL_LIST_CACHE_KEY,
+    CONTRACTORS_FULL_LIST_CACHE_TTL_MS,
+    async () => {
+      const response = await privateClient.get("/contractors");
+      return response.data.map(mapContractor);
+    }
+  );
+};
+
+export interface PaginatedContractorsResult {
+  contractors: Contractor[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const getContractorsPaginated = async (params: {
+  page: number;
+  limit: number;
+  search?: string;
+  status?: string;
+  company?: string;
+  sortBy?: "name" | "company" | "email" | "status";
+  sortOrder?: "asc" | "desc";
+}): Promise<PaginatedContractorsResult> => {
+  const response = await privateClient.get("/contractors", {
+    params: {
+      page: params.page,
+      limit: params.limit,
+      ...(params.search ? { search: params.search } : {}),
+      ...(params.status ? { status: params.status } : {}),
+      ...(params.company ? { company: params.company } : {}),
+      ...(params.sortBy ? { sortBy: params.sortBy } : {}),
+      ...(params.sortOrder ? { sortOrder: params.sortOrder } : {}),
+    },
+  });
+  return {
+    contractors: (response.data?.contractors || []).map(mapContractor),
+    total: response.data?.total || 0,
+    page: response.data?.page || params.page,
+    limit: response.data?.limit || params.limit,
+    totalPages: response.data?.totalPages || 1,
+  };
 };
 
 export const createContractor = async (data: {
@@ -49,6 +96,7 @@ export const createContractor = async (data: {
   company: string;
 }): Promise<Contractor> => {
   const response = await privateClient.post("/contractors", data);
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
   return {
     id: response.data.contractor.id,
     name: response.data.contractor.name,
@@ -68,6 +116,7 @@ export const assignSiteToContractor = async (
     contractorId,
     siteId,
   });
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
 };
 
 export const addTransaction = async (data: {
@@ -82,6 +131,7 @@ export const addTransaction = async (data: {
 }> => {
   const response = await privateClient.post("/contractors/transactions", data);
   const { transaction, updatedContractor } = response.data;
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
   return {
     transaction: {
       id: transaction._id,
@@ -131,6 +181,7 @@ export const updateContractor = async (
   },
 ): Promise<Contractor> => {
   const response = await privateClient.put(`/contractors/${id}`, data);
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
   return {
     id: response.data.contractor.id,
     name: response.data.contractor.name,
@@ -144,6 +195,7 @@ export const updateContractor = async (
 
 export const deleteContractor = async (id: string): Promise<void> => {
   await privateClient.delete(`/contractors/${id}`);
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
 };
 
 export const deleteContractorTransaction = async (
@@ -152,6 +204,7 @@ export const deleteContractorTransaction = async (
   const response = await privateClient.delete(
     `/contractors/transactions/${transactionId}`,
   );
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
   return {
     updatedContractor: mapContractor(response.data.updatedContractor),
   };
@@ -164,5 +217,6 @@ export const unassignSiteFromContractor = async (
   const response = await privateClient.delete(
     `/contractors/${contractorId}/sites/${siteId}`,
   );
+  invalidateCache(CONTRACTORS_FULL_LIST_CACHE_KEY);
   return response.data;
 };

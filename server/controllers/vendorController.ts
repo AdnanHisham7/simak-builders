@@ -5,10 +5,61 @@ import { ApiError } from "@utils/errors/ApiError";
 import { PurchaseModel } from "@models/Purchase";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { CompanyModel } from "@models/Company";
+import {
+  cacheGet,
+  cacheSet,
+  bumpCacheVersion,
+  getCacheVersion,
+} from "@config/redis";
+
+const VENDORS_CACHE_NAMESPACE = "vendors";
+const VENDORS_CACHE_TTL_SECONDS = 20;
 
 const getVendors = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 0;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const isPaginated = page > 0 && limit > 0;
+
+    const version = await getCacheVersion(VENDORS_CACHE_NAMESPACE);
+    const paginationSuffix = isPaginated
+      ? `:page:${page}:limit:${limit}:search:${search}`
+      : "";
+    const cacheKey = `${VENDORS_CACHE_NAMESPACE}:v${version}${paginationSuffix}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const searchMatchStage =
+      search.length > 0
+        ? [
+            {
+              $match: {
+                $or: [
+                  { name: { $regex: search, $options: "i" } },
+                  { phone: { $regex: search, $options: "i" } },
+                  { email: { $regex: search, $options: "i" } },
+                ],
+              },
+            },
+          ]
+        : [];
+    const sortStage = isPaginated ? [{ $sort: { name: 1 as const } }] : [];
+    const paginationStages = isPaginated
+      ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
+      : [];
+
     const vendors = await VendorModel.aggregate([
+      ...searchMatchStage,
+      ...sortStage,
+      ...paginationStages,
       {
         $lookup: {
           from: "purchases",
@@ -55,7 +106,33 @@ const getVendors = async (req: Request, res: Response, next: NextFunction) => {
         },
       },
     ]);
-    res.status(HttpStatus.OK).json(vendors);
+
+    let responseBody: unknown = vendors;
+
+    if (isPaginated) {
+      const countMatch =
+        search.length > 0
+          ? {
+              $or: [
+                { name: { $regex: search, $options: "i" } },
+                { phone: { $regex: search, $options: "i" } },
+                { email: { $regex: search, $options: "i" } },
+              ],
+            }
+          : {};
+      const total = await VendorModel.countDocuments(countMatch);
+      responseBody = {
+        vendors,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      };
+    }
+
+    await cacheSet(cacheKey, responseBody, VENDORS_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
   } catch (error) {
     next(error);
   }
@@ -96,6 +173,7 @@ const createVendor = async (
       resourceId: newVendor._id,
       details: `Created vendor: ${newVendor.name}`,
     });
+    await bumpCacheVersion(VENDORS_CACHE_NAMESPACE);
     res.status(HttpStatus.CREATED).json(newVendor);
   } catch (error) {
     next(error);
@@ -117,6 +195,7 @@ const updateVendor = async (
     if (!updatedVendor) {
       throw new ApiError("Vendor not found", HttpStatus.NOT_FOUND);
     }
+    await bumpCacheVersion(VENDORS_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json(updatedVendor);
   } catch (error) {
     next(error);
@@ -134,6 +213,7 @@ const deleteVendor = async (
     if (!deletedVendor) {
       throw new ApiError("Vendor not found", HttpStatus.NOT_FOUND);
     }
+    await bumpCacheVersion(VENDORS_CACHE_NAMESPACE);
     res.status(HttpStatus.NO_CONTENT).send();
   } catch (error) {
     next(error);
@@ -264,6 +344,7 @@ const settleVendorPayments = async (
       resourceId: id,
       details: `Settled ${settleAmount} of ${totalOutstanding} outstanding for vendor ${vendor.name}`,
     });
+    await bumpCacheVersion(VENDORS_CACHE_NAMESPACE);
     res.status(HttpStatus.OK).json({
       message: "Payment settled successfully",
       settledAmount: settleAmount,

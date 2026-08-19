@@ -1,4 +1,8 @@
 import { privateClient } from "@/api";
+import { withCache, invalidateCache } from "@/helpers/requestCache";
+
+const VENDORS_FULL_LIST_CACHE_KEY = "vendors-full-list";
+const VENDORS_FULL_LIST_CACHE_TTL_MS = 15_000;
 
 export interface Vendor {
   id: string;
@@ -46,19 +50,63 @@ export interface Purchase {
 }
 
 export const getVendors = async (): Promise<Vendor[]> => {
-  const response = await privateClient.get("/vendors");
-  return response.data.map((vendor: any) => ({
-    id: vendor._id,
-    name: vendor.name,
-    email: vendor.email,
-    phone: vendor.phone,
-    createdAt: vendor.createdAt,
-    updatedAt: vendor.updatedAt,
-    totalPurchases: vendor.totalPurchases,
-    totalAmount: vendor.totalAmount,
-    outstandingAmount: vendor.outstandingAmount,
-    status: vendor.status,
-  }));
+  return withCache(VENDORS_FULL_LIST_CACHE_KEY, VENDORS_FULL_LIST_CACHE_TTL_MS, async () => {
+    const response = await privateClient.get("/vendors");
+    return response.data.map((vendor: any) => ({
+      id: vendor._id,
+      name: vendor.name,
+      email: vendor.email,
+      phone: vendor.phone,
+      createdAt: vendor.createdAt,
+      updatedAt: vendor.updatedAt,
+      totalPurchases: vendor.totalPurchases,
+      totalAmount: vendor.totalAmount,
+      outstandingAmount: vendor.outstandingAmount,
+      status: vendor.status,
+    }));
+  });
+};
+
+export interface PaginatedVendorsResult {
+  vendors: Vendor[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+const mapVendor = (vendor: any): Vendor => ({
+  id: vendor._id,
+  name: vendor.name,
+  email: vendor.email,
+  phone: vendor.phone,
+  createdAt: vendor.createdAt,
+  updatedAt: vendor.updatedAt,
+  totalPurchases: vendor.totalPurchases,
+  totalAmount: vendor.totalAmount,
+  outstandingAmount: vendor.outstandingAmount,
+  status: vendor.status,
+});
+
+export const getVendorsPaginated = async (params: {
+  page: number;
+  limit: number;
+  search?: string;
+}): Promise<PaginatedVendorsResult> => {
+  const response = await privateClient.get("/vendors", {
+    params: {
+      page: params.page,
+      limit: params.limit,
+      ...(params.search ? { search: params.search } : {}),
+    },
+  });
+  return {
+    vendors: (response.data?.vendors || []).map(mapVendor),
+    total: response.data?.total || 0,
+    page: response.data?.page || params.page,
+    limit: response.data?.limit || params.limit,
+    totalPages: response.data?.totalPages || 1,
+  };
 };
 
 export const getVendorById = async (id: string): Promise<Vendor> => {
@@ -81,6 +129,7 @@ export const createVendor = async (data: {
 }): Promise<Vendor> => {
   const response = await privateClient.post("/vendors", data);
   const vendor = response.data;
+  invalidateCache(VENDORS_FULL_LIST_CACHE_KEY);
   return {
     id: vendor._id,
     name: vendor.name,
@@ -97,6 +146,7 @@ export const updateVendor = async (
 ): Promise<Vendor> => {
   const response = await privateClient.put(`/vendors/${id}`, data);
   const vendor = response.data;
+  invalidateCache(VENDORS_FULL_LIST_CACHE_KEY);
   return {
     id: vendor._id,
     name: vendor.name,
@@ -109,6 +159,7 @@ export const updateVendor = async (
 
 export const deleteVendor = async (id: string): Promise<void> => {
   await privateClient.delete(`/vendors/${id}`);
+  invalidateCache(VENDORS_FULL_LIST_CACHE_KEY);
 };
 
 export const getPurchasesByVendor = async (
@@ -126,5 +177,6 @@ export const settleVendorPayments = async (
     amount: data.amount,
     notes: data.notes || "",
   });
+  invalidateCache(VENDORS_FULL_LIST_CACHE_KEY);
   return response.data;
 };

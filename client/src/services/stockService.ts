@@ -1,4 +1,8 @@
 import { privateClient } from "@/api";
+import { withCache, invalidateCache } from "@/helpers/requestCache";
+
+const STOCKS_FULL_LIST_CACHE_KEY = "stocks-full-list";
+const STOCKS_FULL_LIST_CACHE_TTL_MS = 15_000;
 
 export interface Stock {
   _id: string;
@@ -31,8 +35,43 @@ export interface StockUsage {
 }
 
 export const getStocks = async (): Promise<Stock[]> => {
-  const response = await privateClient.get(`/stocks`);
-  return response.data;
+  return withCache(STOCKS_FULL_LIST_CACHE_KEY, STOCKS_FULL_LIST_CACHE_TTL_MS, async () => {
+    const response = await privateClient.get(`/stocks`);
+    return response.data;
+  });
+};
+
+export interface PaginatedStocksResult {
+  stocks: Stock[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const getStocksPaginated = async (params: {
+  page: number;
+  limit: number;
+  search?: string;
+  category?: string;
+  site?: string;
+}): Promise<PaginatedStocksResult> => {
+  const response = await privateClient.get(`/stocks`, {
+    params: {
+      page: params.page,
+      limit: params.limit,
+      ...(params.search ? { search: params.search } : {}),
+      ...(params.category ? { category: params.category } : {}),
+      ...(params.site ? { site: params.site } : {}),
+    },
+  });
+  return {
+    stocks: response.data?.stocks || [],
+    total: response.data?.total || 0,
+    page: response.data?.page || params.page,
+    limit: response.data?.limit || params.limit,
+    totalPages: response.data?.totalPages || 1,
+  };
 };
 
 export const getStocksBySite = async (siteId: string): Promise<Stock[]> => {
@@ -51,6 +90,7 @@ export const addStock = async (stockData: {
   site?: string;
 }): Promise<Stock> => {
   const response = await privateClient.post(`/stocks`, stockData);
+  invalidateCache(STOCKS_FULL_LIST_CACHE_KEY);
   return response.data;
 };
 
@@ -71,6 +111,7 @@ export const approveStockTransfer = async (
     `/stocks/transfers/${transferId}/approve`,
     {},
   );
+  invalidateCache(STOCKS_FULL_LIST_CACHE_KEY);
   return response.data;
 };
 
@@ -100,6 +141,7 @@ export const logStockUsage = async (usageData: {
   usageDate?: string;
 }): Promise<StockUsage> => {
   const response = await privateClient.post(`/stocks/usages`, usageData);
+  invalidateCache(STOCKS_FULL_LIST_CACHE_KEY);
   return response.data;
 };
 

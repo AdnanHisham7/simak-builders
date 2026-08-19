@@ -408,6 +408,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
   const [roundAmounts, setRoundAmounts] = useState(false);
   const [roundBalance, setRoundBalance] = useState(false);
   const [balanceOverride, setBalanceOverride] = useState<number | null>(null);
+  const [varavOverride, setVaravOverride] = useState<number | null>(null);
   const [supervisionOverride, setSupervisionOverride] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -423,6 +424,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
     setRoundAmounts(false);
     setRoundBalance(false);
     setBalanceOverride(null);
+    setVaravOverride(null);
     setSupervisionOverride(null);
   };
 
@@ -450,6 +452,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
       setRoundAmounts(false);
       setRoundBalance(false);
       setBalanceOverride(null);
+      setVaravOverride(null);
       setSupervisionOverride(null);
     } catch (err) {
       console.error("Error fetching client report:", err);
@@ -467,12 +470,24 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
         supervisionOverride,
       )
     : { totalAmount: 0, supervisionAmount: 0, netTotal: 0 };
+  const effectiveVarav = reportData
+    ? varavOverride !== null
+      ? varavOverride
+      : Number(reportData.varav) || 0
+    : 0;
   const rawBalance = reportData
     ? balanceOverride !== null
       ? balanceOverride
-      : totals.netTotal - (Number(reportData.varav) || 0)
+      : totals.netTotal - effectiveVarav
     : 0;
   const balance = reportData ? computeBalance(rawBalance, roundBalance) : 0;
+
+  const handleVaravCommit = (value: number) => {
+    setVaravOverride(value);
+    // Varav drives balance automatically, so drop any manual balance
+    // override and let it recompute from the new received amount.
+    setBalanceOverride(null);
+  };
 
   const exportToPDF = async () => {
     if (!reportData || editableRows.length === 0) return;
@@ -497,7 +512,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
           { label: "TOTAL", amount: totals.totalAmount },
           { label: `SUPERVISION (${reportData.supervisionPercentage}%)`, amount: totals.supervisionAmount },
           { label: "NET TOTAL", amount: totals.netTotal },
-          { label: "VARAV", amount: reportData.varav },
+          { label: "VARAV", amount: effectiveVarav },
           { label: "BALANCE", amount: balance },
         ],
         headerImage: headerData,
@@ -634,10 +649,32 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
               </p>
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
-              <p className="text-sm text-console-muted">Varav (Received)</p>
-              <p className="mt-1 text-xl font-semibold text-success-700">
-                ₹{formatNumber(reportData.varav)}
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-console-muted">Varav (Received)</p>
+                {varavOverride !== null && (
+                  <Tooltip label="Reset to original varav">
+                    <button
+                      type="button"
+                      onClick={() => setVaravOverride(null)}
+                      aria-label="Reset to original varav"
+                      className="text-console-muted hover:text-console-text"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </Tooltip>
+                )}
+              </div>
+              <div className="mt-1">
+                <EditableAmountField
+                  value={effectiveVarav}
+                  onCommit={handleVaravCommit}
+                  inputClassName="w-full border-0 border-b border-transparent bg-transparent px-0 py-0 text-right text-xl font-semibold text-success-700 transition-colors hover:border-slate-300 focus:border-brand-500 focus:ring-0"
+                  currencyClassName="mr-1 text-xl font-semibold text-success-700"
+                />
+              </div>
+              {varavOverride !== null && (
+                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+              )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
               <div className="flex items-center justify-between">

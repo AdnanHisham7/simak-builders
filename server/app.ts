@@ -89,9 +89,9 @@ const publicFormLimiter = rateLimit({
 });
 
 app.use("/api", generalApiLimiter);
-app.use("/api/auth", authLimiter);
-app.use("/api/enquiries", publicFormLimiter);
-app.use("/api/feedback", publicFormLimiter);
+// app.use("/api/auth", authLimiter);
+// app.use("/api/enquiries", publicFormLimiter);
+// app.use("/api/feedback", publicFormLimiter);
 
 
 // Routes

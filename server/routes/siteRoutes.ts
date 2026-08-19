@@ -6,7 +6,7 @@ import upload from "@middleware/multer";
 const router = Router();
 
 router.get("/", authMiddleware, siteController.getSites);
-router.get("/:siteId", siteController.getSiteDetails);
+router.get("/:siteId", authMiddleware, siteController.getSiteDetails);
 router.post("/", authMiddleware, siteController.createSite);
 router.put("/", authMiddleware, siteController.updateSite);
 router.put("/:siteId/phases/:phaseId/status", authMiddleware, siteController.updatePhaseStatus);

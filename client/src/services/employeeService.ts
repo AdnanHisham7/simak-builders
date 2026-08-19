@@ -1,4 +1,8 @@
 import { privateClient } from "@/api";
+import { withCache, invalidateCache } from "@/helpers/requestCache";
+
+const EMPLOYEES_FULL_LIST_CACHE_KEY = "employees-full-list";
+const EMPLOYEES_FULL_LIST_CACHE_TTL_MS = 15_000;
 
 export interface Employee {
   id: string;
@@ -25,8 +29,53 @@ export interface Attendance {
 }
 
 export const getEmployees = async (): Promise<Employee[]> => {
-  const response = await privateClient.get("/employees");
-  return response.data.map((employee: any) => ({
+  return withCache(
+    EMPLOYEES_FULL_LIST_CACHE_KEY,
+    EMPLOYEES_FULL_LIST_CACHE_TTL_MS,
+    async () => {
+      const response = await privateClient.get("/employees");
+      return response.data.map((employee: any) => ({
+        id: employee._id,
+        name: employee.name,
+        email: employee.email,
+        phone: employee.phone,
+        position: employee.position,
+        dailyWage: employee.dailyWage,
+        totalPaidSalary: employee.totalPaidSalary,
+        createdAt: employee.createdAt,
+        updatedAt: employee.updatedAt,
+      }));
+    }
+  );
+};
+
+export interface PaginatedEmployeesResult {
+  employees: Employee[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export const getEmployeesPaginated = async (params: {
+  page: number;
+  limit: number;
+  search?: string;
+  position?: string;
+  sortBy?: "name" | "email" | "position";
+  sortOrder?: "asc" | "desc";
+}): Promise<PaginatedEmployeesResult> => {
+  const response = await privateClient.get("/employees", {
+    params: {
+      page: params.page,
+      limit: params.limit,
+      ...(params.search ? { search: params.search } : {}),
+      ...(params.position ? { position: params.position } : {}),
+      ...(params.sortBy ? { sortBy: params.sortBy } : {}),
+      ...(params.sortOrder ? { sortOrder: params.sortOrder } : {}),
+    },
+  });
+  const mapEmployee = (employee: any): Employee => ({
     id: employee._id,
     name: employee.name,
     email: employee.email,
@@ -36,7 +85,14 @@ export const getEmployees = async (): Promise<Employee[]> => {
     totalPaidSalary: employee.totalPaidSalary,
     createdAt: employee.createdAt,
     updatedAt: employee.updatedAt,
-  }));
+  });
+  return {
+    employees: (response.data?.employees || []).map(mapEmployee),
+    total: response.data?.total || 0,
+    page: response.data?.page || params.page,
+    limit: response.data?.limit || params.limit,
+    totalPages: response.data?.totalPages || 1,
+  };
 };
 
 export const getEmployeesBySite = async (id: string): Promise<Employee> => {
@@ -63,6 +119,7 @@ export const createEmployee = async (data: {
 }): Promise<Employee> => {
   const response = await privateClient.post("/employees", data);
   const employee = response.data;
+  invalidateCache(EMPLOYEES_FULL_LIST_CACHE_KEY);
   return {
     id: employee._id,
     name: employee.name,
@@ -81,6 +138,7 @@ export const updateEmployee = async (
 ): Promise<Employee> => {
   const response = await privateClient.put(`/employees/${id}`, data);
   const employee = response.data;
+  invalidateCache(EMPLOYEES_FULL_LIST_CACHE_KEY);
   return {
     id: employee._id,
     name: employee.name,
@@ -95,6 +153,7 @@ export const updateEmployee = async (
 
 export const deleteEmployee = async (id: string): Promise<void> => {
   await privateClient.delete(`/employees/${id}`);
+  invalidateCache(EMPLOYEES_FULL_LIST_CACHE_KEY);
 };
 
 export const getAttendanceByEmployee = async (
@@ -135,4 +194,5 @@ export const markAttendancesPaid = async (
   await privateClient.post("/employees/mark-attendances-paid", {
     attendanceIds,
   });
+  invalidateCache(EMPLOYEES_FULL_LIST_CACHE_KEY);
 };

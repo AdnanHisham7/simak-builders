@@ -9,6 +9,15 @@ import { Types } from "mongoose";
 import { CompanyModel } from "@models/Company";
 import { UserModel } from "@models/User";
 import { sign } from "crypto";
+import {
+  cacheGet,
+  cacheSet,
+  bumpCacheVersion,
+  getCacheVersion,
+} from "@config/redis";
+
+const CONTRACTORS_CACHE_NAMESPACE = "contractors";
+const CONTRACTORS_CACHE_TTL_SECONDS = 20;
 
 const createContractor = async (
   req: Request,
@@ -42,6 +51,8 @@ const createContractor = async (
       details: `Created contractor: ${contractor.name}`,
     });
 
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
+
     res.status(HttpStatus.CREATED).json({
       message: "Contractor created successfully",
       contractor: {
@@ -66,11 +77,76 @@ const getAllContractors = async (
   try {
     if (req.user?.role !== "admin")
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
-    const contractors = await ContractorModel.find({}).populate(
-      "siteAssignments.site",
-      "name",
-    );
-    res.status(HttpStatus.OK).json(contractors);
+
+    const page = req.query.page ? parseInt(req.query.page as string, 10) : 0;
+    const limit = req.query.limit
+      ? parseInt(req.query.limit as string, 10)
+      : 0;
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const status =
+      typeof req.query.status === "string" ? req.query.status.trim() : "";
+    const company =
+      typeof req.query.company === "string" ? req.query.company.trim() : "";
+    const sortField = ["name", "company", "email", "status"].includes(
+      req.query.sortBy as string,
+    )
+      ? (req.query.sortBy as "name" | "company" | "email" | "status")
+      : "name";
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const isPaginated = page > 0 && limit > 0;
+
+    const version = await getCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
+    const paginationSuffix = isPaginated
+      ? `:page:${page}:limit:${limit}:search:${search}:status:${status}:company:${company}:sort:${sortField}:${sortOrder}`
+      : "";
+    const cacheKey = `${CONTRACTORS_CACHE_NAMESPACE}:v${version}${paginationSuffix}`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const filter: Record<string, any> = {};
+    if (search.length > 0) {
+      filter.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { company: { $regex: search, $options: "i" } },
+      ];
+    }
+    if (status.length > 0) {
+      filter.status = status;
+    }
+    if (company.length > 0) {
+      filter.company = company;
+    }
+
+    let query = ContractorModel.find(filter)
+      .populate("siteAssignments.site", "name")
+      .sort({ [sortField]: sortOrder as 1 | -1 });
+    if (isPaginated) {
+      query = query.skip((page - 1) * limit).limit(limit);
+    }
+    const contractors = await query.lean();
+
+    let responseBody: unknown = contractors;
+
+    if (isPaginated) {
+      const total = await ContractorModel.countDocuments(filter);
+      responseBody = {
+        contractors,
+        total,
+        page,
+        limit,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      };
+    }
+
+    await cacheSet(cacheKey, responseBody, CONTRACTORS_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
   } catch (error) {
     next(error);
   }
@@ -122,6 +198,8 @@ const updateContractor = async (
       resourceId: contractor._id,
       details: `Updated contractor: ${contractor.name}`,
     });
+
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
 
     res.status(HttpStatus.OK).json({
       message: "Contractor updated successfully",
@@ -175,6 +253,8 @@ const deleteContractor = async (
       details: `Deleted contractor: ${contractor.name}`,
     });
 
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
+
     res.status(HttpStatus.OK).json({
       message: "Contractor deleted successfully",
     });
@@ -214,6 +294,8 @@ const assignSiteToContractor = async (
     contractor.siteAssignments.push({ site: siteId, totalAmount: 0 });
     await contractor.save();
 
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
+
     res
       .status(HttpStatus.OK)
       .json({ message: "Site assigned to contractor successfully" });
@@ -230,15 +312,6 @@ const addTransaction = async (
   try {
     const { contractorId, siteId, type, amount, description, category } =
       req.body;
-    console.log(
-      "HAHAHAHAHA",
-      contractorId,
-      siteId,
-      type,
-      amount,
-      description,
-      category,
-    );
     const userId = req.user?.userId;
     const userRole = req.user?.role;
 
@@ -341,6 +414,8 @@ const addTransaction = async (
       await siteManager.save();
     }
 
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
+
     res.status(HttpStatus.CREATED).json({
       message: "Transaction added successfully",
       transaction,
@@ -418,6 +493,8 @@ const unassignSiteFromContractor = async (
       resourceId: contractor._id,
       details: `Unassigned site ${siteId} from contractor ${contractor.name}`,
     });
+
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
 
     res.status(HttpStatus.OK).json({
       message: "Site unassigned from contractor successfully",
@@ -500,7 +577,6 @@ const deleteTransaction = async (
     const siteAssignment = contractor.siteAssignments.find(
       (a) => a.site?.toString() === transactionSiteId,
     );
-    console.log("HAHAHA", siteAssignment, contractor.siteAssignments);
     if (siteAssignment) {
       siteAssignment.totalAmount -= amount;
       await contractor.save();
@@ -558,6 +634,8 @@ const deleteTransaction = async (
     )
       .populate("siteAssignments.site", "name")
       .lean();
+
+    await bumpCacheVersion(CONTRACTORS_CACHE_NAMESPACE);
 
     res.status(HttpStatus.OK).json({
       message: "Transaction deleted and reversed",

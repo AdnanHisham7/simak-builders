@@ -6,8 +6,8 @@ const router = express.Router();
 
 // Stocks
 router.post("/", authMiddleware, stockController.addStock);
-router.get("/", stockController.getStocks);
-router.get("/by-site", stockController.getStocksBySite);
+router.get("/", authMiddleware, stockController.getStocks);
+router.get("/by-site", authMiddleware, stockController.getStocksBySite);
 
 // Stock Transfers
 router.post("/transfers", authMiddleware, stockController.requestStockTransfer);
@@ -21,10 +21,10 @@ router.patch(
   authMiddleware,
   stockController.rejectStockTransfer
 );
-router.get("/transfers", stockController.getStockTransfers);
+router.get("/transfers", authMiddleware, stockController.getStockTransfers);
 
 // Stock Usages
 router.post("/usages", authMiddleware, stockController.logStockUsage);
-router.get("/usages", stockController.getStockUsages);
+router.get("/usages", authMiddleware, stockController.getStockUsages);
 
 export default router;

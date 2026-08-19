@@ -12,4 +12,7 @@ const EmployeeSchema = new Schema<Employee>(
   { timestamps: true }
 );
 
+EmployeeSchema.index({ name: 1 });
+EmployeeSchema.index({ position: 1 });
+
 export const EmployeeModel = model<Employee>("Employee", EmployeeSchema);

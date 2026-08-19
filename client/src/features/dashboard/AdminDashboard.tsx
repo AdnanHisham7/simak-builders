@@ -113,11 +113,6 @@ interface PendingTransaction {
   createdAt: string;
 }
 
-interface Site {
-  _id: string;
-  name: string;
-}
-
 interface Vendor {
   _id: string;
   name: string;
@@ -167,12 +162,13 @@ const AdminDashboard = () => {
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [, setSites] = useState<Site[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [clients, setClients] = useState<[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [contractors, setContractors] = useState<Contractor[]>([]);
+  const [bulkImportDataLoaded, setBulkImportDataLoaded] = useState(false);
+  const [bulkImportDataLoading, setBulkImportDataLoading] = useState(false);
   const [companyTotalAmount, setCompanyTotalAmount] = useState<number | null>(null);
   const [amountToBeReceived, setAmountToBeReceived] = useState<number | null>(null);
   const [financialSummaryLoading, setFinancialSummaryLoading] = useState(true);
@@ -186,22 +182,6 @@ const AdminDashboard = () => {
         setData(realData);
         setLastUpdated(new Date());
         setLoading(false);
-
-        const [sitesRes, vendorsRes, employeesRes, stocksRes, contractorsRes, clientsRes] =
-          await Promise.all([
-            privateClient.get("/sites"),
-            privateClient.get("/vendors"),
-            privateClient.get("/employees"),
-            privateClient.get("/stocks"),
-            privateClient.get("/contractors"),
-            privateClient.get("/users?role=client"),
-          ]);
-        setSites(sitesRes.data);
-        setVendors(vendorsRes.data);
-        setEmployees(employeesRes.data);
-        setStocks(stocksRes.data);
-        setContractors(contractorsRes.data);
-        setClients(clientsRes.data);
 
         try {
           const [companySummary, receivableSummary] = await Promise.all([
@@ -222,6 +202,35 @@ const AdminDashboard = () => {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (activeSection !== "bulkImport" || bulkImportDataLoaded) return;
+
+    const fetchBulkImportData = async () => {
+      setBulkImportDataLoading(true);
+      try {
+        const [vendorsRes, employeesRes, stocksRes, contractorsRes, clientsRes] =
+          await Promise.all([
+            privateClient.get("/vendors"),
+            privateClient.get("/employees"),
+            privateClient.get("/stocks"),
+            privateClient.get("/contractors"),
+            privateClient.get("/users?role=client"),
+          ]);
+        setVendors(vendorsRes.data);
+        setEmployees(employeesRes.data);
+        setStocks(stocksRes.data);
+        setContractors(contractorsRes.data);
+        setClients(clientsRes.data);
+        setBulkImportDataLoaded(true);
+      } catch (err) {
+        toast.error("Failed to load bulk import data");
+      } finally {
+        setBulkImportDataLoading(false);
+      }
+    };
+    fetchBulkImportData();
+  }, [activeSection, bulkImportDataLoaded]);
 
   const handleVerifyTransaction = async (transactionId: string) => {
     try {
@@ -618,13 +627,19 @@ const AdminDashboard = () => {
 
           {activeSection === "bulkImport" && (
             <Card title="Bulk import site data" description="Enter past or forgotten data for a site">
-              <BulkImportForm
-                clients={clients}
-                vendors={vendors}
-                employees={employees}
-                stocks={stocks}
-                contractors={contractors}
-              />
+              {bulkImportDataLoading && !bulkImportDataLoaded ? (
+                <div className="flex items-center justify-center py-12 text-console-muted">
+                  Loading form data…
+                </div>
+              ) : (
+                <BulkImportForm
+                  clients={clients}
+                  vendors={vendors}
+                  employees={employees}
+                  stocks={stocks}
+                  contractors={contractors}
+                />
+              )}
             </Card>
           )}
         </motion.div>
