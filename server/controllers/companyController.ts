@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { CompanyModel } from "@models/Company";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
-import { ClientTransactionModel } from "./clientController";
+import { ClientTransactionModel } from "@models/ClientTransaction";
 import { EmployeeModel } from "@models/Employee";
 import { SiteModel } from "@models/Site";
 import { StockModel } from "@models/Stock";

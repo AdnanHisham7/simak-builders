@@ -5,7 +5,7 @@ import { StockModel } from "@models/Stock";
 import { VendorModel } from "@models/Vendor";
 import { UserModel } from "@models/User";
 import { SiteModel } from "@models/Site";
-import { ClientTransactionModel } from "./clientController";
+import { ClientTransactionModel } from "@models/ClientTransaction";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
 import mongoose, { Types } from "mongoose";
