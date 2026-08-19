@@ -708,7 +708,16 @@ const SiteDetail: React.FC = () => {
       );
       if (data?.site) {
         setSite((prev) =>
-          prev ? { ...prev, expenses: data.site.expenses } : prev,
+          prev
+            ? {
+                ...prev,
+                expenses: data.site.expenses,
+                transactions:
+                  data.site.transactions && data.site.transactions.length > 0
+                    ? [...data.site.transactions, ...prev.transactions]
+                    : prev.transactions,
+              }
+            : prev,
         );
       }
       toast.success("Purchase deleted successfully");
@@ -731,7 +740,16 @@ const SiteDetail: React.FC = () => {
       );
       if (data?.site) {
         setSite((prev) =>
-          prev ? { ...prev, expenses: data.site.expenses } : prev,
+          prev
+            ? {
+                ...prev,
+                expenses: data.site.expenses,
+                transactions:
+                  data.site.transactions && data.site.transactions.length > 0
+                    ? [...data.site.transactions, ...prev.transactions]
+                    : prev.transactions,
+              }
+            : prev,
         );
       }
       toast.success("Miscellaneous expense deleted successfully");

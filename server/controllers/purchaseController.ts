@@ -509,6 +509,7 @@ const deletePurchase = async (
     const transportationFee = purchase.transportationFee || 0;
 
     let updatedSiteExpenses: number | undefined;
+    const newSiteTransactions: any[] = [];
     if (wasVerified) {
       // 1. Reverse stock updates
       for (const item of purchase.items) {
@@ -539,6 +540,7 @@ const deletePurchase = async (
         });
         await site.save();
         updatedSiteExpenses = site.expenses;
+        newSiteTransactions.push(site.transactions[site.transactions.length - 1]);
       }
 
       // 3. Reverse source deduction (only for cash purchases)
@@ -603,6 +605,9 @@ const deletePurchase = async (
               miscSite._id.toString() === purchase.site._id.toString()
             ) {
               updatedSiteExpenses = miscSite.expenses;
+              newSiteTransactions.push(
+                miscSite.transactions[miscSite.transactions.length - 1],
+              );
             }
           }
           // Reverse source for misc
@@ -686,7 +691,11 @@ const deletePurchase = async (
       wasVerified,
       site:
         updatedSiteExpenses !== undefined
-          ? { _id: purchase.site?._id, expenses: updatedSiteExpenses }
+          ? {
+              _id: purchase.site?._id,
+              expenses: updatedSiteExpenses,
+              transactions: newSiteTransactions,
+            }
           : undefined,
     });
   } catch (error) {

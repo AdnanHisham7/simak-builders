@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { UserType } from "@/store/slices/authSlice";
@@ -23,6 +23,7 @@ import {
   Upload,
   ShoppingCart,
   Inbox,
+  Loader2,
 } from "lucide-react";
 import { createSite, getSites, getSitesPaginated, Site } from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
@@ -159,6 +160,7 @@ const Sites: React.FC = () => {
   ]);
 
   const itemsPerPage = 8;
+  const pageRequestIdRef = useRef(0);
 
   const handleViewSite = (siteId: string) => {
     if (userType === "admin") {
@@ -203,6 +205,7 @@ const Sites: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const requestId = ++pageRequestIdRef.current;
     const fetchPage = async () => {
       setTableLoading(true);
       try {
@@ -212,27 +215,33 @@ const Sites: React.FC = () => {
           search: debouncedSearchTerm,
           status: selectedProjectStatus,
         });
+        if (pageRequestIdRef.current !== requestId) return;
         setPageSites(result.sites.map(mapSiteForDisplay));
         setTotal(result.total);
         setTotalPages(result.totalPages);
       } catch (err) {
+        if (pageRequestIdRef.current !== requestId) return;
         toast.error("Failed to fetch sites");
         setError("Failed to fetch data. Please try again later.");
       } finally {
-        setLoading(false);
-        setTableLoading(false);
+        if (pageRequestIdRef.current === requestId) {
+          setLoading(false);
+          setTableLoading(false);
+        }
       }
     };
     fetchPage();
   }, [currentPage, debouncedSearchTerm, selectedProjectStatus]);
 
   const refetchCurrentPage = async () => {
+    const requestId = ++pageRequestIdRef.current;
     const result = await getSitesPaginated({
       page: currentPage,
       limit: itemsPerPage,
       search: debouncedSearchTerm,
       status: selectedProjectStatus,
     });
+    if (pageRequestIdRef.current !== requestId) return;
     setPageSites(result.sites.map(mapSiteForDisplay));
     setTotal(result.total);
     setTotalPages(result.totalPages);
@@ -392,7 +401,17 @@ const Sites: React.FC = () => {
               />
             ) : (
               <>
-                <div className="mb-6 overflow-hidden rounded-console border border-console-border">
+                <div className="relative mb-6 overflow-hidden rounded-console border border-console-border">
+                  {tableLoading && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 backdrop-blur-[1px]">
+                      <div className="flex items-center gap-2 rounded-lg bg-white px-4 py-2.5 shadow-sm ring-1 ring-console-border">
+                        <Loader2 size={18} className="animate-spin text-brand-700" />
+                        <span className="text-sm font-medium text-console-text">
+                          Loading sites…
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-console-border">
                       <thead className="bg-console-bg">
@@ -575,7 +594,7 @@ const Sites: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => paginate(currentPage - 1)}
-                      disabled={currentPage === 1}
+                      disabled={currentPage === 1 || tableLoading}
                       className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronLeft size={18} />
@@ -592,8 +611,9 @@ const Sites: React.FC = () => {
                             type="button"
                             key={pageNum}
                             onClick={() => paginate(pageNum)}
+                            disabled={tableLoading}
                             className={cn(
-                              "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium transition-colors",
+                              "flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
                               currentPage === pageNum
                                 ? "bg-brand-700 text-white"
                                 : "text-console-muted hover:bg-white",
@@ -615,7 +635,7 @@ const Sites: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => paginate(currentPage + 1)}
-                      disabled={currentPage === totalPages}
+                      disabled={currentPage === totalPages || tableLoading}
                       className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <ChevronRight size={18} />

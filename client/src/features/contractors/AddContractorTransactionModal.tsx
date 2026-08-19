@@ -76,9 +76,18 @@ const AddContractorTransactionModal: React.FC<
   };
 
   useEffect(() => {
-    if (defaultSiteId)
-      setTransaction((prev) => ({ ...prev, siteId: defaultSiteId }));
-  }, [defaultSiteId]);
+    if (!isOpen) return;
+    setTransaction({
+      siteId: defaultSiteId || "",
+      type: "",
+      amount: 0,
+      description: "",
+    });
+    setCategory("");
+    setCustomCategory("");
+    setShowCustomCategory(false);
+    setError(null);
+  }, [isOpen, defaultSiteId]);
 
   const handleAdd = async () => {
     if (isSubmitting) return;
@@ -101,7 +110,10 @@ const AddContractorTransactionModal: React.FC<
         category: showCustomCategory ? customCategory : category,
       };
       await onAddTransaction(data);
-      setTransaction({ siteId: "", type: "", amount: 0, description: "" });
+      setTransaction({ siteId: defaultSiteId || "", type: "", amount: 0, description: "" });
+      setCategory("");
+      setCustomCategory("");
+      setShowCustomCategory(false);
       setError(null);
       onClose();
       toast.success("Transaction added successfully");

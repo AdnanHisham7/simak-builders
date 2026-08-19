@@ -286,6 +286,7 @@ const deleteMiscellaneousExpense = async (
 
     // If verified, perform accounting reversal
     let updatedSiteExpenses: number | undefined;
+    let newTransaction: any;
     if (wasVerified) {
       // 1. Reverse site expense
       const site = await SiteModel.findById(expense.site);
@@ -302,6 +303,7 @@ const deleteMiscellaneousExpense = async (
         });
         await site.save();
         updatedSiteExpenses = site.expenses;
+        newTransaction = site.transactions[site.transactions.length - 1];
       }
 
       // 2. Reverse source deduction
@@ -368,7 +370,11 @@ const deleteMiscellaneousExpense = async (
       wasVerified,
       site:
         updatedSiteExpenses !== undefined
-          ? { _id: expense.site, expenses: updatedSiteExpenses }
+          ? {
+              _id: expense.site,
+              expenses: updatedSiteExpenses,
+              transactions: newTransaction ? [newTransaction] : [],
+            }
           : undefined,
     });
   } catch (error) {
