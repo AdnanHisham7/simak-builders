@@ -24,13 +24,15 @@ import {
   ShoppingCart,
   Inbox,
   Loader2,
+  Pencil,
 } from "lucide-react";
-import { createSite, getSites, getSitesPaginated, Site } from "@/services/siteService";
+import { createSite, getSites, getSitesPaginated, updateSite, Site } from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
 import { UserRole } from "@/types/user";
 import debounce from "lodash/debounce";
 import AddSiteModal from "./AddSiteModal";
 import AddPurchaseModal from "./AddPurchaseModal";
+import EditSiteModal, { EditSiteFormValues } from "./EditSiteModal";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
@@ -52,6 +54,10 @@ interface User {
 interface MappedSite {
   id: string;
   name: string;
+  address: string;
+  city: string;
+  state: string;
+  zip: string;
   location: string;
   status: string;
   clientName: string;
@@ -64,12 +70,17 @@ interface MappedSite {
   totalPhases: number;
 }
 
+const buildLocation = (address: string, city: string, state: string, zip: string) =>
+  `${address}, ${city}, ${state} ${zip}`.trim().replace(/^,|,$/g, "");
+
 const mapSiteForDisplay = (site: Site): MappedSite => ({
   id: site.id,
   name: site.name,
-  location: `${site.address}, ${site.city}, ${site.state} ${site.zip}`
-    .trim()
-    .replace(/^,|,$/g, ""),
+  address: site.address || "",
+  city: site.city || "",
+  state: site.state || "",
+  zip: site.zip || "",
+  location: buildLocation(site.address, site.city, site.state, site.zip),
   status: site.status || "Unknown",
   clientName: site.client?.name || "Unknown",
   budget: site.budget,
@@ -121,6 +132,7 @@ const getStatusVariant = (status: string): "success" | "info" | "warning" | "err
 const getActionsForRole = (role: UserType): string[] => {
   switch (role) {
     case "admin":
+      return ["view", "addPurchase", "edit"];
     case "siteManager":
     case "supervisor":
       return ["view", "addPurchase"];
@@ -149,7 +161,9 @@ const Sites: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [siteBeingEdited, setSiteBeingEdited] = useState<MappedSite | null>(null);
   const [selectedProjectStatus, setSelectedProjectStatus] =
     useState("All Statuses");
   const [clients, setClients] = useState<User[]>([]);
@@ -285,6 +299,45 @@ const Sites: React.FC = () => {
   const handleAddPurchase = (siteId: string) => {
     setSelectedSiteId(siteId);
     setIsAddPurchaseModalOpen(true);
+  };
+
+  const handleEditSite = (site: MappedSite) => {
+    setSiteBeingEdited(site);
+    setIsEditModalOpen(true);
+  };
+
+  const applySiteEdit = (
+    list: MappedSite[],
+    siteId: string,
+    updates: EditSiteFormValues,
+  ): MappedSite[] =>
+    list.map((s) =>
+      s.id === siteId
+        ? {
+            ...s,
+            name: updates.name,
+            address: updates.address,
+            city: updates.city,
+            state: updates.state,
+            zip: updates.zip,
+            location: buildLocation(updates.address, updates.city, updates.state, updates.zip),
+          }
+        : s,
+    );
+
+  const handleEditSubmit = async (updates: EditSiteFormValues) => {
+    if (!siteBeingEdited) return;
+    try {
+      await updateSite(siteBeingEdited.id, updates);
+      const editedSiteId = siteBeingEdited.id;
+      setPageSites((prev) => applySiteEdit(prev, editedSiteId, updates));
+      setPortfolioStats((prev) => applySiteEdit(prev, editedSiteId, updates));
+      setIsEditModalOpen(false);
+      setSiteBeingEdited(null);
+      toast.success("Site updated successfully");
+    } catch {
+      toast.error("Failed to update site");
+    }
   };
 
   const handleUploadDocuments = (siteId: string) => {
@@ -535,6 +588,18 @@ const Sites: React.FC = () => {
                                       <Eye size={16} />
                                     </button>
                                   </Tooltip>
+                                  {actions.includes("edit") && (
+                                    <Tooltip label="Edit site">
+                                      <button
+                                        type="button"
+                                        className="rounded-lg p-2 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                        onClick={() => handleEditSite(site)}
+                                        aria-label="Edit site"
+                                      >
+                                        <Pencil size={16} />
+                                      </button>
+                                    </Tooltip>
+                                  )}
                                   {actions.includes("addPurchase") && (
                                     <Tooltip label="Add purchase">
                                       <button
@@ -661,6 +726,23 @@ const Sites: React.FC = () => {
         <AddPurchaseModal
           siteId={selectedSiteId!}
           onClose={() => setIsAddPurchaseModalOpen(false)}
+        />
+      )}
+      {siteBeingEdited && (
+        <EditSiteModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSiteBeingEdited(null);
+          }}
+          site={{
+            name: siteBeingEdited.name,
+            address: siteBeingEdited.address,
+            city: siteBeingEdited.city,
+            state: siteBeingEdited.state,
+            zip: siteBeingEdited.zip,
+          }}
+          onSubmit={handleEditSubmit}
         />
       )}
     </div>

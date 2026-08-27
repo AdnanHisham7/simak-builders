@@ -120,6 +120,11 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
       siteId,
+      name,
+      address,
+      city,
+      state,
+      zip,
       clientId,
       status,
       phases,
@@ -127,8 +132,50 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
       architectIds,
       supervisorIds,
     } = req.body;
+
+    if (!siteId || typeof siteId !== "string") {
+      throw new ApiError("Site ID is required", HttpStatus.BAD_REQUEST);
+    }
+
     const site = await SiteModel.findById(siteId);
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const isEditingSiteDetails =
+      name !== undefined ||
+      address !== undefined ||
+      city !== undefined ||
+      state !== undefined ||
+      zip !== undefined;
+
+    if (isEditingSiteDetails) {
+      if (req.user?.role !== "admin") {
+        throw new ApiError(
+          "Only admins can edit site details",
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      const fields: Record<string, unknown> = { name, address, city, state, zip };
+      const trimmedValues: Record<string, string> = {};
+
+      for (const field of ["name", "address", "city", "state", "zip"] as const) {
+        const rawValue = fields[field];
+        const nextValue = rawValue === undefined ? site[field] : rawValue;
+        if (typeof nextValue !== "string" || !nextValue.trim()) {
+          throw new ApiError(
+            "Site name, address, city, state, and zip code are all required",
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+        trimmedValues[field] = nextValue.trim();
+      }
+
+      site.name = trimmedValues.name;
+      site.address = trimmedValues.address;
+      site.city = trimmedValues.city;
+      site.state = trimmedValues.state;
+      site.zip = trimmedValues.zip;
+    }
 
     if (clientId && clientId !== site.client.toString()) {
       await UserModel.updateOne(
@@ -188,6 +235,17 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
 
     await site.save();
     await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    if (isEditingSiteDetails) {
+      await ActivityLogModel.create({
+        user: req.user?.userId,
+        action: "update",
+        resource: "site",
+        resourceId: site._id,
+        details: `Updated site details for: ${site.name}`,
+      });
+    }
+
     res.status(HttpStatus.OK).json({ message: "Site updated" });
   } catch (error) {
     next(error);
