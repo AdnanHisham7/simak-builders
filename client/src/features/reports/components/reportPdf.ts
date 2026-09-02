@@ -148,7 +148,7 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
   autoTable(doc, {
     startY: yOffset,
     margin: { top: 20, bottom: 26, left: 14, right: 14 },
-    head: [["Sl.No", "Item of Work", "Quantity", "Amount (INR)"]],
+    head: [["No.", "Item of Work", "Quantity", "Amount (INR)"]],
     body: [...bodyRows, ...summaryTableRows],
     theme: "grid",
     styles: {
@@ -163,7 +163,7 @@ export const generateProfessionalReportPdf = (options: ReportPdfOptions): jsPDF 
     headStyles: {
       font: "Roboto-Regular",
       fontStyle: "bold",
-      fontSize: 11.5,
+      fontSize: 11,
       fillColor: [240, 242, 245],
       textColor: [30, 30, 30],
       lineColor: [205, 208, 213],
