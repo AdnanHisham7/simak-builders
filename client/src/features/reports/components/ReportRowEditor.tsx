@@ -11,9 +11,11 @@ import {
   roundToCents,
   updateRowAmount,
   updateRowItemOfWork,
+  updateRowQuantity,
 } from "./editableReport";
 import EditableAmountField from "./EditableAmountField";
 import EditableTextField from "./EditableTextField";
+import EditableQuantityField from "./EditableQuantityField";
 import { usePreferences } from "@/hooks/usePreferences";
 
 interface ReportRowEditorProps {
@@ -312,7 +314,13 @@ const ReportRowEditor: React.FC<ReportRowEditorProps> = ({
                   </div>
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 text-center">
-                  {row.quantity !== null && row.quantity !== undefined ? row.quantity : "-"}
+                  <EditableQuantityField
+                    value={row.quantity}
+                    disabled={disabled}
+                    onCommit={(quantity) =>
+                      onRowsChange(updateRowQuantity(rows, row.id, quantity))
+                    }
+                  />
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-right">
                   <EditableAmountField

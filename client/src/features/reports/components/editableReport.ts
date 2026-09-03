@@ -58,6 +58,17 @@ export const updateRowAmount = (
 ): EditableReportRow[] =>
   rows.map((row) => (row.id === id ? { ...row, amount: roundToCents(amount) } : row));
 
+export const updateRowQuantity = (
+  rows: EditableReportRow[],
+  id: string,
+  quantity: number | null,
+): EditableReportRow[] =>
+  rows.map((row) =>
+    row.id === id
+      ? { ...row, quantity: quantity === null || Number.isNaN(quantity) ? null : quantity }
+      : row,
+  );
+
 export const updateRowItemOfWork = (
   rows: EditableReportRow[],
   id: string,
