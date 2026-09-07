@@ -433,34 +433,23 @@ const refreshToken = async (
 
     const decoded = authService.verifyRefreshToken(refreshToken);
     const { userId, role, sessionId } = decoded;
+    if (!sessionId) {
+      throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
+    }
 
-    const user = await UserModel.findById(userId).select(
-      "+sessions.tokenHash +sessions.prevTokenHash +sessions.prevTokenExpiresAt"
+    const incomingTokenHash = authService.hashToken(refreshToken);
+    const now = new Date();
+    
+    const userStatus = await UserModel.findById(userId).select(
+      "isBlocked isDeleted"
     );
-    if (!user || !sessionId) {
+    if (!userStatus) {
       throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
     }
-
-    const session = (user.sessions as any).id(sessionId);
-    const tokenHash = authService.hashToken(refreshToken);
-
-    const isCurrentToken = session?.tokenHash === tokenHash;
-    const isTokenInGracePeriod =
-      session?.prevTokenHash === tokenHash &&
-      session?.prevTokenExpiresAt &&
-      session.prevTokenExpiresAt.getTime() > Date.now();
-
-    if (!session || (!isCurrentToken && !isTokenInGracePeriod)) {
-      // Genuinely stale/replayed token outside the grace window: treat as
-      // a possible reuse and kill the session rather than silently no-op.
-      throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
-    }
-
-    if (user.isBlocked) {
+    if (userStatus.isBlocked) {
       throw new ApiError("User is blocked", HttpStatus.CONFLICT);
     }
-
-    if (user.isDeleted) {
+    if (userStatus.isDeleted) {
       throw new ApiError(
         "This account has been deactivated. Please contact your administrator.",
         HttpStatus.FORBIDDEN,
@@ -469,19 +458,48 @@ const refreshToken = async (
 
     const newAccessToken = authService.generateAccessToken(userId, role, sessionId);
     const newRefreshToken = authService.generateRefreshToken(userId, role, sessionId);
+    const newTokenHash = authService.hashToken(newRefreshToken);
+    const graceExpiresAt = new Date(now.getTime() + REFRESH_TOKEN_GRACE_PERIOD_MS);
 
-    // Only advance the grace window when rotating off the *current* token.
-    // A request arriving inside the grace period re-rotates but keeps
-    // referencing the same previous hash/expiry so the window doesn't
-    // reset indefinitely on repeated stragglers.
-    if (isCurrentToken) {
-      session.prevTokenHash = session.tokenHash;
-      session.prevTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_GRACE_PERIOD_MS);
+    let updated = await UserModel.findOneAndUpdate(
+      {
+        _id: userId,
+        "sessions._id": sessionId,
+        "sessions.tokenHash": incomingTokenHash,
+      },
+      {
+        $set: {
+          "sessions.$.tokenHash": newTokenHash,
+          "sessions.$.prevTokenHash": incomingTokenHash,
+          "sessions.$.prevTokenExpiresAt": graceExpiresAt,
+          "sessions.$.lastUsedAt": now,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      updated = await UserModel.findOneAndUpdate(
+        {
+          _id: userId,
+          "sessions._id": sessionId,
+          "sessions.prevTokenHash": incomingTokenHash,
+          "sessions.prevTokenExpiresAt": { $gt: now },
+        },
+        {
+          $set: {
+            "sessions.$.tokenHash": newTokenHash,
+            "sessions.$.lastUsedAt": now,
+          },
+        },
+        { new: true }
+      );
     }
-    session.tokenHash = authService.hashToken(newRefreshToken);
-    session.lastUsedAt = new Date();
 
-    await user.save();
+    if (!updated) {
+      throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
+    }
+
     setTokensCookies(res, newAccessToken, newRefreshToken);
 
     res.status(HttpStatus.OK).json({ accessToken: newAccessToken });
