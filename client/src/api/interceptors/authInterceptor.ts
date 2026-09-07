@@ -9,6 +9,18 @@ interface RetriableRequest extends AxiosRequestConfig {
   _retry?: boolean;
 }
 
+// Shared in-flight refresh promise
+let refreshPromise: Promise<unknown> | null = null;
+
+const getRefreshPromise = () => {
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+};
+
 export const attachAuthInterceptor = (client: AxiosInstance) => {
   client.interceptors.response.use(
     (response) => response,
@@ -19,7 +31,7 @@ export const attachAuthInterceptor = (client: AxiosInstance) => {
       if (error.response?.status === 401 && !originalRequest._retry) {
         originalRequest._retry = true;
         try {
-          await refreshAccessToken();
+          await getRefreshPromise();
           return client.request(originalRequest);
         } catch (refreshError) {
           store.dispatch(clearUser());

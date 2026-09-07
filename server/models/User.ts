@@ -54,6 +54,8 @@ const UserSchema = new Schema<User>(
     sessions: [
       {
         tokenHash: { type: String, required: true, select: false },
+        prevTokenHash: { type: String, select: false },
+        prevTokenExpiresAt: { type: Date, select: false },
         userAgent: { type: String },
         ip: { type: String },
         device: { type: String },

@@ -17,6 +17,7 @@ import { ActivityLogModel } from "@models/ActivityLog";
 import { parseUserAgent, getRequestIp } from "@utils/deviceParser";
 
 const MAX_SESSIONS_PER_USER = 10;
+const REFRESH_TOKEN_GRACE_PERIOD_MS = 10 * 1000;
 
 const createSessionAndTokens = async (
   user: InstanceType<typeof UserModel>,
@@ -433,14 +434,25 @@ const refreshToken = async (
     const decoded = authService.verifyRefreshToken(refreshToken);
     const { userId, role, sessionId } = decoded;
 
-    const user = await UserModel.findById(userId).select("+sessions.tokenHash");
+    const user = await UserModel.findById(userId).select(
+      "+sessions.tokenHash +sessions.prevTokenHash +sessions.prevTokenExpiresAt"
+    );
     if (!user || !sessionId) {
       throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
     }
 
     const session = (user.sessions as any).id(sessionId);
     const tokenHash = authService.hashToken(refreshToken);
-    if (!session || session.tokenHash !== tokenHash) {
+
+    const isCurrentToken = session?.tokenHash === tokenHash;
+    const isTokenInGracePeriod =
+      session?.prevTokenHash === tokenHash &&
+      session?.prevTokenExpiresAt &&
+      session.prevTokenExpiresAt.getTime() > Date.now();
+
+    if (!session || (!isCurrentToken && !isTokenInGracePeriod)) {
+      // Genuinely stale/replayed token outside the grace window: treat as
+      // a possible reuse and kill the session rather than silently no-op.
       throw new ApiError(Messages.INVALID_TOKEN, HttpStatus.UNAUTHORIZED);
     }
 
@@ -458,6 +470,14 @@ const refreshToken = async (
     const newAccessToken = authService.generateAccessToken(userId, role, sessionId);
     const newRefreshToken = authService.generateRefreshToken(userId, role, sessionId);
 
+    // Only advance the grace window when rotating off the *current* token.
+    // A request arriving inside the grace period re-rotates but keeps
+    // referencing the same previous hash/expiry so the window doesn't
+    // reset indefinitely on repeated stragglers.
+    if (isCurrentToken) {
+      session.prevTokenHash = session.tokenHash;
+      session.prevTokenExpiresAt = new Date(Date.now() + REFRESH_TOKEN_GRACE_PERIOD_MS);
+    }
     session.tokenHash = authService.hashToken(newRefreshToken);
     session.lastUsedAt = new Date();
 

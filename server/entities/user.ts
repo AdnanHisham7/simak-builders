@@ -55,6 +55,8 @@ export interface User {
   sessions: {
     _id: Types.ObjectId;
     tokenHash: string;
+    prevTokenHash?: string;
+    prevTokenExpiresAt?: Date;
     userAgent?: string;
     ip?: string;
     device?: string;
