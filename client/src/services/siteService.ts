@@ -262,11 +262,38 @@ const mapSiteDetailsData = (
   updatedAt: site?.updatedAt,
 });
 
-const SITES_FULL_LIST_CACHE_KEY = "sites-full-list";
-const SITES_FULL_LIST_CACHE_TTL_MS = 15_000;
+const SITES_CACHE_PREFIX = "sites";
+const SITES_FULL_LIST_CACHE_KEY = "sites:full-list";
+const SITES_STATS_CACHE_KEY = "sites:stats";
+const SITES_CACHE_TTL_MS = 60_000;
+
+export interface SiteStats {
+  totalSites: number;
+  totalBudget: number;
+  completedSites: number;
+  activeSites: number;
+  statuses: string[];
+}
+
+export const getSiteStats = async (): Promise<SiteStats> => {
+  return withCache(SITES_STATS_CACHE_KEY, SITES_CACHE_TTL_MS, async () => {
+    const response = await privateClient?.get("/sites/stats", {
+      withCredentials: true,
+    });
+    return (
+      response.data || {
+        totalSites: 0,
+        totalBudget: 0,
+        completedSites: 0,
+        activeSites: 0,
+        statuses: ["InProgress", "Completed"],
+      }
+    );
+  });
+};
 
 export const getSites = async () => {
-  return withCache(SITES_FULL_LIST_CACHE_KEY, SITES_FULL_LIST_CACHE_TTL_MS, async () => {
+  return withCache(SITES_FULL_LIST_CACHE_KEY, SITES_CACHE_TTL_MS, async () => {
     const response = await privateClient?.get("/sites", { withCredentials: true });
     return response.data?.map(mapSiteData);
   });
@@ -286,22 +313,25 @@ export const getSitesPaginated = async (params: {
   search?: string;
   status?: string;
 }): Promise<PaginatedSitesResult> => {
-  const response = await privateClient?.get("/sites", {
-    withCredentials: true,
-    params: {
-      page: params.page,
-      limit: params.limit,
-      ...(params.search ? { search: params.search } : {}),
-      ...(params.status ? { status: params.status } : {}),
-    },
+  const cacheKey = `sites:paginated:p${params.page}:l${params.limit}:s${params.search || ""}:st${params.status || ""}`;
+  return withCache(cacheKey, SITES_CACHE_TTL_MS, async () => {
+    const response = await privateClient?.get("/sites", {
+      withCredentials: true,
+      params: {
+        page: params.page,
+        limit: params.limit,
+        ...(params.search ? { search: params.search } : {}),
+        ...(params.status ? { status: params.status } : {}),
+      },
+    });
+    return {
+      sites: (response.data?.sites || []).map(mapSiteData),
+      total: response.data?.total || 0,
+      page: response.data?.page || params.page,
+      limit: response.data?.limit || params.limit,
+      totalPages: response.data?.totalPages || 1,
+    };
   });
-  return {
-    sites: (response.data?.sites || []).map(mapSiteData),
-    total: response.data?.total || 0,
-    page: response.data?.page || params.page,
-    limit: response.data?.limit || params.limit,
-    totalPages: response.data?.totalPages || 1,
-  };
 };
 
 export const getSiteDetails = async (siteId: string) => {
@@ -319,13 +349,13 @@ export const createSite = async (siteData: any) => {
   const response = await privateClient?.post("/sites", siteData);
   const { siteId } = response.data;
   const fullSite = await getSiteDetails(siteId);
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
   return fullSite;
 };
 
 export const updateSite = async (siteId: string, updateData: any) => {
   await privateClient?.put("/sites", { siteId, ...updateData });
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
   return { siteId, ...updateData };
 };
 
@@ -337,14 +367,14 @@ export const updatePhaseStatus = async (
   await privateClient?.put(`/sites/${siteId}/phases/${phaseId}/status`, {
     status,
   });
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
 };
 
 export const uploadDocument = async (siteId: string, formData: FormData) => {
   await privateClient?.post(`/sites/${siteId}/documents`, formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
 };
 
 export const markSiteAsCompleted = async (
@@ -356,7 +386,7 @@ export const markSiteAsCompleted = async (
     deleteSiteDocuments,
     deletePurchaseBills,
   });
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
 };
 
 export const updateSupervisionPercentage = async (
@@ -367,6 +397,6 @@ export const updateSupervisionPercentage = async (
     `/sites/${siteId}/supervision-percentage`,
     { supervisionPercentage }
   );
-  invalidateCache(SITES_FULL_LIST_CACHE_KEY);
+  invalidateCache(SITES_CACHE_PREFIX);
   return response.data;
 };

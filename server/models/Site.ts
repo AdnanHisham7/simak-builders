@@ -69,5 +69,7 @@ const SiteSchema = new Schema<Site>(
 
 SiteSchema.index({ client: 1 });
 SiteSchema.index({ status: 1 });
+SiteSchema.index({ name: 1 });
+SiteSchema.index({ createdAt: -1 });
 
 export const SiteModel = model<Site>("Site", SiteSchema);

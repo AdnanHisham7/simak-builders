@@ -20,7 +20,7 @@ import {
 } from "@config/redis";
 
 const SITES_CACHE_NAMESPACE = "sites";
-const SITES_CACHE_TTL_SECONDS = 20;
+const SITES_CACHE_TTL_SECONDS = 300;
 
 const createSite = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -341,6 +341,103 @@ const getSiteDetails = async (
   }
 };
 
+const getSiteStats = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const user = req.authUser;
+    const isRestrictedRole =
+      user?.role === "siteManager" ||
+      user?.role === "supervisor" ||
+      user?.role === "architect";
+
+    const matchStage: Record<string, any> = {};
+    if (isRestrictedRole) {
+      matchStage._id = { $in: user?.assignedSites || [] };
+    }
+
+    const version = await getCacheVersion(SITES_CACHE_NAMESPACE);
+    const cacheKey = isRestrictedRole
+      ? `${SITES_CACHE_NAMESPACE}:v${version}:stats:user:${req.user?.userId}`
+      : `${SITES_CACHE_NAMESPACE}:v${version}:stats:all`;
+
+    const cached = await cacheGet(cacheKey);
+    if (cached) {
+      res.status(HttpStatus.OK).json(cached);
+      return;
+    }
+
+    const stats = await SiteModel.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: null,
+          totalSites: { $sum: 1 },
+          totalBudget: { $sum: { $ifNull: ["$budget", 0] } },
+          completedSites: {
+            $sum: {
+              $cond: [
+                {
+                  $eq: [
+                    { $toLower: { $ifNull: ["$status", ""] } },
+                    "completed",
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          activeSites: {
+            $sum: {
+              $cond: [
+                {
+                  $in: [
+                    { $toLower: { $ifNull: ["$status", ""] } },
+                    ["active", "in progress", "inprogress"],
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          statuses: { $addToSet: "$status" },
+        },
+      },
+    ]);
+
+    const result = stats[0] || {
+      totalSites: 0,
+      totalBudget: 0,
+      completedSites: 0,
+      activeSites: 0,
+      statuses: ["InProgress", "Completed"],
+    };
+
+    const validStatuses = Array.from(
+      new Set(
+        (result.statuses || []).filter(
+          (s: any) => typeof s === "string" && s.trim().length > 0,
+        ),
+      ),
+    );
+
+    const responseBody = {
+      totalSites: result.totalSites || 0,
+      totalBudget: result.totalBudget || 0,
+      completedSites: result.completedSites || 0,
+      activeSites: result.activeSites || 0,
+      statuses:
+        validStatuses.length > 0 ? validStatuses : ["InProgress", "Completed"],
+    };
+
+    await cacheSet(cacheKey, responseBody, SITES_CACHE_TTL_SECONDS);
+
+    res.status(HttpStatus.OK).json(responseBody);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getSites = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.authUser;
@@ -358,6 +455,7 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
         ? req.query.status
         : "";
     const isPaginated = page > 0 && limit > 0;
+    const includeDocuments = req.query.includeDocuments === "true";
 
     const version = await getCacheVersion(SITES_CACHE_NAMESPACE);
     const isRestrictedRole =
@@ -366,7 +464,7 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
       user?.role === "architect";
     const paginationSuffix = isPaginated
       ? `:page:${page}:limit:${limit}:search:${search}:status:${status}`
-      : "";
+      : `:includeDocs:${includeDocuments}`;
     const cacheKey = isRestrictedRole
       ? `${SITES_CACHE_NAMESPACE}:v${version}:user:${req.user?.userId}${paginationSuffix}`
       : `${SITES_CACHE_NAMESPACE}:v${version}:all${paginationSuffix}`;
@@ -398,153 +496,99 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
       ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
       : [];
 
-    if (isRestrictedRole) {
-      sites = await SiteModel.aggregate([
-        { $match: { _id: { $in: user?.assignedSites } } },
-        ...searchMatchStage,
-        ...statusMatchStage,
-        ...paginationStages,
-        {
-          $lookup: {
-            from: "users",
-            let: { siteId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $in: ["$$siteId", "$assignedSites"] },
-                  role: "siteManager",
-                },
-              },
-            ],
-            as: "siteManagers",
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            let: { siteId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $in: ["$$siteId", "$assignedSites"] },
-                  role: "architect",
-                },
-              },
-            ],
-            as: "architects",
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "client",
-            foreignField: "_id",
-            as: "client",
-          },
-        },
-        { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-        {
-          $addFields: {
-            siteManagerCount: { $size: "$siteManagers" },
-            architectCount: { $size: "$architects" },
-            completedPhases: {
-              $size: {
-                $filter: {
-                  input: "$phases",
-                  cond: { $eq: ["$$this.status", "completed"] },
-                },
+    const pipeline: any[] = [
+      ...(isRestrictedRole
+        ? [{ $match: { _id: { $in: user?.assignedSites || [] } } }]
+        : []),
+      ...searchMatchStage,
+      ...statusMatchStage,
+      { $sort: { createdAt: -1 } },
+      ...paginationStages,
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "assignedSites",
+          pipeline: [
+            {
+              $match: {
+                role: "siteManager",
+                isDeleted: { $ne: true },
               },
             },
-            totalPhases: { $size: "$phases" },
-          },
+            { $project: { _id: 1 } },
+          ],
+          as: "siteManagers",
         },
-        {
-          $project: {
-            siteManagers: 0,
-            architects: 0,
-          },
-        },
-      ]);
-    } else {
-      sites = await SiteModel.aggregate([
-        ...searchMatchStage,
-        ...statusMatchStage,
-        ...paginationStages,
-        {
-          $lookup: {
-            from: "users",
-            let: { siteId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $in: ["$$siteId", "$assignedSites"] },
-                  role: "siteManager",
-                },
-              },
-            ],
-            as: "siteManagers",
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            let: { siteId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: { $in: ["$$siteId", "$assignedSites"] },
-                  role: "architect",
-                },
-              },
-            ],
-            as: "architects",
-          },
-        },
-        {
-          $lookup: {
-            from: "users",
-            localField: "client",
-            foreignField: "_id",
-            as: "client",
-          },
-        },
-        { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
-        {
-          $addFields: {
-            siteManagerCount: { $size: "$siteManagers" },
-            architectCount: { $size: "$architects" },
-            completedPhases: {
-              $size: {
-                $filter: {
-                  input: "$phases",
-                  cond: { $eq: ["$$this.status", "completed"] },
-                },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "_id",
+          foreignField: "assignedSites",
+          pipeline: [
+            {
+              $match: {
+                role: "architect",
+                isDeleted: { $ne: true },
               },
             },
-            totalPhases: { $size: "$phases" },
-          },
+            { $project: { _id: 1 } },
+          ],
+          as: "architects",
         },
-        {
-          $project: {
-            siteManagers: 0,
-            architects: 0,
-          },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "client",
+          foreignField: "_id",
+          pipeline: [{ $project: { name: 1, email: 1 } }],
+          as: "client",
         },
-      ]);
-    }
+      },
+      { $unwind: { path: "$client", preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          siteManagerCount: { $size: "$siteManagers" },
+          architectCount: { $size: "$architects" },
+          completedPhases: {
+            $size: {
+              $filter: {
+                input: "$phases",
+                cond: { $eq: ["$$this.status", "completed"] },
+              },
+            },
+          },
+          totalPhases: { $size: "$phases" },
+        },
+      },
+      {
+        $project: {
+          siteManagers: 0,
+          architects: 0,
+          ...(isPaginated || !includeDocuments
+            ? { transactions: 0, documents: 0 }
+            : {}),
+        },
+      },
+    ];
 
-    // Populate documents.uploadedBy separately if needed
-    sites = await SiteModel.populate(sites, {
-      path: "documents.uploadedBy",
-      select: "name",
-    });
+    sites = await SiteModel.aggregate(pipeline);
+
+    if (!isPaginated && includeDocuments) {
+      sites = await SiteModel.populate(sites, {
+        path: "documents.uploadedBy",
+        select: "name",
+      });
+    }
 
     let responseBody: unknown = sites;
 
     if (isPaginated) {
       const countMatch: Record<string, any> = {};
       if (isRestrictedRole) {
-        countMatch._id = { $in: user?.assignedSites };
+        countMatch._id = { $in: user?.assignedSites || [] };
       }
       if (search.length > 0) {
         countMatch.$or = [
@@ -956,6 +1000,7 @@ export default {
   updateSupervisionPercentage,
   getSiteDetails,
   getSites,
+  getSiteStats,
   updatePhaseStatus,
   uploadDocument,
   approvePhase,

@@ -26,7 +26,14 @@ import {
   Loader2,
   Pencil,
 } from "lucide-react";
-import { createSite, getSites, getSitesPaginated, updateSite, Site } from "@/services/siteService";
+import {
+  createSite,
+  getSitesPaginated,
+  getSiteStats,
+  updateSite,
+  Site,
+  SiteStats,
+} from "@/services/siteService";
 import { getUsersByRole } from "@/services/userService";
 import { UserRole } from "@/types/user";
 import debounce from "lodash/debounce";
@@ -152,7 +159,13 @@ const Sites: React.FC = () => {
   const [pageSites, setPageSites] = useState<MappedSite[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
-  const [portfolioStats, setPortfolioStats] = useState<MappedSite[]>([]);
+  const [stats, setStats] = useState<SiteStats>({
+    totalSites: 0,
+    totalBudget: 0,
+    completedSites: 0,
+    activeSites: 0,
+    statuses: ["InProgress", "Completed"],
+  });
   const [loading, setLoading] = useState(true);
   const [tableLoading, setTableLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +188,7 @@ const Sites: React.FC = () => {
 
   const itemsPerPage = 8;
   const pageRequestIdRef = useRef(0);
+  const isInitialMountRef = useRef(true);
 
   const handleViewSite = (siteId: string) => {
     if (userType === "admin") {
@@ -183,6 +197,38 @@ const Sites: React.FC = () => {
       navigate(`/siteManager/sites/${siteId}`);
     }
   };
+
+  const loadModalUsers = async () => {
+    if (clients.length > 0 && siteManagers.length > 0 && architects.length > 0) {
+      return;
+    }
+    try {
+      const [clientList, managerList, architectList] = await Promise.all([
+        getUsersByRole(UserRole.Client),
+        getUsersByRole(UserRole.SiteManager),
+        getUsersByRole(UserRole.Architect),
+      ]);
+      setClients(clientList);
+      setSiteManagers(managerList);
+      setArchitects(architectList);
+    } catch {
+      toast.error("Failed to load user lists for site assignment");
+    }
+  };
+
+  const handleOpenAddModal = () => {
+    setIsModalOpen(true);
+    void loadModalUsers();
+  };
+
+  useEffect(() => {
+    if (userType === "admin") {
+      const timer = setTimeout(() => {
+        void loadModalUsers();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [userType]);
 
   useEffect(() => {
     const debounced = debounce((value: string) => {
@@ -194,31 +240,47 @@ const Sites: React.FC = () => {
   }, [searchTerm]);
 
   useEffect(() => {
+    let isMounted = true;
     const fetchInitialData = async () => {
       try {
-        const [allSites, clientList, managerList, architectList] =
-          await Promise.all([
-            getSites(),
-            getUsersByRole(UserRole.Client),
-            getUsersByRole(UserRole.SiteManager),
-            getUsersByRole(UserRole.Architect),
-          ]);
-        const mappedAllSites = allSites.map(mapSiteForDisplay);
-        setPortfolioStats(mappedAllSites);
-        setProjectStatuses(getProjectStatuses(mappedAllSites));
-        setClients(clientList);
-        setSiteManagers(managerList);
-        setArchitects(architectList);
-      } catch (err) {
+        const [statsData, pageResult] = await Promise.all([
+          getSiteStats(),
+          getSitesPaginated({
+            page: 1,
+            limit: itemsPerPage,
+            search: "",
+            status: "All Statuses",
+          }),
+        ]);
+        if (!isMounted) return;
+        setStats(statsData);
+        if (statsData.statuses?.length) {
+          setProjectStatuses(["All Statuses", ...statsData.statuses]);
+        }
+        setPageSites(pageResult.sites.map(mapSiteForDisplay));
+        setTotal(pageResult.total);
+        setTotalPages(pageResult.totalPages);
+      } catch {
+        if (!isMounted) return;
         toast.error("Failed to fetch sites");
         setError("Failed to fetch data. Please try again later.");
-        setLoading(false);
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
     fetchInitialData();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
     const requestId = ++pageRequestIdRef.current;
     const fetchPage = async () => {
       setTableLoading(true);
@@ -233,13 +295,11 @@ const Sites: React.FC = () => {
         setPageSites(result.sites.map(mapSiteForDisplay));
         setTotal(result.total);
         setTotalPages(result.totalPages);
-      } catch (err) {
+      } catch {
         if (pageRequestIdRef.current !== requestId) return;
         toast.error("Failed to fetch sites");
-        setError("Failed to fetch data. Please try again later.");
       } finally {
         if (pageRequestIdRef.current === requestId) {
-          setLoading(false);
           setTableLoading(false);
         }
       }
@@ -261,15 +321,9 @@ const Sites: React.FC = () => {
     setTotalPages(result.totalPages);
   };
 
-  const totalBudget = portfolioStats.reduce((sum, site) => sum + site.budget, 0);
-  const completedSites = portfolioStats.filter(
-    (site) => site.status.toLowerCase() === "completed"
-  ).length;
-  const activeSites = portfolioStats.filter(
-    (site) =>
-      site.status.toLowerCase() === "active" ||
-      site.status.toLowerCase() === "in progress"
-  ).length;
+  const totalBudget = stats.totalBudget;
+  const completedSites = stats.completedSites;
+  const activeSites = stats.activeSites;
 
   const indexOfFirstItem = total === 0 ? 0 : (currentPage - 1) * itemsPerPage;
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -282,16 +336,18 @@ const Sites: React.FC = () => {
 
   const handleModalSubmit = async (siteData: any) => {
     try {
-      const createdSite = await createSite(siteData);
-      const mappedSite = mapSiteForDisplay(createdSite);
-      setPortfolioStats((prev) => [...prev, mappedSite]);
-      if (!projectStatuses.includes(mappedSite.status)) {
-        setProjectStatuses((prev) => [...prev, mappedSite.status]);
-      }
+      await createSite(siteData);
       setIsModalOpen(false);
       toast.success("Site created successfully");
-      await refetchCurrentPage();
-    } catch (err) {
+      const [newStats] = await Promise.all([
+        getSiteStats(),
+        refetchCurrentPage(),
+      ]);
+      setStats(newStats);
+      if (newStats.statuses?.length) {
+        setProjectStatuses(["All Statuses", ...newStats.statuses]);
+      }
+    } catch {
       toast.error("Failed to create site");
     }
   };
@@ -331,7 +387,6 @@ const Sites: React.FC = () => {
       await updateSite(siteBeingEdited.id, updates);
       const editedSiteId = siteBeingEdited.id;
       setPageSites((prev) => applySiteEdit(prev, editedSiteId, updates));
-      setPortfolioStats((prev) => applySiteEdit(prev, editedSiteId, updates));
       setIsEditModalOpen(false);
       setSiteBeingEdited(null);
       toast.success("Site updated successfully");
@@ -375,7 +430,7 @@ const Sites: React.FC = () => {
           </p>
         </div>
         {userType === "admin" && (
-          <Button onClick={() => setIsModalOpen(true)}>
+          <Button onClick={handleOpenAddModal}>
             <Plus size={16} /> Add new site
           </Button>
         )}
@@ -389,7 +444,7 @@ const Sites: React.FC = () => {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Total Sites" value={total} icon={Building2} />
+            <StatCard label="Total Sites" value={stats.totalSites || total} icon={Building2} />
             <StatCard label="Active Sites" value={activeSites} icon={TrendingUp} />
             <GradientStatCard label="Total Budget" value={totalBudget} prefix="₹" icon={DollarSign} />
             <StatCard label="Completed" value={completedSites} icon={CheckCircle2} />
