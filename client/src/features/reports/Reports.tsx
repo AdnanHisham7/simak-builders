@@ -9,13 +9,21 @@ import {
   Receipt,
   Wallet,
   RotateCcw,
+  BarChart3,
+  Users,
+  Truck,
+  Briefcase,
+  Coins,
 } from "lucide-react";
 import { privateClient } from "@/api";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
 import ReportRowEditor from "./components/ReportRowEditor";
 import EditableAmountField from "./components/EditableAmountField";
-import { loadImage, generateProfessionalReportPdf } from "./components/reportPdf";
+import {
+  loadImage,
+  generateProfessionalReportPdf,
+} from "./components/reportPdf";
 import {
   buildEditableRows,
   computeTotals,
@@ -28,8 +36,14 @@ import Button from "@/components/ui/Button";
 import PageLoader from "@/components/ui/PageLoader";
 import EmptyState from "@/components/ui/EmptyState";
 import Tooltip from "@/components/ui/Tooltip";
+import Badge from "@/components/ui/Badge";
 import { cn } from "@/lib/cn";
 import { usePreferences } from "@/hooks/usePreferences";
+import AnnualReportView from "./components/AnnualReportView";
+import SalaryReportView from "./components/SalaryReportView";
+import VendorReportView from "./components/VendorReportView";
+import ContractorReportView from "./components/ContractorReportView";
+import CapitalLenderReportView from "./components/CapitalLenderReportView";
 
 interface ReportSite {
   _id: string;
@@ -44,23 +58,68 @@ interface ReportSite {
 
 const reportTypes = [
   {
+    id: "annualReport",
+    title: "Annual & Financials",
+    description:
+      "Executive overview, site vs company expenses, revenues & cash flow",
+    icon: BarChart3,
+    category: "Analytics",
+  },
+  {
+    id: "salaryReport",
+    title: "Salary & Payroll",
+    description:
+      "Employee wages, site & company payroll, role distribution & registers",
+    icon: Users,
+    category: "Analytics",
+  },
+  {
+    id: "vendorReport",
+    title: "Vendor Procurement",
+    description:
+      "Material purchases, vendor invoices, payment status & spend ranking",
+    icon: Truck,
+    category: "Analytics",
+  },
+  {
+    id: "contractorReport",
+    title: "Contractor Work & Payouts",
+    description:
+      "Committed contracts, advances, verified expenses & pending balances",
+    icon: Briefcase,
+    category: "Analytics",
+  },
+  {
+    id: "capitalReport",
+    title: "Capital & Debt Ledger",
+    description:
+      "Owner equity infusion, lended borrowings, settlements & debt balance",
+    icon: Coins,
+    category: "Analytics",
+  },
+  {
     id: "expenseReport",
-    title: "Expense Report",
-    description: "Itemized site expenses with supervision calculation",
+    title: "Site Expense Statement",
+    description:
+      "Itemized site expenses with supervision calculation & PDF print",
     icon: Receipt,
+    category: "Statements",
   },
   {
     id: "clientReport",
-    title: "Client Report",
-    description: "Client statement with supervision, amount received and balance",
+    title: "Client Statement",
+    description:
+      "Client statement with supervision, amount received, balance & PDF print",
     icon: Wallet,
+    category: "Statements",
   },
 ] as const;
 
 type ReportId = (typeof reportTypes)[number]["id"];
 
 const Reports = () => {
-  const [selectedReport, setSelectedReport] = useState<ReportId>("clientReport");
+  const [selectedReport, setSelectedReport] =
+    useState<ReportId>("clientReport");
   const [sites, setSites] = useState<ReportSite[]>([]);
   const [loadingSites, setLoadingSites] = useState(true);
 
@@ -84,9 +143,12 @@ const Reports = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-console-text">Reports</h1>
+          <h1 className="text-xl font-semibold text-console-text">
+            Reports & Analytics
+          </h1>
           <p className="mt-0.5 text-sm text-console-muted">
-            Generate comprehensive business reports and analytics
+            Generate executive business analytics, contractor/vendor ledgers,
+            and site client statements
           </p>
         </div>
         <Button variant="secondary" onClick={fetchSites} loading={loadingSites}>
@@ -94,7 +156,8 @@ const Reports = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {/* Report Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
         {reportTypes.map((report) => {
           const Icon = report.icon;
           const isSelected = selectedReport === report.id;
@@ -104,39 +167,95 @@ const Reports = () => {
               key={report.id}
               onClick={() => setSelectedReport(report.id)}
               className={cn(
-                "rounded-console border-2 bg-white p-5 text-left transition-shadow",
+                "group relative flex flex-col justify-between rounded-console border p-4 text-left transition-all duration-200",
                 isSelected
-                  ? "border-brand-500 shadow-console-lg"
-                  : "border-console-border hover:border-slate-300 hover:shadow-console",
+                  ? "border-brand-500 bg-brand-50/40 shadow-console-lg ring-2 ring-brand-500/20"
+                  : "border-console-border bg-white hover:border-brand-200 hover:bg-slate-50/70 hover:shadow-console",
               )}
             >
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 text-brand-700">
-                  <Icon size={20} />
+              <div>
+                <div className="mb-2.5 flex items-center justify-between">
+                  <div
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                      isSelected
+                        ? "bg-brand-600 text-white shadow-sm"
+                        : "bg-brand-50 text-brand-700 group-hover:bg-brand-100/70",
+                    )}
+                  >
+                    <Icon size={18} />
+                  </div>
+                  <Badge
+                    variant={
+                      report.category === "Analytics" ? "info" : "secondary"
+                    }
+                    className="text-[10px] py-0.5 px-2 font-medium"
+                  >
+                    {report.category}
+                  </Badge>
                 </div>
-                {isSelected && (
-                  <span className="flex h-2.5 w-2.5 rounded-full bg-success-500" />
-                )}
+                <h3
+                  className={cn(
+                    "text-sm font-semibold transition-colors",
+                    isSelected
+                      ? "text-brand-950"
+                      : "text-console-text group-hover:text-brand-800",
+                  )}
+                >
+                  {report.title}
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-console-muted line-clamp-2">
+                  {report.description}
+                </p>
               </div>
-              <h3 className="text-sm font-semibold text-console-text">{report.title}</h3>
-              <p className="mt-1 text-xs leading-relaxed text-console-muted">
-                {report.description}
-              </p>
+              {isSelected && (
+                <div className="mt-3 pt-2 border-t border-brand-200/60 flex items-center gap-1.5 text-[11px] font-semibold text-brand-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-brand-600 animate-pulse" />
+                  Active Report
+                </div>
+              )}
             </button>
           );
         })}
       </div>
 
-      <Card>
+      {/* Selected Report Content */}
+      <div className="w-full">
         {loadingSites ? (
-          <PageLoader label="Loading sites" fullHeight={false} />
+          <Card>
+            <PageLoader
+              label="Loading site configurations"
+              fullHeight={false}
+            />
+          </Card>
         ) : (
           <>
-            {selectedReport === "expenseReport" && <ExpenseReport sites={sites} />}
-            {selectedReport === "clientReport" && <ClientSiteReport sites={sites} />}
+            {selectedReport === "annualReport" && (
+              <AnnualReportView sites={sites} />
+            )}
+            {selectedReport === "salaryReport" && (
+              <SalaryReportView sites={sites} />
+            )}
+            {selectedReport === "vendorReport" && (
+              <VendorReportView sites={sites} />
+            )}
+            {selectedReport === "contractorReport" && (
+              <ContractorReportView sites={sites} />
+            )}
+            {selectedReport === "capitalReport" && <CapitalLenderReportView />}
+            {selectedReport === "expenseReport" && (
+              <Card>
+                <ExpenseReport sites={sites} />
+              </Card>
+            )}
+            {selectedReport === "clientReport" && (
+              <Card>
+                <ClientSiteReport sites={sites} />
+              </Card>
+            )}
           </>
         )}
-      </Card>
+      </div>
     </div>
   );
 };
@@ -153,7 +272,9 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
   const [loading, setLoading] = useState(false);
   const [editableRows, setEditableRows] = useState<any[]>([]);
   const [roundAmounts, setRoundAmounts] = useState(false);
-  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(null);
+  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(
+    null,
+  );
   const [exporting, setExporting] = useState(false);
 
   const handleSiteChange = (siteId: string) => {
@@ -225,7 +346,9 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
         siteName: reportData.site.name,
         address: `${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
         periodLabel:
-          filters.startDate && filters.endDate ? `${filters.startDate} to ${filters.endDate}` : null,
+          filters.startDate && filters.endDate
+            ? `${filters.startDate} to ${filters.endDate}`
+            : null,
         rows: editableRows.map((row) => ({
           itemOfWork: row.itemOfWork,
           quantity: row.quantity,
@@ -233,7 +356,10 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
         })),
         summaryRows: [
           { label: "TOTAL", amount: totals.totalAmount },
-          { label: `SUPERVISION (${reportData.supervisionPercentage}%)`, amount: totals.supervisionAmount },
+          {
+            label: `SUPERVISION (${reportData.supervisionPercentage}%)`,
+            amount: totals.supervisionAmount,
+          },
           { label: "NET TOTAL (With Supervision)", amount: totals.netTotal },
         ],
         headerImage: headerData,
@@ -268,7 +394,10 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
             ))}
           </select>
           <div className="relative">
-            <Receipt className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Receipt
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="number"
               min={0}
@@ -281,27 +410,42 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Calendar
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="date"
               value={filters.startDate}
-              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              onChange={(e) =>
+                setFilters({ ...filters, startDate: e.target.value })
+              }
               className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Calendar
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="date"
               value={filters.endDate}
-              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              onChange={(e) =>
+                setFilters({ ...filters, endDate: e.target.value })
+              }
               className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={fetchData} loading={loading} disabled={!filters.siteId}>
-            <RefreshCw size={15} /> {loading ? "Generating..." : "Generate report"}
+          <Button
+            onClick={fetchData}
+            loading={loading}
+            disabled={!filters.siteId}
+          >
+            <RefreshCw size={15} />{" "}
+            {loading ? "Generating..." : "Generate report"}
           </Button>
           <Button
             variant="danger"
@@ -315,7 +459,11 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
       </div>
 
       {!filters.siteId ? (
-        <EmptyState icon={Search} title="Select a site" description="Please select a site to view its expense report." />
+        <EmptyState
+          icon={Search}
+          title="Select a site"
+          description="Please select a site to view its expense report."
+        />
       ) : loading ? (
         <PageLoader label="Fetching expense data" fullHeight={false} />
       ) : !reportData ? (
@@ -328,7 +476,9 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="rounded-console border border-console-border bg-white p-5">
-              <p className="text-sm text-console-muted">Total amount (without supervision)</p>
+              <p className="text-sm text-console-muted">
+                Total amount (without supervision)
+              </p>
               <p className="mt-1 text-xl font-semibold text-console-text">
                 ₹{formatNumber(totals.totalAmount)}
               </p>
@@ -360,11 +510,15 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
                 />
               </div>
               {supervisionOverride !== null && (
-                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+                <p className="mt-1 text-[11px] text-warning-600">
+                  Manually overridden
+                </p>
               )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
-              <p className="text-sm text-console-muted">Net total (with supervision)</p>
+              <p className="text-sm text-console-muted">
+                Net total (with supervision)
+              </p>
               <p className="mt-1 text-xl font-semibold text-success-700">
                 ₹{formatNumber(totals.netTotal)}
               </p>
@@ -409,7 +563,9 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
   const [roundBalance, setRoundBalance] = useState(false);
   const [balanceOverride, setBalanceOverride] = useState<number | null>(null);
   const [varavOverride, setVaravOverride] = useState<number | null>(null);
-  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(null);
+  const [supervisionOverride, setSupervisionOverride] = useState<number | null>(
+    null,
+  );
   const [exporting, setExporting] = useState(false);
 
   const handleSiteChange = (siteId: string) => {
@@ -502,7 +658,9 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
         address: `${reportData.site.address}, ${reportData.site.city}, ${reportData.site.state} ${reportData.site.zip}`,
         clientName: reportData.site.client?.name || null,
         periodLabel:
-          filters.startDate && filters.endDate ? `${filters.startDate} to ${filters.endDate}` : null,
+          filters.startDate && filters.endDate
+            ? `${filters.startDate} to ${filters.endDate}`
+            : null,
         rows: editableRows.map((row) => ({
           itemOfWork: row.itemOfWork,
           quantity: row.quantity,
@@ -510,7 +668,10 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
         })),
         summaryRows: [
           { label: "TOTAL", amount: totals.totalAmount },
-          { label: `SUPERVISION (${reportData.supervisionPercentage}%)`, amount: totals.supervisionAmount },
+          {
+            label: `SUPERVISION (${reportData.supervisionPercentage}%)`,
+            amount: totals.supervisionAmount,
+          },
           { label: "NET TOTAL", amount: totals.netTotal },
           { label: "VARAV", amount: effectiveVarav },
           { label: "BALANCE", amount: balance },
@@ -547,7 +708,10 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
             ))}
           </select>
           <div className="relative">
-            <Wallet className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Wallet
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="number"
               min={0}
@@ -555,32 +719,52 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
               step="0.01"
               placeholder="Supervision %"
               value={filters.supervisionPercentage}
-              onChange={(e) => setFilters({ ...filters, supervisionPercentage: e.target.value })}
+              onChange={(e) =>
+                setFilters({
+                  ...filters,
+                  supervisionPercentage: e.target.value,
+                })
+              }
               className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Calendar
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="date"
               value={filters.startDate}
-              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              onChange={(e) =>
+                setFilters({ ...filters, startDate: e.target.value })
+              }
               className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
           <div className="relative">
-            <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
+            <Calendar
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
+              size={15}
+            />
             <input
               type="date"
               value={filters.endDate}
-              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              onChange={(e) =>
+                setFilters({ ...filters, endDate: e.target.value })
+              }
               className="w-full rounded-lg border border-console-border bg-white py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
             />
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={fetchData} loading={loading} disabled={!filters.siteId}>
-            <RefreshCw size={15} /> {loading ? "Generating..." : "Generate report"}
+          <Button
+            onClick={fetchData}
+            loading={loading}
+            disabled={!filters.siteId}
+          >
+            <RefreshCw size={15} />{" "}
+            {loading ? "Generating..." : "Generate report"}
           </Button>
           <Button
             variant="danger"
@@ -594,7 +778,11 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
       </div>
 
       {!filters.siteId ? (
-        <EmptyState icon={Search} title="Select a site" description="Please select a site to view its client report." />
+        <EmptyState
+          icon={Search}
+          title="Select a site"
+          description="Please select a site to view its client report."
+        />
       ) : loading ? (
         <PageLoader label="Fetching client report data" fullHeight={false} />
       ) : !reportData ? (
@@ -639,7 +827,9 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
                 />
               </div>
               {supervisionOverride !== null && (
-                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+                <p className="mt-1 text-[11px] text-warning-600">
+                  Manually overridden
+                </p>
               )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
@@ -673,7 +863,9 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
                 />
               </div>
               {varavOverride !== null && (
-                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+                <p className="mt-1 text-[11px] text-warning-600">
+                  Manually overridden
+                </p>
               )}
             </div>
             <div className="rounded-console border border-console-border bg-white p-5">
@@ -718,7 +910,9 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
                 />
               </div>
               {balanceOverride !== null && (
-                <p className="mt-1 text-[11px] text-warning-600">Manually overridden</p>
+                <p className="mt-1 text-[11px] text-warning-600">
+                  Manually overridden
+                </p>
               )}
             </div>
           </div>

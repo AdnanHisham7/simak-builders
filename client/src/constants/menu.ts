@@ -5,6 +5,7 @@ import {
   Briefcase,
   Truck,
   Building,
+  Building2,
   Settings,
   DollarSign,
   CheckSquare,
@@ -36,6 +37,7 @@ export const adminMenus = [
   {
     title: "Operations",
     items: [
+      { name: "Company", icon: Building2, path: "/admin/company" },
       { name: "Sites", icon: Building, path: "/admin/sites" },
       { name: "Stocks", icon: Package, path: "/admin/stocks" },
       { name: "Portfolio", icon: Briefcase, path: "/admin/portfolio" },

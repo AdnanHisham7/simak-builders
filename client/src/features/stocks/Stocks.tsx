@@ -19,6 +19,7 @@ import RequestTransferModal from "./RequestTransferModal";
 import AddStockModal from "./AddStockModal";
 import LogUsageModal from "./LogUsageModal";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 import {
   Search,
   Plus,
@@ -37,6 +38,7 @@ import {
   DollarSign,
   ChevronLeft,
   ChevronRight,
+  ExternalLink,
 } from "lucide-react";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -507,6 +509,23 @@ const Stocks: React.FC = () => {
               </div>
             </div>
           </Card>
+
+          {userType === "admin" && (
+            <div className="flex flex-col gap-2 rounded-lg border border-brand-200 bg-brand-50/60 p-3.5 text-xs text-brand-900 sm:flex-row sm:items-center sm:justify-between">
+              <span className="flex items-center gap-2">
+                <Building2 size={16} className="text-brand-600 shrink-0" />
+                <span>
+                  Looking to manage <strong>Company Warehouse Stocks</strong>, procure <strong>Company Purchases</strong>, and track <strong>Capital Infusions</strong>?
+                </span>
+              </span>
+              <Link
+                to="/admin/company"
+                className="flex items-center gap-1 font-semibold text-brand-700 hover:text-brand-800 hover:underline shrink-0"
+              >
+                Open Company Hub <ExternalLink size={13} />
+              </Link>
+            </div>
+          )}
 
           {!filterSite && (
             <>

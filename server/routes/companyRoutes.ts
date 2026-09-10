@@ -29,4 +29,9 @@ router.put(
   companyController.updateCompanyProfile,
 );
 
+// Lenders and Debt Management
+router.get("/lenders", authMiddleware, companyController.getLenders);
+router.get("/lenders/:id", authMiddleware, companyController.getLenderById);
+router.post("/lenders/settle", authMiddleware, companyController.settleLender);
+
 export default router;

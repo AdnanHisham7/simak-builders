@@ -53,6 +53,7 @@ const Clients = lazy(() => import("./features/clients/Clients.tsx"));
 const ListEnquiries = lazy(() => import("./features/enquiries/ListEnquiries.tsx"));
 const AdminFeedback = lazy(() => import("./features/feedback/AdminFeedback.tsx"));
 const AdminExpenseRequests = lazy(() => import("./features/expenseRequests/AdminExpenseRequests.tsx"));
+const CompanyPage = lazy(() => import("./features/company/CompanyPage.tsx"));
 
 const App: React.FC = () => {
   const isAuthenticated = useSelector(
@@ -109,6 +110,7 @@ const App: React.FC = () => {
               <Route path="architects" element={<Architects />} />
               <Route path="sites" element={<Sites />} />
               <Route path="sites/:siteId" element={<SiteDetail />} />
+              <Route path="company" element={<CompanyPage />} />
               <Route path="stocks" element={<Stocks />} />
               <Route path="reports" element={<Reports />} />
               <Route path="portfolio" element={<PortfolioAdmin />} />

@@ -17,4 +17,11 @@ router.get("/vendor-purchases", reportController.getVendorPurchases);
 router.get("/expense-report", authMiddleware, reportController.getExpenseReport);
 router.get("/client-report", authMiddleware, reportController.getClientReport);
 
+// Comprehensive Analytical Reports
+router.get("/annual-financial", authMiddleware, reportController.getAnnualFinancialReport);
+router.get("/salary", authMiddleware, reportController.getSalaryPayrollReport);
+router.get("/vendors-comprehensive", authMiddleware, reportController.getComprehensiveVendorsReport);
+router.get("/contractors-comprehensive", authMiddleware, reportController.getComprehensiveContractorsReport);
+router.get("/capital-lenders", authMiddleware, reportController.getCapitalLendersReport);
+
 export default router;

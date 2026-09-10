@@ -19,6 +19,7 @@ import { PurchaseModel } from "@models/Purchase";
 import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { StockUsageModel } from "@models/StockUsage";
 import { ContractorTransactionModel } from "@models/ContractorTransaction";
+import { LenderModel } from "@models/Lender";
 
 const initializeComapny = async (
   req: Request,
@@ -668,10 +669,10 @@ const getCompanySummary = async (
   next: NextFunction,
 ) => {
   try {
-    const company = await CompanyModel.findOne().populate(
-      "transactions.site",
-      "name",
-    );
+    const company = await CompanyModel.findOne()
+      .populate("transactions.site", "name")
+      .populate("transactions.lender", "name phone")
+      .populate("transactions.settlementFor", "name phone");
     if (!company) {
       throw new ApiError("Company not found", HttpStatus.NOT_FOUND);
     }
@@ -697,7 +698,16 @@ const addCompanyFunds = async (
     if (req.user?.role !== "admin") {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
-    const { amount, notes } = req.body;
+    const {
+      amount,
+      notes,
+      isCapitalInfusion,
+      capitalType,
+      lenderId,
+      newLenderName,
+      lenderPhone,
+    } = req.body;
+
     const numAmount = Number(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       throw new ApiError(
@@ -711,13 +721,76 @@ const addCompanyFunds = async (
       throw new ApiError("Company not found", HttpStatus.NOT_FOUND);
     }
 
+    let resolvedLender: any = null;
+    let txDescription = notes ? String(notes).trim() : "Funds added to company";
+
+    const isInfusion = Boolean(isCapitalInfusion);
+    let capType: "own" | "lended" | undefined = undefined;
+
+    if (isInfusion) {
+      capType = capitalType === "lended" ? "lended" : "own";
+
+      if (capType === "lended") {
+        if (lenderId) {
+          resolvedLender = await LenderModel.findById(lenderId);
+          if (!resolvedLender) {
+            throw new ApiError(
+              "Selected lender not found",
+              HttpStatus.NOT_FOUND,
+            );
+          }
+        } else if (newLenderName && String(newLenderName).trim()) {
+          const trimmedName = String(newLenderName).trim();
+          resolvedLender = await LenderModel.findOne({
+            name: { $regex: new RegExp(`^${trimmedName}$`, "i") },
+          });
+          if (!resolvedLender) {
+            resolvedLender = await LenderModel.create({
+              name: trimmedName,
+              phone: lenderPhone ? String(lenderPhone).trim() : "",
+            });
+          }
+        } else {
+          throw new ApiError(
+            "Lender name or selection is required for lended capital",
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        // Update lender totals and history
+        resolvedLender.totalLended += numAmount;
+        resolvedLender.outstandingBalance += numAmount;
+        resolvedLender.history.push({
+          type: "borrow",
+          amount: numAmount,
+          date: new Date(),
+          notes: notes ? String(notes).trim() : "Lended capital infusion",
+        });
+        await resolvedLender.save();
+
+        txDescription = notes
+          ? `${String(notes).trim()} (Lended from ${resolvedLender.name})`
+          : `Owner Capital Infusion (Lended from ${resolvedLender.name})`;
+      } else {
+        txDescription = notes
+          ? `${String(notes).trim()} (Owner Capital - Own Funds)`
+          : "Owner Capital Infusion (Own Funds)";
+      }
+    }
+
     company.totalAmount += numAmount;
-    company.transactions.push({
+    const newTx: any = {
       date: new Date(),
       amount: numAmount,
       type: "incoming",
-      description: notes ? String(notes).trim() : "Funds added to company",
-    });
+      description: txDescription,
+      isCapitalInfusion: isInfusion,
+      capitalType: capType,
+      lender: resolvedLender ? resolvedLender._id : undefined,
+      lenderName: resolvedLender ? resolvedLender.name : "",
+    };
+
+    company.transactions.push(newTx);
     await company.save();
 
     await ActivityLogModel.create({
@@ -725,11 +798,142 @@ const addCompanyFunds = async (
       action: "create",
       resource: "company",
       resourceId: company._id,
-      details: `Added ${numAmount} to company funds`,
+      details: `Added ₹${numAmount} to company funds${
+        isInfusion
+          ? ` as ${capType === "lended" ? `Loan from ${resolvedLender?.name}` : "Own Capital"}`
+          : ""
+      }`,
     });
 
     res.status(HttpStatus.CREATED).json({
       message: "Funds added successfully",
+      totalAmount: company.totalAmount,
+      transaction: newTx,
+      lender: resolvedLender,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getLenders = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+    const lenders = await LenderModel.find().sort({ updatedAt: -1, name: 1 });
+    res.status(HttpStatus.OK).json(lenders);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getLenderById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+    const { id } = req.params;
+    const lender = await LenderModel.findById(id);
+    if (!lender) {
+      throw new ApiError("Lender not found", HttpStatus.NOT_FOUND);
+    }
+    res.status(HttpStatus.OK).json(lender);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const settleLender = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
+    }
+    const { lenderId, amount, notes } = req.body;
+    const numAmount = Number(amount);
+
+    if (!lenderId) {
+      throw new ApiError("Lender ID is required", HttpStatus.BAD_REQUEST);
+    }
+    if (isNaN(numAmount) || numAmount <= 0) {
+      throw new ApiError(
+        "Settlement amount must be greater than zero",
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const lender = await LenderModel.findById(lenderId);
+    if (!lender) {
+      throw new ApiError("Lender not found", HttpStatus.NOT_FOUND);
+    }
+
+    if (numAmount > lender.outstandingBalance) {
+      throw new ApiError(
+        `Settlement amount (₹${numAmount}) cannot exceed outstanding balance (₹${lender.outstandingBalance})`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const company = await CompanyModel.findOne();
+    if (!company) {
+      throw new ApiError("Company not found", HttpStatus.NOT_FOUND);
+    }
+
+    if (numAmount > company.totalAmount) {
+      throw new ApiError(
+        `Insufficient company funds (Available: ₹${company.totalAmount})`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Deduct from company funds
+    company.totalAmount -= numAmount;
+    const settlementTx: any = {
+      date: new Date(),
+      amount: -numAmount,
+      type: "expenditure",
+      description: notes
+        ? `Loan settlement paid to ${lender.name}: ${String(notes).trim()}`
+        : `Loan settlement paid to ${lender.name}`,
+      settlementFor: lender._id,
+      lenderName: lender.name,
+    };
+    company.transactions.push(settlementTx);
+    await company.save();
+
+    // Update lender settled amounts & balance
+    lender.totalSettled += numAmount;
+    lender.outstandingBalance = Math.max(
+      0,
+      lender.outstandingBalance - numAmount,
+    );
+    lender.history.push({
+      type: "settlement",
+      amount: numAmount,
+      date: new Date(),
+      notes: notes ? String(notes).trim() : "Loan repayment",
+    });
+    await lender.save();
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "company",
+      resourceId: company._id,
+      details: `Settled ₹${numAmount} to lender ${lender.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: `Settled ₹${numAmount} successfully with ${lender.name}`,
+      lender,
       totalAmount: company.totalAmount,
     });
   } catch (error) {
@@ -864,14 +1068,14 @@ const getAmountToBeReceived = async (
       { $match: { status: "verified", site: { $ne: null } } }, // 1. Prevents null sites from aggregating
       { $group: { _id: "$site", totalReceived: { $sum: "$amount" } } },
     ]);
-    
+
     const receivedMap = new Map(
       receivedBySite.map((r: any) => [r._id?.toString(), r.totalReceived]), // 2. Optional chaining fallback
     );
 
     const bySite = sites.map((site: any) => {
       // 3. Optional chaining fallback just in case a site lacks an _id
-      const amountReceived = receivedMap.get(site._id?.toString()) || 0; 
+      const amountReceived = receivedMap.get(site._id?.toString()) || 0;
       const difference = (site.expenses || 0) - amountReceived;
       return {
         siteId: site._id,
@@ -901,4 +1105,7 @@ export default {
   getAmountToBeReceived,
   getCompanyProfile,
   updateCompanyProfile,
+  getLenders,
+  getLenderById,
+  settleLender,
 };

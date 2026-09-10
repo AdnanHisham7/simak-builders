@@ -1,5 +1,27 @@
 import { privateClient } from "@/api";
 
+export interface LenderHistory {
+  _id: string;
+  type: "borrow" | "settlement";
+  amount: number;
+  date: string;
+  notes?: string;
+  transactionId?: string;
+}
+
+export interface Lender {
+  _id: string;
+  name: string;
+  phone?: string;
+  notes?: string;
+  totalLended: number;
+  totalSettled: number;
+  outstandingBalance: number;
+  history: LenderHistory[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface CompanyTransaction {
   _id: string;
   date: string;
@@ -7,11 +29,26 @@ export interface CompanyTransaction {
   type: "expenditure" | "incoming" | "reversal";
   description?: string;
   site?: { _id: string; name: string } | null;
+  isCapitalInfusion?: boolean;
+  capitalType?: "own" | "lended";
+  lender?: { _id: string; name: string; phone?: string } | null;
+  lenderName?: string;
+  settlementFor?: { _id: string; name: string; phone?: string } | null;
 }
 
 export interface CompanySummary {
   totalAmount: number;
   transactions: CompanyTransaction[];
+}
+
+export interface AddFundsPayload {
+  amount: number;
+  notes?: string;
+  isCapitalInfusion?: boolean;
+  capitalType?: "own" | "lended";
+  lenderId?: string;
+  newLenderName?: string;
+  lenderPhone?: string;
 }
 
 export const getCompanySummary = async (): Promise<CompanySummary> => {
@@ -20,13 +57,38 @@ export const getCompanySummary = async (): Promise<CompanySummary> => {
 };
 
 export const addCompanyFunds = async (
-  amount: number,
+  amountOrPayload: number | AddFundsPayload,
   notes?: string,
-): Promise<{ totalAmount: number }> => {
-  const response = await privateClient.post("/company/add-funds", {
-    amount,
-    notes,
-  });
+): Promise<{ totalAmount: number; lender?: Lender }> => {
+  const payload =
+    typeof amountOrPayload === "number"
+      ? { amount: amountOrPayload, notes }
+      : amountOrPayload;
+  const response = await privateClient.post("/company/add-funds", payload);
+  return response.data;
+};
+
+export const getLenders = async (): Promise<Lender[]> => {
+  const response = await privateClient.get("/company/lenders");
+  return response.data;
+};
+
+export const getLenderById = async (id: string): Promise<Lender> => {
+  const response = await privateClient.get(`/company/lenders/${id}`);
+  return response.data;
+};
+
+export const settleLender = async (
+  lenderId: string,
+  amount: number | { amount: number; notes?: string; date?: string },
+  notes?: string,
+): Promise<{ message: string; lender: Lender; totalAmount: number }> => {
+  const payload =
+    typeof amount === "object"
+      ? { lenderId, amount: amount.amount, notes: amount.notes }
+      : { lenderId, amount, notes };
+
+  const response = await privateClient.post("/company/lenders/settle", payload);
   return response.data;
 };
 

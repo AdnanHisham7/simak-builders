@@ -31,6 +31,23 @@ const CompanySchema = new Schema(
           type: Schema.Types.ObjectId,
           ref: "Site",
         }, // Optional, if tied to a specific site
+        isCapitalInfusion: { type: Boolean, default: false },
+        capitalType: {
+          type: String,
+          enum: ["own", "lended"],
+          required: false,
+        },
+        lender: {
+          type: Schema.Types.ObjectId,
+          ref: "Lender",
+          required: false,
+        },
+        lenderName: { type: String, default: "" },
+        settlementFor: {
+          type: Schema.Types.ObjectId,
+          ref: "Lender",
+          required: false,
+        },
       },
     ],
     // Additional fields like name, address can be added if needed
