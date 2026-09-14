@@ -190,6 +190,9 @@ const SiteDetail: React.FC = () => {
   const [manualDate, setManualDate] = useState(
     new Date().toISOString().split("T")[0],
   );
+  const [isSubmittingManualPayment, setIsSubmittingManualPayment] =
+    useState(false);
+  const isSubmittingManualPaymentRef = useRef(false);
   const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(
     new Set(),
   );
@@ -294,11 +297,17 @@ const SiteDetail: React.FC = () => {
 
   const handleManualPaymentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingManualPaymentRef.current) return;
+
     const amount = parseFloat(manualAmount);
     if (isNaN(amount) || amount <= 0) {
       toast.error("Please enter a valid amount");
       return;
     }
+
+    isSubmittingManualPaymentRef.current = true;
+    setIsSubmittingManualPayment(true);
+
     try {
       await privateClient.post(`/client/${siteId}/client-payments/manual`, {
         amount,
@@ -313,6 +322,9 @@ const SiteDetail: React.FC = () => {
     } catch (err) {
       console.error(err);
       toast.error("Failed to record manual payment");
+    } finally {
+      isSubmittingManualPaymentRef.current = false;
+      setIsSubmittingManualPayment(false);
     }
   };
 
@@ -2392,6 +2404,7 @@ const SiteDetail: React.FC = () => {
       <Modal
         isOpen={isManualPaymentModalOpen}
         onClose={() => {
+          if (isSubmittingManualPayment) return;
           setIsManualPaymentModalOpen(false);
           setManualAmount("");
           setManualNotes("");
@@ -2410,8 +2423,9 @@ const SiteDetail: React.FC = () => {
               placeholder="Enter amount"
               step="0.01"
               autoFocus
+              disabled={isSubmittingManualPayment}
               required
-              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-lg font-semibold focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-lg font-semibold focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
             />
           </div>
           <div>
@@ -2420,8 +2434,9 @@ const SiteDetail: React.FC = () => {
               type="date"
               value={manualDate}
               onChange={(e) => setManualDate(e.target.value)}
+              disabled={isSubmittingManualPayment}
               required
-              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              className="w-full rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
             />
           </div>
           <div>
@@ -2433,14 +2448,17 @@ const SiteDetail: React.FC = () => {
               onChange={(e) => setManualNotes(e.target.value)}
               placeholder="Any remarks..."
               rows={3}
-              className="w-full resize-none rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+              disabled={isSubmittingManualPayment}
+              className="w-full resize-none rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 disabled:opacity-60"
             />
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <Button
               type="button"
               variant="secondary"
+              disabled={isSubmittingManualPayment}
               onClick={() => {
+                if (isSubmittingManualPayment) return;
                 setIsManualPaymentModalOpen(false);
                 setManualAmount("");
                 setManualNotes("");
@@ -2449,7 +2467,13 @@ const SiteDetail: React.FC = () => {
             >
               Cancel
             </Button>
-            <Button type="submit">Record payment</Button>
+            <Button
+              type="submit"
+              loading={isSubmittingManualPayment}
+              disabled={isSubmittingManualPayment}
+            >
+              Record payment
+            </Button>
           </div>
         </form>
       </Modal>

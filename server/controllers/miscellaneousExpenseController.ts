@@ -8,6 +8,7 @@ import { NotificationModel } from "@models/Notification";
 import { ApiError } from "@utils/errors/ApiError";
 import { HttpStatus } from "@utils/enums/httpStatus";
 import { Types } from "mongoose";
+import { resolveItem } from "@utils/itemMaster";
 
 const addMiscellaneousExpense = async (
   req: Request,
@@ -80,10 +81,24 @@ const addMiscellaneousExpense = async (
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
+    const trimmedName = String(name).trim();
+    let canonicalExpenseName = trimmedName;
+    try {
+      const { canonicalName } = await resolveItem(
+        trimmedName,
+        category,
+        undefined,
+        req.user?.userId,
+      );
+      canonicalExpenseName = canonicalName;
+    } catch (itemErr) {
+      console.error("Failed to resolve item in item master:", itemErr);
+    }
+
     const expense = new MiscellaneousExpenseModel({
       site: siteId,
       category,
-      name,
+      name: canonicalExpenseName,
       amount: parsedAmount,
       tip: parsedTip,
       notes,
@@ -409,7 +424,21 @@ const updateMiscellaneousExpense = async (
 
     const wasVerified = expense.status === "verified";
 
-    expense.name = String(name).trim();
+    const trimmedName = String(name).trim();
+    let canonicalExpenseName = trimmedName;
+    try {
+      const { canonicalName } = await resolveItem(
+        trimmedName,
+        category,
+        undefined,
+        req.user?.userId,
+      );
+      canonicalExpenseName = canonicalName;
+    } catch (itemErr) {
+      console.error("Failed to resolve item in item master:", itemErr);
+    }
+
+    expense.name = canonicalExpenseName;
     expense.category = category;
     await expense.save();
 
@@ -452,10 +481,83 @@ const getMiscellaneousExpensesBySite = async (
   }
 };
 
+const VALID_MISC_CATEGORIES = [
+  "machinery",
+  "rental",
+  "service",
+  "material",
+] as const;
+
+const getMiscellaneousExpenseSuggestions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const q = ((req.query.q as string) || "").trim();
+    const currentCategory = (req.query.category as string) || "";
+
+    const matchStage: any = {
+      name: { $exists: true, $ne: "" },
+      category: { $in: VALID_MISC_CATEGORIES },
+    };
+
+    if (q) {
+      matchStage.name = {
+        $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        $options: "i",
+      };
+    }
+
+    const suggestions = await MiscellaneousExpenseModel.aggregate([
+      { $match: matchStage },
+      {
+        $group: {
+          _id: {
+            nameLower: { $toLower: { $trim: { input: "$name" } } },
+            category: "$category",
+          },
+          name: { $first: "$name" },
+          category: { $first: "$category" },
+          count: { $sum: 1 },
+          lastUsed: { $max: "$createdAt" },
+        },
+      },
+      {
+        $addFields: {
+          isCurrentCategory: {
+            $cond: [{ $eq: ["$category", currentCategory] }, 1, 0],
+          },
+        },
+      },
+      {
+        $sort: {
+          isCurrentCategory: -1,
+          count: -1,
+          lastUsed: -1,
+        },
+      },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: { $concat: ["$_id.nameLower", "_", "$_id.category"] },
+          name: 1,
+          category: 1,
+        },
+      },
+    ]);
+
+    res.status(HttpStatus.OK).json(suggestions);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   addMiscellaneousExpense,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
   updateMiscellaneousExpense,
   deleteMiscellaneousExpense,
+  getMiscellaneousExpenseSuggestions,
 };

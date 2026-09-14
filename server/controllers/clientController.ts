@@ -139,6 +139,24 @@ const sendMoneyToAdmin = async (
     const client = await UserModel.findById(clientId);
     if (!client) throw new ApiError("Client not found", HttpStatus.NOT_FOUND);
 
+    // Check for duplicate pending transaction submitted within the last 10 seconds
+    const tenSecondsAgo = new Date(Date.now() - 10000);
+    const existingTransaction = await ClientTransactionModel.findOne({
+      client: clientId,
+      site: siteId,
+      amount: Number(amount),
+      status: "pending",
+      createdAt: { $gte: tenSecondsAgo },
+    });
+
+    if (existingTransaction) {
+      res.status(HttpStatus.OK).json({
+        message: "Transaction already created, pending verification",
+        transactionId: existingTransaction._id,
+      });
+      return;
+    }
+
     const transaction = new ClientTransactionModel({
       client: clientId,
       site: siteId,
@@ -320,6 +338,8 @@ const getSiteClientTransactions = async (
   }
 };
 
+const inFlightManualPayments = new Set<string>();
+
 const addManualClientPayment = async (
   req: Request,
   res: Response,
@@ -377,33 +397,68 @@ const addManualClientPayment = async (
       );
     }
 
-    // Create client transaction
-    const transaction = new ClientTransactionModel({
-      client: site.client,
-      site: siteId,
-      amount: Number(amount),
-      notes: notes || "",
-      transactionDate: date ? new Date(date) : new Date(),
-      status: "pending",
-    });
-    await transaction.save();
+    // In-flight mutex to block exact concurrent requests from same user/site
+    const lockKey = `${siteId}:${userId}:${amount}:${notes || ""}:${date || ""}`;
+    if (inFlightManualPayments.has(lockKey)) {
+      throw new ApiError(
+        "Payment is currently being processed. Please wait.",
+        HttpStatus.CONFLICT,
+      );
+    }
+    inFlightManualPayments.add(lockKey);
 
-    // Notify the client
-    const clientNotification = new NotificationModel({
-      user: site.client,
-      type: "payment_verified",
-      relatedId: transaction._id,
-      message: `₹${amount} has been added to the budget of site "${site.name}" by the team.`,
-      status: "approved",
-    });
-    await clientNotification.save();
+    try {
+      // Check for recent duplicate pending transaction submitted within the last 10 seconds
+      const tenSecondsAgo = new Date(Date.now() - 10000);
+      const recentDuplicate = await ClientTransactionModel.findOne({
+        site: siteId,
+        amount: Number(amount),
+        notes: notes || "",
+        status: "pending",
+        createdAt: { $gte: tenSecondsAgo },
+      });
 
-    res.status(HttpStatus.CREATED).json({
-      success: true,
-      message: "Manual client payment recorded successfully",
-      transaction,
-      newSiteBudget: site.budget,
-    });
+      if (recentDuplicate) {
+        res.status(HttpStatus.OK).json({
+          success: true,
+          message: "Manual client payment already recorded",
+          transaction: recentDuplicate,
+          newSiteBudget: site.budget,
+        });
+        return;
+      }
+
+      // Create client transaction
+      const transaction = new ClientTransactionModel({
+        client: site.client,
+        site: siteId,
+        amount: Number(amount),
+        notes: notes || "",
+        transactionDate: date ? new Date(date) : new Date(),
+        status: "pending",
+      });
+      await transaction.save();
+
+      // Notify the client
+      const clientNotification = new NotificationModel({
+        user: site.client,
+        type: "payment_verified",
+        relatedId: transaction._id,
+        message: `₹${amount} has been added to the budget of site "${site.name}" by the team.`,
+        status: "approved",
+      });
+      await clientNotification.save();
+
+      res.status(HttpStatus.CREATED).json({
+        success: true,
+        message: "Manual client payment recorded successfully",
+        transaction,
+        newSiteBudget: site.budget,
+      });
+      return;
+    } finally {
+      inFlightManualPayments.delete(lockKey);
+    }
   } catch (error) {
     next(error);
   }

@@ -48,3 +48,19 @@ export const deleteMiscellaneousExpense = async (expenseId: string) => {
   );
   return response.data;
 };
+
+export interface MiscellaneousExpenseSuggestion {
+  _id: string;
+  name: string;
+  category: "machinery" | "rental" | "service" | "material";
+}
+
+export const getMiscellaneousExpenseSuggestions = async (
+  query: string,
+  category?: string,
+): Promise<MiscellaneousExpenseSuggestion[]> => {
+  const response = await privateClient.get("/miscellaneous-expenses/suggestions", {
+    params: { q: query, category },
+  });
+  return response.data;
+};

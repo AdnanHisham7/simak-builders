@@ -119,6 +119,9 @@ export const resolveItem = async (
         throw error;
       }
     }
+  } else if (!item.category && category) {
+    item.category = category;
+    await item.save();
   }
 
   return { canonicalName: item.name, itemId: item._id as Types.ObjectId };

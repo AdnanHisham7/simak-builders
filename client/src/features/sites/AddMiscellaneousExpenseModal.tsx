@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AlertCircle, DollarSign, ReceiptText } from "lucide-react";
-import { addMiscellaneousExpense } from "@/services/miscellaneousExpenseService";
+import {
+  addMiscellaneousExpense,
+  getMiscellaneousExpenseSuggestions,
+  MiscellaneousExpenseSuggestion,
+} from "@/services/miscellaneousExpenseService";
 import { privateClient } from "@/api";
 import { getSiteDetails } from "@/services/siteService";
 import Modal from "@/components/ui/Modal";
@@ -44,6 +48,18 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [loading, setLoading] = useState(false);
 
+  const [nameSuggestions, setNameSuggestions] = useState<
+    MiscellaneousExpenseSuggestion[]
+  >([]);
+  const [openSuggestions, setOpenSuggestions] = useState(false);
+  const searchTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!isOpen) return;
     setCategory("machinery");
@@ -57,6 +73,8 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
     setPaymentMethod("cash");
     setSelectedVendorId("");
     setErrors({});
+    setNameSuggestions([]);
+    setOpenSuggestions(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -77,6 +95,47 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
     };
     fetchVendors();
   }, [isAdmin, siteId]);
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setOpenSuggestions(true);
+    setErrors((prev) => ({ ...prev, name: "" }));
+
+    if (searchTimer.current) {
+      clearTimeout(searchTimer.current);
+    }
+
+    if (!value || value.trim().length < 1) {
+      setNameSuggestions([]);
+      return;
+    }
+
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const results = await getMiscellaneousExpenseSuggestions(
+          value.trim(),
+          category,
+        );
+        setNameSuggestions(results);
+      } catch (error) {
+        console.error("Error fetching item suggestions:", error);
+      }
+    }, 300);
+  };
+
+  const selectSuggestion = (suggestion: MiscellaneousExpenseSuggestion) => {
+    setName(suggestion.name);
+    if (
+      ["machinery", "rental", "service", "material"].includes(
+        suggestion.category,
+      )
+    ) {
+      setCategory(suggestion.category);
+    }
+    setOpenSuggestions(false);
+    setNameSuggestions([]);
+    setErrors((prev) => ({ ...prev, name: "" }));
+  };
 
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {};
@@ -169,15 +228,39 @@ const AddMiscellaneousExpenseModal: React.FC<Props> = ({
           </select>
         </div>
 
-        <div>
+        <div className="relative">
           <label className={labelClass}>Name / Description *</label>
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            autoComplete="off"
+            onChange={(e) => handleNameChange(e.target.value)}
+            onFocus={() => {
+              if (nameSuggestions.length > 0) {
+                setOpenSuggestions(true);
+              }
+            }}
+            onBlur={() => setTimeout(() => setOpenSuggestions(false), 150)}
             className={`${fieldClass} ${errors.name ? "border-danger-300" : ""}`}
             placeholder="e.g., JCB Hire, Generator Service"
           />
+          {openSuggestions && nameSuggestions.length > 0 && (
+            <div className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-console-border bg-white shadow-console-lg">
+              {nameSuggestions.map((suggestion) => (
+                <button
+                  type="button"
+                  key={suggestion._id}
+                  onMouseDown={() => selectSuggestion(suggestion)}
+                  className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-50 transition-colors"
+                >
+                  <span className="text-console-text font-medium">{suggestion.name}</span>
+                  <span className="inline-flex items-center rounded-md bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700 capitalize border border-brand-200/60">
+                    {suggestion.category}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           {errors.name && (
             <p className="mt-1.5 text-sm text-danger-600">{errors.name}</p>
           )}
