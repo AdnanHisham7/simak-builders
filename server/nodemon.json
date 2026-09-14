@@ -1,5 +1,5 @@
 {
-  "watch": ["src"],
+  "watch": ["controllers", "routes", "models", "middleware", "utils", "config", "server.ts", "app.ts"],
   "ext": "ts",
   "ignore": ["dist"],
   "exec": "ts-node-dev --respawn --transpile-only --require tsconfig-paths/register server.ts"

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format, isSameDay } from "date-fns";
 import {
   BarChart,
   Bar,
@@ -32,12 +32,20 @@ import {
   Wrench,
   Truck,
   LucideIcon,
+  Download,
+  Calendar as CalendarIcon,
+  Maximize2,
+  RefreshCw,
 } from "lucide-react";
 import {
   getAllActivityLogs,
   getDashboardData,
+  ActivityLogItem,
 } from "@/services/dashboardService";
 import { getCompanySummary, getAmountToBeReceived } from "@/services/companyService";
+import { useCompanyProfile } from "@/hooks/useCompanyProfile";
+import DailyActivityModal from "./components/DailyActivityModal";
+import { exportDailyActivityPdf } from "./components/exportDailyActivityPdf";
 import { privateClient } from "@/api";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -155,10 +163,11 @@ const ECOSYSTEM_ICON_BG: Record<string, string> = {
 
 const AdminDashboard = () => {
   const { formatNumber, formatDate } = usePreferences();
+  const { profile: companyProfile } = useCompanyProfile();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [allActivityLogs, setAllActivityLogs] = useState<ActivityLog[] | null>(null);
+  const [allActivityLogs, setAllActivityLogs] = useState<ActivityLogItem[] | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -174,6 +183,13 @@ const AdminDashboard = () => {
   const [financialSummaryLoading, setFinancialSummaryLoading] = useState(true);
   const [isCompanyFundsModalOpen, setIsCompanyFundsModalOpen] = useState(false);
   const [isReceivableModalOpen, setIsReceivableModalOpen] = useState(false);
+
+  // Daily Activity State for Operations Tab
+  const [operationsSelectedDate, setOperationsSelectedDate] = useState<Date>(new Date());
+  const [operationsDateLogs, setOperationsDateLogs] = useState<ActivityLogItem[]>([]);
+  const [operationsLogsLoading, setOperationsLogsLoading] = useState(false);
+  const [isDailyActivityModalOpen, setIsDailyActivityModalOpen] = useState(false);
+  const [operationsIsExporting, setOperationsIsExporting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -244,14 +260,56 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleViewAllActivity = async () => {
-    try {
-      const logs = await getAllActivityLogs();
-      setAllActivityLogs(logs);
-      setShowAllActivities(true);
-    } catch (err) {
-      toast.error("Failed to load activity logs");
+  // Fetch operations activities whenever Operations tab is active or selected date changes
+  useEffect(() => {
+    if (activeSection !== "operations") return;
+
+    const fetchDateLogs = async () => {
+      setOperationsLogsLoading(true);
+      try {
+        const start = new Date(operationsSelectedDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(operationsSelectedDate);
+        end.setHours(23, 59, 59, 999);
+
+        const logs = await getAllActivityLogs({
+          startDate: start.toISOString(),
+          endDate: end.toISOString(),
+          limit: 100,
+        });
+        setOperationsDateLogs(Array.isArray(logs) ? logs : []);
+      } catch (err) {
+        toast.error("Failed to load activities for the selected date");
+      } finally {
+        setOperationsLogsLoading(false);
+      }
+    };
+
+    fetchDateLogs();
+  }, [activeSection, operationsSelectedDate]);
+
+  const handleOperationsCardExportPdf = () => {
+    if (operationsDateLogs.length === 0) {
+      toast.error("No activities to export for this date");
+      return;
     }
+    setOperationsIsExporting(true);
+    try {
+      exportDailyActivityPdf({
+        activities: operationsDateLogs,
+        selectedDate: operationsSelectedDate,
+        companyProfile,
+      });
+      toast.success("Activity audit report exported successfully");
+    } catch (err) {
+      toast.error("Failed to generate PDF report");
+    } finally {
+      setOperationsIsExporting(false);
+    }
+  };
+
+  const handleViewAllActivity = () => {
+    setIsDailyActivityModalOpen(true);
   };
 
   const latestRevenue = useMemo(() => {
@@ -532,52 +590,145 @@ const AdminDashboard = () => {
               </Card>
 
               <Card
-                title="Live activity feed"
-                description="Recent changes across the console"
+                title="Daily Activity Log"
+                description={`Audit for ${format(operationsSelectedDate, "EEEE, dd MMMM yyyy")}`}
                 action={
-                  <HoverTooltip label="View all activity">
-                    <button
-                      type="button"
-                      onClick={handleViewAllActivity}
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
-                      aria-label="View all activity"
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </HoverTooltip>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {/* Inline Date Selector */}
+                    <div className="flex items-center gap-1">
+                      {!isSameDay(operationsSelectedDate, new Date()) && (
+                        <button
+                          type="button"
+                          onClick={() => setOperationsSelectedDate(new Date())}
+                          className="rounded-md bg-brand-50 px-2 py-1 text-[11px] font-medium text-brand-700 hover:bg-brand-100 transition-colors"
+                        >
+                          Today
+                        </button>
+                      )}
+                      <input
+                        type="date"
+                        value={format(operationsSelectedDate, "yyyy-MM-dd")}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            const [y, m, d] = e.target.value
+                              .split("-")
+                              .map(Number);
+                            setOperationsSelectedDate(new Date(y, m - 1, d));
+                          }
+                        }}
+                        className="rounded-lg border border-console-border bg-white px-2 py-1 text-xs text-console-text shadow-sm focus:border-brand-500 focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Export PDF Button */}
+                    <HoverTooltip label="Export this date as PDF">
+                      <button
+                        type="button"
+                        onClick={handleOperationsCardExportPdf}
+                        disabled={operationsIsExporting || operationsDateLogs.length === 0}
+                        className="rounded-lg p-1.5 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text disabled:opacity-40 disabled:cursor-not-allowed"
+                        aria-label="Export date activity as PDF"
+                      >
+                        <Download size={15} />
+                      </button>
+                    </HoverTooltip>
+
+                    {/* Full Audit View Button */}
+                    <HoverTooltip label="Open full detailed activity audit">
+                      <button
+                        type="button"
+                        onClick={() => setIsDailyActivityModalOpen(true)}
+                        className="rounded-lg p-1.5 text-console-muted transition-colors hover:bg-console-bg hover:text-console-text"
+                        aria-label="Open full detailed activity audit"
+                      >
+                        <Maximize2 size={15} />
+                      </button>
+                    </HoverTooltip>
+                  </div>
                 }
               >
-                {data?.recentActivity?.length ? (
-                  <div className="h-80 space-y-3 overflow-y-auto">
-                    {data.recentActivity.map((activity) => (
-                      <div
-                        key={activity.id}
-                        className="flex items-start gap-3 rounded-lg border border-console-border p-3"
-                      >
+                {operationsLogsLoading ? (
+                  <div className="flex h-80 flex-col items-center justify-center text-console-muted">
+                    <RefreshCw size={22} className="animate-spin text-brand-600 mb-2" />
+                    <p className="text-xs">Loading activities for {format(operationsSelectedDate, "dd MMM yyyy")}...</p>
+                  </div>
+                ) : operationsDateLogs.length > 0 ? (
+                  <div className="flex flex-col h-80">
+                    <div className="flex-1 space-y-2.5 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                      {operationsDateLogs.map((activity) => (
                         <div
-                          className={cn(
-                            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                            activity.type === "employee" && "bg-brand-50 text-brand-700",
-                            activity.type === "site" && "bg-success-50 text-success-700",
-                            activity.type === "stock" && "bg-warning-50 text-warning-700",
-                          )}
+                          key={activity._id}
+                          className="flex items-start gap-2.5 rounded-lg border border-console-border bg-white p-2.5 transition-colors hover:border-brand-200 shadow-xs"
                         >
-                          {activity.type === "employee" && <Users size={15} />}
-                          {activity.type === "site" && <Building size={15} />}
-                          {activity.type === "stock" && <Package size={15} />}
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-700">
+                            <Activity size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <span className="text-xs font-semibold text-console-text truncate">
+                                  {activity.user?.name || "System"}
+                                </span>
+                                {activity.resource && (
+                                  <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
+                                    {activity.resource}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="flex items-center gap-0.5 text-[10px] font-medium text-console-muted shrink-0">
+                                <Clock size={10} />
+                                {activity.timestamp
+                                  ? format(new Date(activity.timestamp), "hh:mm a")
+                                  : "-"}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
+                              {activity.details || `${activity.action} on ${activity.resource}`}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-console-text">{activity.description}</p>
-                          <p className="mt-0.5 flex items-center gap-1 text-xs text-console-muted">
-                            <Clock size={11} />
-                            {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+
+                    <div className="mt-2.5 flex items-center justify-between border-t border-console-border pt-2 text-xs">
+                      <span className="text-console-muted">
+                        Total: <strong>{operationsDateLogs.length}</strong> activities
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsDailyActivityModalOpen(true)}
+                        className="font-medium text-brand-600 hover:text-brand-700"
+                      >
+                        Detailed view & filters →
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <EmptyState icon={Activity} title="No recent activity" description="New employees, sites, and stock updates will show up here." />
+                  <EmptyState
+                    icon={CalendarIcon}
+                    title={`No activity on ${format(operationsSelectedDate, "dd MMM yyyy")}`}
+                    description="Pick another date or open the detailed audit modal to search records across any time period."
+                    action={
+                      <div className="flex items-center gap-2">
+                        {!isSameDay(operationsSelectedDate, new Date()) && (
+                          <button
+                            type="button"
+                            onClick={() => setOperationsSelectedDate(new Date())}
+                            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-700"
+                          >
+                            Go to Today
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setIsDailyActivityModalOpen(true)}
+                          className="rounded-lg border border-console-border bg-white px-3 py-1.5 text-xs font-medium text-console-text transition-colors hover:bg-slate-50"
+                        >
+                          Open Audit Tool
+                        </button>
+                      </div>
+                    }
+                  />
                 )}
               </Card>
             </div>
@@ -646,31 +797,11 @@ const AdminDashboard = () => {
         </AnimatePresence>
       )}
 
-      <Modal
-        isOpen={showAllActivities && !!allActivityLogs}
-        onClose={() => setShowAllActivities(false)}
-        title="Activity timeline"
-        size="lg"
-      >
-        <div className="max-h-[60vh] space-y-3 overflow-y-auto">
-          {allActivityLogs?.map((log) => (
-            <div key={log._id} className="flex items-start gap-3 rounded-lg border border-console-border p-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                <Activity size={15} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-console-text">
-                  {log.details || `${log.user.name} performed ${log.action} on ${log.resource}`}
-                </p>
-                <p className="mt-0.5 flex items-center gap-1 text-xs text-console-muted">
-                  <Clock size={11} />
-                  {formatDistanceToNow(new Date(log.timestamp), { addSuffix: true })}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Modal>
+      <DailyActivityModal
+        isOpen={isDailyActivityModalOpen}
+        onClose={() => setIsDailyActivityModalOpen(false)}
+        initialDate={operationsSelectedDate}
+      />
 
       <CompanyFundsModal
         isOpen={isCompanyFundsModalOpen}

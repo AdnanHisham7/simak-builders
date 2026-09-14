@@ -234,15 +234,62 @@ const getAllActivityLogs = async (
   next: NextFunction,
 ) => {
   try {
-    const activityLogs = await ActivityLogModel.find()
+    const { startDate, endDate, date, resource, action, search, limit } =
+      req.query;
+
+    const query: Record<string, any> = {};
+
+    // Date filtering: support startDate/endDate range or single date
+    if (startDate || endDate) {
+      query.timestamp = {};
+      if (startDate) {
+        query.timestamp.$gte = new Date(startDate as string);
+      }
+      if (endDate) {
+        query.timestamp.$lte = new Date(endDate as string);
+      }
+    } else if (date) {
+      const startOfDay = new Date(date as string);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const endOfDay = new Date(date as string);
+      endOfDay.setUTCHours(23, 59, 59, 999);
+      query.timestamp = { $gte: startOfDay, $lte: endOfDay };
+    }
+
+    if (resource && resource !== "all") {
+      query.resource = resource;
+    }
+
+    if (action && action !== "all") {
+      query.action = action;
+    }
+
+    if (search && typeof search === "string" && search.trim() !== "") {
+      const sanitized = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { details: { $regex: sanitized, $options: "i" } },
+        { resource: { $regex: sanitized, $options: "i" } },
+        { action: { $regex: sanitized, $options: "i" } },
+      ];
+    }
+
+    const maxLimit = limit
+      ? Math.min(Math.max(Number(limit), 1), 2000)
+      : date || startDate || endDate
+      ? 1000
+      : 200;
+
+    const activityLogs = await ActivityLogModel.find(query)
       .sort({ timestamp: -1 })
-      .limit(100)
-      .populate("user", "name");
+      .limit(maxLimit)
+      .populate("user", "name email role");
+
     res.status(HttpStatus.OK).json(activityLogs);
   } catch (error) {
     next(error);
   }
 };
+
 
 // Bulk Import for Site
 const createSiteWithBulkData = async (
