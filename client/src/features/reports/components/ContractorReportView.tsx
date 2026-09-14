@@ -447,28 +447,28 @@ export const ContractorReportView: React.FC<ContractorReportViewProps> = ({ site
           {/* KPI Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              title="Total Contract Commitments"
+              label="Total Contract Commitments"
               value={`₹${formatNumber(data.kpis.totalContractValue || 0)}`}
               icon={Briefcase}
               tone="info"
               subtitle={`${data.kpis.totalContractors} Active Contractors`}
             />
             <StatCard
-              title="Total Advances Given"
+              label="Total Advances Given"
               value={`₹${formatNumber(data.kpis.totalAdvances || 0)}`}
               icon={Clock}
               tone="warning"
               subtitle="Pre-settlement disbursements"
             />
             <StatCard
-              title="Verified Contractor Work"
+              label="Verified Contractor Work"
               value={`₹${formatNumber(data.kpis.totalExpenses || 0)}`}
               icon={CheckCircle2}
               tone="success"
               subtitle={`+ ₹${formatNumber(data.kpis.totalAdditional || 0)} additional`}
             />
             <StatCard
-              title="Net Outstanding Balance"
+              label="Net Outstanding Balance"
               value={`₹${formatNumber(data.kpis.pendingBalance || 0)}`}
               icon={DollarSign}
               tone={data.kpis.pendingBalance > 0 ? "danger" : "default"}

@@ -471,28 +471,28 @@ export const CapitalLenderReportView: React.FC = () => {
           {/* KPI Stat Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              title="Total Capital Infused"
+              label="Total Capital Infused"
               value={`₹${formatNumber(data.kpis.totalInfused || 0)}`}
               icon={Coins}
               tone="info"
               subtitle="All equity & loan infusions"
             />
             <StatCard
-              title="Owner's Own Capital"
+              label="Owner's Own Capital"
               value={`₹${formatNumber(data.kpis.totalOwnCapital || 0)}`}
               icon={TrendingUp}
               tone="success"
               subtitle="Personal equity injected"
             />
             <StatCard
-              title="Lended / Borrowed Capital"
+              label="Lended / Borrowed Capital"
               value={`₹${formatNumber(data.kpis.totalLendedCapital || 0)}`}
               icon={HandCoins}
               tone="warning"
               subtitle={`From ${data.kpis.activeLenders} lenders`}
             />
             <StatCard
-              title="Net Outstanding Debt"
+              label="Net Outstanding Debt"
               value={`₹${formatNumber(data.kpis.totalOutstandingDebt || 0)}`}
               icon={AlertCircle}
               tone={data.kpis.totalOutstandingDebt > 0 ? "danger" : "default"}
