@@ -21,7 +21,11 @@ import {
   LayoutList,
   Table as TableIcon,
   X,
+  Wrench,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/store";
 import Modal from "@/components/ui/Modal";
 import Tooltip from "@/components/ui/Tooltip";
 import EmptyState from "@/components/ui/EmptyState";
@@ -113,6 +117,7 @@ const ACTION_COLORS: Record<string, string> = {
   approve: "bg-purple-500/10 text-purple-700 border-purple-300",
   reject: "bg-rose-500/10 text-rose-700 border-rose-300",
   login: "bg-slate-500/10 text-slate-700 border-slate-300",
+  logout: "bg-slate-500/10 text-slate-700 border-slate-300",
   attendance: "bg-teal-500/10 text-teal-700 border-teal-300",
 };
 
@@ -121,6 +126,9 @@ export const DailyActivityModal = ({
   onClose,
   initialDate,
 }: DailyActivityModalProps) => {
+  const navigate = useNavigate();
+  const { userType } = useSelector((state: RootState) => state.auth);
+  const basePath = userType === "siteManager" ? "siteManager" : "admin";
   const { profile } = useCompanyProfile();
   const [selectedDate, setSelectedDate] = useState<Date>(
     initialDate || new Date(),
@@ -670,6 +678,42 @@ export const DailyActivityModal = ({
                           `${log.user?.name || "User"} performed ${log.action} on ${resMeta.label}`}
                       </p>
 
+                      {/* Detail Page Link for Purchases and Misc Expenses */}
+                      {(() => {
+                        const isPurchase = log.resource === "purchase";
+                        const isMisc =
+                          log.resource === "miscellaneousExpense" ||
+                          log.resource === "miscellaneous";
+                        const detailUrl =
+                          isPurchase && log.resourceId
+                            ? `/${basePath}/purchases/${log.resourceId}`
+                            : isMisc && log.resourceId
+                            ? `/${basePath}/miscellaneous-expenses/${log.resourceId}`
+                            : null;
+
+                        if (!detailUrl) return null;
+
+                        return (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                navigate(detailUrl);
+                              }}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50/70 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100 hover:text-brand-900 transition-colors shadow-2xs"
+                            >
+                              {isPurchase ? (
+                                <ShoppingCart size={13} />
+                              ) : (
+                                <Wrench size={13} />
+                              )}
+                              View detailed {isPurchase ? "purchase" : "expense"} record →
+                            </button>
+                          </div>
+                        );
+                      })()}
+
                       {/* Technical metadata toggle */}
                       {(log.ip || log.device || log.resourceId) && (
                         <div className="mt-2">
@@ -801,7 +845,39 @@ export const DailyActivityModal = ({
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-slate-700 leading-relaxed font-medium">
-                          {log.details || "-"}
+                          <div>{log.details || "-"}</div>
+                          {(() => {
+                            const isPurchase = log.resource === "purchase";
+                            const isMisc =
+                              log.resource === "miscellaneousExpense" ||
+                              log.resource === "miscellaneous";
+                            const detailUrl =
+                              isPurchase && log.resourceId
+                                ? `/${basePath}/purchases/${log.resourceId}`
+                                : isMisc && log.resourceId
+                                ? `/${basePath}/miscellaneous-expenses/${log.resourceId}`
+                                : null;
+
+                            if (!detailUrl) return null;
+
+                            return (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  navigate(detailUrl);
+                                }}
+                                className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:text-brand-800"
+                              >
+                                {isPurchase ? (
+                                  <ShoppingCart size={11} />
+                                ) : (
+                                  <Wrench size={11} />
+                                )}
+                                View {isPurchase ? "purchase" : "expense"} details →
+                              </button>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

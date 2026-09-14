@@ -24,6 +24,13 @@ export const getMiscellaneousExpensesBySite = async (siteId: string) => {
   return response.data;
 };
 
+export const getMiscellaneousExpenseById = async (expenseId: string) => {
+  const response = await privateClient.get(
+    `/miscellaneous-expenses/${expenseId}`,
+  );
+  return response.data;
+};
+
 export const verifyMiscellaneousExpense = async (expenseId: string) => {
   const response = await privateClient.patch(
     `/miscellaneous-expenses/${expenseId}/verify`,

@@ -86,6 +86,35 @@ const recordLoginActivity = async (
   }
 };
 
+const recordLogoutActivity = async (
+  userId: string,
+  req: Request,
+  deviceLabel?: string,
+  details = "User logged out"
+) => {
+  try {
+    const userAgent = req.headers["user-agent"] as string | undefined;
+    const resolvedDevice =
+      deviceLabel ||
+      (() => {
+        const { browser, os } = parseUserAgent(userAgent);
+        return `${browser} on ${os}`;
+      })();
+    await ActivityLogModel.create({
+      user: userId,
+      action: "logout",
+      resource: "auth",
+      resourceId: userId,
+      details,
+      ip: getRequestIp(req),
+      userAgent,
+      device: resolvedDevice,
+    });
+  } catch (error) {
+    // Never block logout on activity-log failure.
+  }
+};
+
 const registerClient = async (
   req: Request,
   res: Response,
@@ -511,11 +540,13 @@ const refreshToken = async (
 
 const logout = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    let userId: string | undefined = req.user?.userId;
     const refreshToken = req.cookies?.refreshToken;
     if (refreshToken) {
       try {
         const decoded = authService.verifyRefreshToken(refreshToken);
         if (decoded.sessionId) {
+          userId = decoded.userId;
           await UserModel.updateOne(
             { _id: decoded.userId },
             { $pull: { sessions: { _id: decoded.sessionId } } }
@@ -524,6 +555,26 @@ const logout = async (req: Request, res: Response, next: NextFunction) => {
       } catch (error) {
         // Token already invalid/expired: nothing to clean up server-side.
       }
+    }
+
+    if (!userId) {
+      const accessToken =
+        req.cookies?.accessToken ||
+        (req.headers.authorization?.startsWith("Bearer ")
+          ? req.headers.authorization.split(" ")[1]
+          : undefined);
+      if (accessToken) {
+        try {
+          const decodedAccess = authService.verifyAccessToken(accessToken);
+          userId = decodedAccess.userId;
+        } catch {
+          // ignore
+        }
+      }
+    }
+
+    if (userId) {
+      await recordLogoutActivity(userId, req);
     }
 
     clearAuthCookies(res);
@@ -717,6 +768,13 @@ const logoutOtherSessions = async (
       (session) => session._id.toString() === currentSessionId
     ) as any;
     await user.save();
+
+    await recordLogoutActivity(
+      userId,
+      req,
+      undefined,
+      "User logged out of all other sessions"
+    );
 
     res
       .status(HttpStatus.OK)

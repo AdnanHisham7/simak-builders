@@ -7,8 +7,9 @@ const router = express.Router();
 router.post('/', authMiddleware, miscellaneousExpenseController.addMiscellaneousExpense);
 router.get("/site", miscellaneousExpenseController.getMiscellaneousExpensesBySite);
 router.get("/suggestions", authMiddleware, miscellaneousExpenseController.getMiscellaneousExpenseSuggestions);
+router.get("/:expenseId", authMiddleware, miscellaneousExpenseController.getMiscellaneousExpenseById);
 router.patch("/:expenseId/verify", authMiddleware, miscellaneousExpenseController.verifyMiscellaneousExpense);
 router.patch("/:expenseId", authMiddleware, miscellaneousExpenseController.updateMiscellaneousExpense);
-router.delete("/:expenseId", authMiddleware, miscellaneousExpenseController.deleteMiscellaneousExpense); // ← NEW
+router.delete("/:expenseId", authMiddleware, miscellaneousExpenseController.deleteMiscellaneousExpense);
 
 export default router;

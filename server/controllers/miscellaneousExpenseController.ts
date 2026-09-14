@@ -553,8 +553,36 @@ const getMiscellaneousExpenseSuggestions = async (
   }
 };
 
+const getMiscellaneousExpenseById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { expenseId } = req.params;
+    const expense = await MiscellaneousExpenseModel.findById(expenseId)
+      .populate("site", "name code address")
+      .populate("vendor")
+      .populate("addedBy", "name email role")
+      .populate("deductFromUserId", "name email")
+      .populate("purchaseId");
+
+    if (!expense) {
+      throw new ApiError(
+        "Miscellaneous expense not found",
+        HttpStatus.NOT_FOUND
+      );
+    }
+
+    res.status(HttpStatus.OK).json(expense);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   addMiscellaneousExpense,
+  getMiscellaneousExpenseById,
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
   updateMiscellaneousExpense,

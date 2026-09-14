@@ -54,6 +54,12 @@ export const generateTempPassword = (): string => {
   return Math.floor(100000 + Math.random() * 900000).toString();
 };
 
+export const verifyAccessToken = (
+  token: string
+): { userId: string; role: UserRole; sessionId?: string } => {
+  return verifyToken(token, process.env.JWT_SECRET!);
+};
+
 export const verifyRefreshToken = (
   token: string
 ): { userId: string; role: UserRole; sessionId?: string } => {

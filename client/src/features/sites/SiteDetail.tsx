@@ -47,6 +47,7 @@ import {
   Check,
   Search,
   Briefcase,
+  ExternalLink,
 } from "lucide-react";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
@@ -1664,6 +1665,18 @@ const SiteDetail: React.FC = () => {
                                   {verifyingPurchaseIds.has(purchase._id) ? "Verifying..." : "Verify"}
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `/${userType === "siteManager" ? "siteManager" : "admin"}/purchases/${purchase._id}`
+                                  )
+                                }
+                                className="rounded-lg p-1.5 text-console-muted hover:bg-brand-50 hover:text-brand-700"
+                                title="View full purchase details page"
+                              >
+                                <ExternalLink size={15} />
+                              </button>
                               {purchase.billUpload && purchase.billUpload.url && (
                                 <a
                                   href={purchase.billUpload.url}
@@ -2133,6 +2146,18 @@ const SiteDetail: React.FC = () => {
                                   {verifyingMiscIds.has(exp._id) ? "Verifying..." : "Verify"}
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  navigate(
+                                    `/${userType === "siteManager" ? "siteManager" : "admin"}/miscellaneous-expenses/${exp._id}`
+                                  )
+                                }
+                                className="rounded p-1 text-console-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                                title="View full expense details page"
+                              >
+                                <ExternalLink size={14} />
+                              </button>
                               {(userType === "admin" || exp.status === "pending") && (
                                 <button
                                   type="button"

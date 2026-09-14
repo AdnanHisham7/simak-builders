@@ -37,6 +37,11 @@ export const getPurchasesBySite = async (siteId: string, status = null) => {
   return response.data;
 };
 
+export const getPurchaseById = async (purchaseId: string) => {
+  const response = await privateClient.get(`/purchases/${purchaseId}`);
+  return response.data;
+};
+
 export const deleteBillUpload = async (purchaseId: string) => {
   await privateClient.delete(`/purchases/${purchaseId}/billUpload`);
 };

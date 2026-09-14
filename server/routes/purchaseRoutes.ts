@@ -13,6 +13,7 @@ router.delete('/:purchaseId', authMiddleware, purchaseController.deletePurchase)
 router.get('/', authMiddleware, purchaseController.getPurchases);
 router.get("/by-site", purchaseController.getPurchasesBySite);
 router.get("/site/:siteId", purchaseController.getPurchasesBySiteForReport);
+router.get("/:purchaseId", authMiddleware, purchaseController.getPurchaseById);
 router.delete("/:purchaseId/billUpload", authMiddleware, purchaseController.deleteBillUpload);
 
 export default router;

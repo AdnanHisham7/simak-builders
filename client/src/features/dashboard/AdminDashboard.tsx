@@ -36,7 +36,9 @@ import {
   Calendar as CalendarIcon,
   Maximize2,
   RefreshCw,
+  ShoppingCart,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   getAllActivityLogs,
   getDashboardData,
@@ -169,6 +171,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [allActivityLogs, setAllActivityLogs] = useState<ActivityLogItem[] | null>(null);
   const [showAllActivities, setShowAllActivities] = useState(false);
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -655,39 +658,80 @@ const AdminDashboard = () => {
                 ) : operationsDateLogs.length > 0 ? (
                   <div className="flex flex-col h-80">
                     <div className="flex-1 space-y-2.5 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                      {operationsDateLogs.map((activity) => (
-                        <div
-                          key={activity._id}
-                          className="flex items-start gap-2.5 rounded-lg border border-console-border bg-white p-2.5 transition-colors hover:border-brand-200 shadow-xs"
-                        >
-                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-brand-50 text-brand-700">
-                            <Activity size={14} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-1">
-                              <div className="flex items-center gap-1.5 truncate">
-                                <span className="text-xs font-semibold text-console-text truncate">
-                                  {activity.user?.name || "System"}
-                                </span>
-                                {activity.resource && (
-                                  <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
-                                    {activity.resource}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="flex items-center gap-0.5 text-[10px] font-medium text-console-muted shrink-0">
-                                <Clock size={10} />
-                                {activity.timestamp
-                                  ? format(new Date(activity.timestamp), "hh:mm a")
-                                  : "-"}
-                              </span>
+                      {operationsDateLogs.map((activity) => {
+                        const isPurchase = activity.resource === "purchase";
+                        const isMisc =
+                          activity.resource === "miscellaneousExpense" ||
+                          activity.resource === "miscellaneous";
+                        const detailUrl =
+                          isPurchase && activity.resourceId
+                            ? `/admin/purchases/${activity.resourceId}`
+                            : isMisc && activity.resourceId
+                            ? `/admin/miscellaneous-expenses/${activity.resourceId}`
+                            : null;
+
+                        return (
+                          <div
+                            key={activity._id}
+                            className={cn(
+                              "flex items-start gap-2.5 rounded-lg border border-console-border bg-white p-2.5 transition-colors shadow-xs",
+                              detailUrl
+                                ? "hover:border-brand-300 hover:bg-slate-50/50 cursor-pointer"
+                                : "hover:border-brand-200"
+                            )}
+                            onClick={() => {
+                              if (detailUrl) navigate(detailUrl);
+                            }}
+                          >
+                            <div
+                              className={cn(
+                                "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                                isPurchase
+                                  ? "bg-amber-50 text-amber-700"
+                                  : isMisc
+                                  ? "bg-blue-50 text-blue-700"
+                                  : "bg-brand-50 text-brand-700"
+                              )}
+                            >
+                              {isPurchase ? (
+                                <ShoppingCart size={14} />
+                              ) : isMisc ? (
+                                <Wrench size={14} />
+                              ) : (
+                                <Activity size={14} />
+                              )}
                             </div>
-                            <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
-                              {activity.details || `${activity.action} on ${activity.resource}`}
-                            </p>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="flex items-center gap-1.5 truncate">
+                                  <span className="text-xs font-semibold text-console-text truncate">
+                                    {activity.user?.name || "System"}
+                                  </span>
+                                  {activity.resource && (
+                                    <span className="rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
+                                      {activity.resource}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="flex items-center gap-0.5 text-[10px] font-medium text-console-muted shrink-0">
+                                  <Clock size={10} />
+                                  {activity.timestamp
+                                    ? format(new Date(activity.timestamp), "hh:mm a")
+                                    : "-"}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-xs text-slate-700 line-clamp-2">
+                                {activity.details || `${activity.action} on ${activity.resource}`}
+                              </p>
+                              {detailUrl && (
+                                <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:text-brand-800">
+                                  View {isPurchase ? "purchase" : "expense"} details →
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="mt-2.5 flex items-center justify-between border-t border-console-border pt-2 text-xs">

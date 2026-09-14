@@ -54,6 +54,8 @@ const ListEnquiries = lazy(() => import("./features/enquiries/ListEnquiries.tsx"
 const AdminFeedback = lazy(() => import("./features/feedback/AdminFeedback.tsx"));
 const AdminExpenseRequests = lazy(() => import("./features/expenseRequests/AdminExpenseRequests.tsx"));
 const CompanyPage = lazy(() => import("./features/company/CompanyPage.tsx"));
+const PurchaseDetail = lazy(() => import("./features/purchases/PurchaseDetail.tsx"));
+const MiscellaneousExpenseDetail = lazy(() => import("./features/expenses/MiscellaneousExpenseDetail.tsx"));
 
 const App: React.FC = () => {
   const isAuthenticated = useSelector(
@@ -110,6 +112,11 @@ const App: React.FC = () => {
               <Route path="architects" element={<Architects />} />
               <Route path="sites" element={<Sites />} />
               <Route path="sites/:siteId" element={<SiteDetail />} />
+              <Route path="purchases/:purchaseId" element={<PurchaseDetail />} />
+              <Route
+                path="miscellaneous-expenses/:expenseId"
+                element={<MiscellaneousExpenseDetail />}
+              />
               <Route path="company" element={<CompanyPage />} />
               <Route path="stocks" element={<Stocks />} />
               <Route path="reports" element={<Reports />} />
@@ -131,6 +138,11 @@ const App: React.FC = () => {
               <Route path="dashboard" element={<SiteManagerDashboard />} />
               <Route path="sites" element={<Sites />} />
               <Route path="sites/:siteId" element={<SiteDetail />} />
+              <Route path="purchases/:purchaseId" element={<PurchaseDetail />} />
+              <Route
+                path="miscellaneous-expenses/:expenseId"
+                element={<MiscellaneousExpenseDetail />}
+              />
               <Route path="reports" element={<Reports />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="profile" element={<Profile />} />

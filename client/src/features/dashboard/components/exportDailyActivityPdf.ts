@@ -3,6 +3,7 @@ import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
 import { ActivityLogItem } from "@/services/dashboardService";
 import { CompanyProfile } from "@/services/companyService";
+import "@/assets/Roboto-Regular";
 
 interface ExportDailyActivityPdfOptions {
   activities: ActivityLogItem[];
@@ -42,10 +43,19 @@ const formatActionLabel = (action: string): string => {
     approve: "Approved",
     reject: "Rejected",
     login: "Logged In",
+    logout: "Logged Out",
     attendance: "Marked Attendance",
     view: "Viewed",
   };
   return map[action] || action.charAt(0).toUpperCase() + action.slice(1);
+};
+
+const sanitizeForPdf = (str: string | null | undefined): string => {
+  if (!str) return "";
+  return String(str)
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-");
 };
 
 export const exportDailyActivityPdf = ({
@@ -70,14 +80,14 @@ export const exportDailyActivityPdf = ({
   let y = 14;
 
   // Company Name
-  const companyName = companyProfile?.name || "SIMAK CONSTRUCTIONS";
-  doc.setFont("helvetica", "bold");
+  const companyName = sanitizeForPdf(companyProfile?.name || "SIMAK CONSTRUCTIONS");
+  doc.setFont("Roboto-Regular", "bold");
   doc.setFontSize(16);
   doc.setTextColor(24, 24, 27); // zinc-900
   doc.text(companyName.toUpperCase(), margin, y);
 
   // Date Tag on Right
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Roboto-Regular", "bold");
   doc.setFontSize(10);
   doc.setTextColor(140, 100, 36); // brand #8C6424
   doc.text("ACTIVITY AUDIT REPORT", pageWidth - margin, y, { align: "right" });
@@ -85,7 +95,7 @@ export const exportDailyActivityPdf = ({
   y += 5.5;
 
   // Subtitle / Address on left
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Roboto-Regular", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(100, 116, 139); // slate-500
   const subAddress = [
@@ -96,7 +106,7 @@ export const exportDailyActivityPdf = ({
     .filter(Boolean)
     .join("  |  ");
   if (subAddress) {
-    doc.text(subAddress, margin, y);
+    doc.text(sanitizeForPdf(subAddress), margin, y);
   } else {
     doc.text("Construction Management ERP", margin, y);
   }
@@ -134,13 +144,13 @@ export const exportDailyActivityPdf = ({
   doc.roundedRect(margin, boxTop, contentWidth, 24, 2, 2, "FD");
 
   // Date Highlight
-  doc.setFont("helvetica", "bold");
+  doc.setFont("Roboto-Regular", "bold");
   doc.setFontSize(11);
   doc.setTextColor(15, 23, 42); // slate-900
   doc.text(`Activity Log for: ${dateHeading}`, margin + 5, boxTop + 6.5);
 
   // Stats text
-  doc.setFont("helvetica", "normal");
+  doc.setFont("Roboto-Regular", "normal");
   doc.setFontSize(8.5);
   doc.setTextColor(71, 85, 105); // slate-600
   doc.text(
@@ -156,12 +166,12 @@ export const exportDailyActivityPdf = ({
     .map(([res, count]) => `${formatResourceLabel(res)}: ${count}`);
 
   const breakdownString = breakdownParts.length
-    ? `Key Categories: ${breakdownParts.join("   •   ")}`
+    ? `Key Categories: ${breakdownParts.join("   |   ")}`
     : "No activity recorded for this date";
 
   doc.setFontSize(8);
   doc.setTextColor(100, 116, 139); // slate-500
-  doc.text(breakdownString, margin + 5, boxTop + 18.5);
+  doc.text(sanitizeForPdf(breakdownString), margin + 5, boxTop + 18.5);
 
   y = boxTop + 28;
 
@@ -178,10 +188,10 @@ export const exportDailyActivityPdf = ({
   }
 
   if (activeFilters.length > 0) {
-    doc.setFont("helvetica", "italic");
+    doc.setFont("Roboto-Regular", "italic");
     doc.setFontSize(8);
     doc.setTextColor(140, 100, 36);
-    doc.text(`Applied Filters: ${activeFilters.join("  |  ")}`, margin, y);
+    doc.text(`Applied Filters: ${sanitizeForPdf(activeFilters.join("  |  "))}`, margin, y);
     y += 4.5;
   }
 
@@ -205,9 +215,9 @@ export const exportDailyActivityPdf = ({
     return [
       String(index + 1),
       timeStr,
-      member,
+      sanitizeForPdf(member),
       `${moduleLabel}\n[${actionLabel}]`,
-      details,
+      sanitizeForPdf(details),
     ];
   });
 
@@ -227,15 +237,20 @@ export const exportDailyActivityPdf = ({
     head: [["#", "Time", "Team Member", "Module / Action", "Activity Details"]],
     body: tableData,
     theme: "grid",
+    styles: {
+      font: "Roboto-Regular",
+    },
     headStyles: {
+      font: "Roboto-Regular",
+      fontStyle: "bold",
       fillColor: [30, 41, 59], // slate-800
       textColor: [255, 255, 255],
-      fontStyle: "bold",
       fontSize: 8.5,
       cellPadding: 2.8,
       halign: "left",
     },
     bodyStyles: {
+      font: "Roboto-Regular",
       textColor: [30, 41, 59],
       fontSize: 8,
       cellPadding: 2.6,
@@ -244,6 +259,7 @@ export const exportDailyActivityPdf = ({
       valign: "middle",
     },
     alternateRowStyles: {
+      font: "Roboto-Regular",
       fillColor: [248, 250, 252], // slate-50
     },
     columnStyles: {
@@ -258,7 +274,7 @@ export const exportDailyActivityPdf = ({
       const totalPages = (doc.internal as any).getNumberOfPages();
 
       // Footer
-      doc.setFont("helvetica", "normal");
+      doc.setFont("Roboto-Regular", "normal");
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184); // slate-400
 

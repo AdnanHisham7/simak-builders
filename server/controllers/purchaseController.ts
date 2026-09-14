@@ -831,8 +831,32 @@ const deleteBillUpload = async (
   }
 };
 
+const getPurchaseById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { purchaseId } = req.params;
+    const purchase = await PurchaseModel.findById(purchaseId)
+      .populate("site", "name code address")
+      .populate("vendor")
+      .populate("addedBy", "name email role")
+      .populate("deductFromUserId", "name email");
+
+    if (!purchase) {
+      throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+    }
+
+    res.status(HttpStatus.OK).json(purchase);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getPurchases,
+  getPurchaseById,
   addPurchase,
   verifyPurchase,
   updatePurchaseItem,
