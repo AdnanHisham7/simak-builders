@@ -26,6 +26,9 @@ import {
   RotateCcw,
   Plus,
   Loader2,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 import AddClientModal from "./AddClientModal";
 import EditClientModal from "./EditClientModal";
@@ -45,6 +48,8 @@ interface Client {
   id: string;
   name: string;
   email: string;
+  password?: string;
+  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   assignedSites: Site[];
@@ -72,6 +77,22 @@ const Clients: React.FC = () => {
     {},
   );
   const [showDeleted, setShowDeleted] = useState(false);
+  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
+
+  const toggleShowPassword = (id: string) =>
+    setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const handleCopyPassword = (client: Client) => {
+    const pwd = client.plainPassword || (client.password && !client.password.startsWith("$2") ? client.password : "");
+    if (pwd) {
+      navigator.clipboard
+        .writeText(pwd)
+        .then(() => toast.success(`Password for ${client.name} copied to clipboard!`))
+        .catch(() => toast.error("Failed to copy password."));
+    } else {
+      toast.error(`Password not available for ${client.name}. Click 'Regenerate password' to set and copy a new one.`);
+    }
+  };
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -177,7 +198,7 @@ const Clients: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${client.name}?`,
+      message: `Are you sure you want to regenerate the password for ${client.name}? A new password will be generated and copied to your clipboard.`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
@@ -186,11 +207,15 @@ const Clients: React.FC = () => {
           const newPassword = await regeneratePassword(client.id);
           navigator.clipboard
             .writeText(newPassword)
-            .then(() => toast.success("Password copied to clipboard!"))
-            .catch(() => toast.error("Failed to copy password."));
-          toast.success("Password regenerated successfully!");
-        } catch (err) {
-          toast.error("Failed to regenerate password.");
+            .then(() => toast.success(`Password for ${client.name} copied to clipboard: ${newPassword}`, { duration: 6000 }))
+            .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
+          setClients((prev) =>
+            prev.map((c) =>
+              c.id === client.id ? { ...c, password: newPassword, plainPassword: newPassword } : c
+            )
+          );
+        } catch (err: any) {
+          toast.error(err?.response?.data?.message || "Failed to regenerate password.");
         } finally {
           setIsRegenerating((prev) => ({ ...prev, [client.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
@@ -491,6 +516,27 @@ const Clients: React.FC = () => {
                             <span className="text-sm text-console-text">{client.email}</span>
                             <CopyButton value={client.email} label="Email" />
                           </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
+                            <KeyRound size={12} className="text-console-muted shrink-0" />
+                            {client.plainPassword || (client.password && !client.password.startsWith("$2")) ? (
+                              <>
+                                <span className="font-mono text-console-text">
+                                  {showPassword[client.id] ? (client.plainPassword || client.password) : "••••••••"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleShowPassword(client.id)}
+                                  className="text-console-muted hover:text-console-text transition-colors p-0.5"
+                                  aria-label={showPassword[client.id] ? "Hide password" : "Show password"}
+                                >
+                                  {showPassword[client.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                                <CopyButton value={client.plainPassword || client.password || ""} label="Password" />
+                              </>
+                            ) : (
+                              <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -567,6 +613,16 @@ const Clients: React.FC = () => {
                                     className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
                                   >
                                     <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Copy current password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyPassword(client)}
+                                    aria-label="Copy current password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-slate-100 hover:text-brand-700"
+                                  >
+                                    <KeyRound size={14} />
                                   </button>
                                 </Tooltip>
                                 <Tooltip label="Regenerate password">
@@ -679,10 +735,15 @@ const Clients: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={async (newClient) => {
           try {
-            const createdClient = await createClient(newClient);
+            const createdClient: any = await createClient(newClient);
             setClients((prev) => [...prev, createdClient]);
             setIsAddModalOpen(false);
-            toast.success("Client added successfully!");
+            if (createdClient?.password) {
+              await navigator.clipboard.writeText(createdClient.password).catch(() => {});
+              toast.success(`Client added! Password copied to clipboard: ${createdClient.password}`, { duration: 6000 });
+            } else {
+              toast.success("Client added successfully!");
+            }
           } catch (err) {
             toast.error("Failed to add client.");
           }

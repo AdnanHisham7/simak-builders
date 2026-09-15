@@ -29,6 +29,9 @@ import {
   Plus,
   Loader2,
   Wallet,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 import AddSiteManagerModal from "./AddSiteManagerModal";
 import EditSiteManagerModal from "./EditSiteManagerModal";
@@ -50,7 +53,8 @@ interface SiteManager {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   sites: Site[];
@@ -77,6 +81,22 @@ const SiteManagers: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
   const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>({});
   const [showDeleted, setShowDeleted] = useState(false);
+  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
+
+  const toggleShowPassword = (id: string) =>
+    setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const handleCopyPassword = (manager: SiteManager) => {
+    const pwd = manager.plainPassword || (manager.password && !manager.password.startsWith("$2") ? manager.password : "");
+    if (pwd) {
+      navigator.clipboard
+        .writeText(pwd)
+        .then(() => toast.success(`Password for ${manager.name} copied to clipboard!`))
+        .catch(() => toast.error("Failed to copy password."));
+    } else {
+      toast.error(`Password not available for ${manager.name}. Click 'Regenerate password' to set and copy a new one.`);
+    }
+  };
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -108,7 +128,8 @@ const SiteManagers: React.FC = () => {
             name: user.name,
             sites: user.assignedSites || [],
             email: user.email,
-            password: user.password || "********",
+            password: user.plainPassword || user.password || "",
+            plainPassword: user.plainPassword,
             isBlocked: user.isBlocked,
             isDeleted: user.isDeleted || false,
             siteExpensesBalance: user.siteExpensesBalance || 0,
@@ -182,7 +203,7 @@ const SiteManagers: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${manager.name}?`,
+      message: `Are you sure you want to regenerate the password for ${manager.name}? A new password will be generated and copied to your clipboard.`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
@@ -191,14 +212,13 @@ const SiteManagers: React.FC = () => {
           const newPassword = await regeneratePassword(manager.id);
           navigator.clipboard
             .writeText(newPassword)
-            .then(() => toast.success("Password copied to clipboard!"))
-            .catch(() => toast.error("Failed to copy password."));
+            .then(() => toast.success(`Password for ${manager.name} copied to clipboard: ${newPassword}`, { duration: 6000 }))
+            .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
           setSiteManagers((prev) =>
-            prev.map((a) => (a.id === manager.id ? { ...a, password: newPassword } : a)),
+            prev.map((a) => (a.id === manager.id ? { ...a, password: newPassword, plainPassword: newPassword } : a)),
           );
-          toast.success("Password regenerated successfully!");
-        } catch (err) {
-          toast.error("Failed to regenerate password.");
+        } catch (err: any) {
+          toast.error(err?.response?.data?.message || "Failed to regenerate password.");
         } finally {
           setIsRegenerating((prev) => ({ ...prev, [manager.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
@@ -535,6 +555,27 @@ const SiteManagers: React.FC = () => {
                             <span className="text-sm text-console-text">{manager.email}</span>
                             <CopyButton value={manager.email} label="Email" />
                           </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
+                            <KeyRound size={12} className="text-console-muted shrink-0" />
+                            {manager.plainPassword || (manager.password && !manager.password.startsWith("$2")) ? (
+                              <>
+                                <span className="font-mono text-console-text">
+                                  {showPassword[manager.id] ? (manager.plainPassword || manager.password) : "••••••••"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleShowPassword(manager.id)}
+                                  className="text-console-muted hover:text-console-text transition-colors p-0.5"
+                                  aria-label={showPassword[manager.id] ? "Hide password" : "Show password"}
+                                >
+                                  {showPassword[manager.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                                <CopyButton value={manager.plainPassword || manager.password || ""} label="Password" />
+                              </>
+                            ) : (
+                              <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -611,6 +652,16 @@ const SiteManagers: React.FC = () => {
                                     className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
                                   >
                                     <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Copy current password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyPassword(manager)}
+                                    aria-label="Copy current password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-slate-100 hover:text-brand-700"
+                                  >
+                                    <KeyRound size={14} />
                                   </button>
                                 </Tooltip>
                                 <Tooltip label="Regenerate password">
@@ -736,7 +787,7 @@ const SiteManagers: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={async (newSiteManager: { name: string; email: string }) => {
           try {
-            await createSiteManager({
+            const created: any = await createSiteManager({
               name: newSiteManager.name,
               email: newSiteManager.email,
               role: "siteManager",
@@ -748,13 +799,19 @@ const SiteManagers: React.FC = () => {
                 name: user.name,
                 sites: user.assignedSites || [],
                 email: user.email,
-                password: user.password || "********",
+                password: user.plainPassword || user.password || "",
+                plainPassword: user.plainPassword,
                 isBlocked: user.isBlocked,
                 siteExpensesBalance: user.siteExpensesBalance || 0,
               })),
             );
             setIsAddModalOpen(false);
-            toast.success("SiteManager added successfully!");
+            if (created?.password) {
+              await navigator.clipboard.writeText(created.password).catch(() => {});
+              toast.success(`Site Manager added! Password copied to clipboard: ${created.password}`, { duration: 6000 });
+            } else {
+              toast.success("SiteManager added successfully!");
+            }
           } catch (err) {
             toast.error("Failed to add manager.");
           }

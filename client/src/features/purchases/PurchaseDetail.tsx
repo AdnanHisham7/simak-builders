@@ -46,7 +46,9 @@ export const PurchaseDetail: React.FC = () => {
       const data = await getPurchaseById(purchaseId);
       setPurchase(data);
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || "Failed to load purchase details");
+      toast.error(
+        err?.response?.data?.message || "Failed to load purchase details",
+      );
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,7 @@ export const PurchaseDetail: React.FC = () => {
   const isVerified = purchase.status === "verified";
   const itemsSubtotal = (purchase.items || []).reduce(
     (sum: number, it: any) => sum + (Number(it.totalAmount) || 0),
-    0
+    0,
   );
   const siteUrl = purchase.site?._id
     ? `/${userType === "siteManager" ? "siteManager" : "admin"}/sites/${purchase.site._id}`
@@ -166,7 +168,7 @@ export const PurchaseDetail: React.FC = () => {
         <Card className="border-l-4 border-l-brand-600">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-console-muted">
-              Total Amount
+              Invoice Total (Materials)
             </span>
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
               <Receipt size={16} />
@@ -176,7 +178,7 @@ export const PurchaseDetail: React.FC = () => {
             ₹{formatNumber(purchase.totalAmount || 0)}
           </p>
           <span className="mt-1 text-xs text-console-muted">
-            Includes transportation fee
+            Vendor items total (excl. transport)
           </span>
         </Card>
 
@@ -193,7 +195,26 @@ export const PurchaseDetail: React.FC = () => {
             ₹{formatNumber(purchase.transportationFee || 0)}
           </p>
           <span className="mt-1 text-xs text-console-muted">
-            Freight / delivery charge
+            {purchase.transportationFee > 0
+              ? "Recorded as misc. service expense"
+              : "No freight / delivery charge"}
+          </span>
+        </Card>
+
+        <Card className="border-l-4 border-l-emerald-600">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-console-muted">
+              Combined Landed Cost
+            </span>
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+              <Wallet size={16} />
+            </div>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-emerald-700">
+            ₹{formatNumber((purchase.totalAmount || 0) + (purchase.transportationFee || 0))}
+          </p>
+          <span className="mt-1 text-xs text-console-muted">
+            Invoice amount + transportation
           </span>
         </Card>
 
@@ -214,37 +235,80 @@ export const PurchaseDetail: React.FC = () => {
               {purchase.payment?.isPaid ? "Paid" : "Unpaid / Credit"}
             </Badge>
           </div>
-          <span className="mt-1 text-xs text-console-muted">
-            Paid amount: ₹{formatNumber(purchase.payment?.paidAmount || 0)}
-          </span>
-        </Card>
-
-        <Card className="border-l-4 border-l-emerald-500">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-console-muted">
-              Source of Funds
-            </span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-              <Wallet size={16} />
-            </div>
-          </div>
-          <p className="mt-2 text-lg font-bold capitalize text-console-text">
-            {purchase.sourceOfFunds === "siteManager"
-              ? "Site Manager"
-              : purchase.sourceOfFunds || "Company"}
-          </p>
           <span className="mt-1 text-xs text-console-muted truncate">
             {purchase.deductFromUserId?.name
               ? `Debited: ${purchase.deductFromUserId.name}`
-              : "Company account"}
+              : `Source: ${purchase.sourceOfFunds === "siteManager" ? "Site Manager" : "Company"}`}
           </span>
         </Card>
       </div>
 
+      {/* Linked Transportation Service Expense Banner */}
+      {purchase.transportationFee > 0 && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-sky-50/50 to-slate-50 p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+                <Truck size={20} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Linked Transportation Service Expense
+                  </h3>
+                  <Badge variant="info">Service Expense</Badge>
+                  {purchase.linkedMiscellaneousExpense?.status && (
+                    <Badge
+                      variant={
+                        purchase.linkedMiscellaneousExpense.status === "verified"
+                          ? "success"
+                          : "warning"
+                      }
+                    >
+                      {purchase.linkedMiscellaneousExpense.status === "verified"
+                        ? "Verified"
+                        : "Pending Verification"}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                  Transportation fee of{" "}
+                  <strong className="text-slate-800 font-semibold">
+                    ₹{formatNumber(purchase.transportationFee)}
+                  </strong>{" "}
+                  is recorded separately as a <strong>Miscellaneous Service Expense</strong> linked
+                  to this purchase. It is <strong>not added</strong> to the vendor invoice grand
+                  total (₹{formatNumber(purchase.totalAmount)}) so the supplier invoice accurately
+                  matches the material bill.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0 self-end md:self-center">
+              {purchase.linkedMiscellaneousExpense?._id ? (
+                <Link
+                  to={`/${userType === "siteManager" ? "siteManager" : "admin"}/miscellaneous-expenses/${purchase.linkedMiscellaneousExpense._id}`}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                >
+                  View Linked Misc Expense <ExternalLink size={13} />
+                </Link>
+              ) : (
+                <span className="text-xs text-slate-500 italic bg-white/80 px-3 py-1.5 rounded-md border border-slate-200">
+                  Tracked under Site Miscellaneous
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Metadata Context Sections */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Site Details Card */}
-        <Card title="Site Information" description="Construction site destination">
+        <Card
+          title="Site Information"
+          description="Construction site destination"
+        >
           <div className="space-y-3">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
@@ -279,7 +343,10 @@ export const PurchaseDetail: React.FC = () => {
         </Card>
 
         {/* Vendor Information Card */}
-        <Card title="Vendor Information" description="Supplier / merchant details">
+        <Card
+          title="Vendor Information"
+          description="Supplier / merchant details"
+        >
           <div className="space-y-3">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
@@ -324,7 +391,10 @@ export const PurchaseDetail: React.FC = () => {
               <span className="font-medium text-console-text flex items-center gap-1">
                 <User size={13} />
                 {purchase.addedBy?.name || "System"} (
-                <span className="uppercase">{purchase.addedBy?.role || "Staff"}</span>)
+                <span className="uppercase">
+                  {purchase.addedBy?.role || "Staff"}
+                </span>
+                )
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -356,7 +426,10 @@ export const PurchaseDetail: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-console-border bg-white text-console-text">
               {(purchase.items || []).map((item: any, idx: number) => (
-                <tr key={idx} className="hover:bg-slate-50/75 transition-colors">
+                <tr
+                  key={idx}
+                  className="hover:bg-slate-50/75 transition-colors"
+                >
                   <td className="px-4 py-3 text-center text-console-muted font-medium">
                     {idx + 1}
                   </td>
@@ -383,26 +456,22 @@ export const PurchaseDetail: React.FC = () => {
             </tbody>
             <tfoot className="border-t-2 border-console-border bg-slate-50 font-semibold text-xs text-console-text">
               <tr>
-                <td colSpan={5} className="px-4 py-2.5 text-right text-console-muted">
+                <td
+                  colSpan={5}
+                  className="px-4 py-2.5 text-right text-console-muted"
+                >
                   Items Subtotal:
                 </td>
                 <td className="px-4 py-2.5 text-right font-bold">
                   ₹{formatDecimal(itemsSubtotal)}
                 </td>
               </tr>
-              {purchase.transportationFee > 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-2 text-right text-console-muted">
-                    Transportation Fee:
-                  </td>
-                  <td className="px-4 py-2 text-right font-bold text-blue-700">
-                    + ₹{formatDecimal(purchase.transportationFee)}
-                  </td>
-                </tr>
-              )}
               <tr className="border-t border-console-border bg-slate-100/80 text-sm font-bold">
-                <td colSpan={5} className="px-4 py-3 text-right text-console-text">
-                  Grand Total:
+                <td
+                  colSpan={5}
+                  className="px-4 py-3 text-right text-console-text"
+                >
+                  Vendor Invoice Grand Total:
                 </td>
                 <td className="px-4 py-3 text-right text-brand-700">
                   ₹{formatDecimal(purchase.totalAmount)}
@@ -411,12 +480,63 @@ export const PurchaseDetail: React.FC = () => {
             </tfoot>
           </table>
         </div>
+
+        {/* Cost Reconciliation Box */}
+        {purchase.transportationFee > 0 && (
+          <div className="mt-4 rounded-xl border border-blue-100 bg-slate-50/80 p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">
+                  <Truck size={15} className="text-blue-600" />
+                  <span>Cost Accounting Reconciliation</span>
+                </div>
+                <p className="text-xs text-console-muted max-w-lg">
+                  The invoice grand total above reflects only materials payable to the vendor. Delivery was booked as a separate miscellaneous expense.
+                </p>
+                {purchase.linkedMiscellaneousExpense?._id && (
+                  <Link
+                    to={`/${userType === "siteManager" ? "siteManager" : "admin"}/miscellaneous-expenses/${purchase.linkedMiscellaneousExpense._id}`}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline pt-1"
+                  >
+                    Open Linked Miscellaneous Record <ExternalLink size={12} />
+                  </Link>
+                )}
+              </div>
+              <div className="w-full sm:w-auto bg-white rounded-lg border border-console-border p-3.5 space-y-2 min-w-[280px] text-xs shadow-2xs">
+                <div className="flex justify-between items-center text-slate-600">
+                  <span>Vendor Invoice Total:</span>
+                  <span className="font-semibold text-slate-900">
+                    ₹{formatDecimal(purchase.totalAmount)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-blue-700">
+                  <span>Transportation (Misc Expense):</span>
+                  <span className="font-semibold">
+                    + ₹{formatDecimal(purchase.transportationFee)}
+                  </span>
+                </div>
+                <div className="border-t border-console-border pt-2 flex justify-between items-center font-bold text-slate-900">
+                  <span>Combined Site Landed Cost:</span>
+                  <span className="text-sm text-emerald-700">
+                    ₹{formatDecimal(
+                      (Number(purchase.totalAmount) || 0) +
+                        (Number(purchase.transportationFee) || 0),
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Notes / Remarks & Attached Bill Preview */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {purchase.notes && (
-          <Card title="Purchase Notes & Remarks" description="Internal team comments">
+          <Card
+            title="Purchase Notes & Remarks"
+            description="Internal team comments"
+          >
             <div className="rounded-lg border border-slate-100 bg-slate-50 p-3.5 text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
               {purchase.notes}
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Filter,
   FileText,
@@ -15,6 +15,8 @@ import {
   Briefcase,
   Coins,
 } from "lucide-react";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/store";
 import { privateClient } from "@/api";
 import headerImg from "@/assets/header.png";
 import footerImg from "@/assets/footer.png";
@@ -118,10 +120,34 @@ const reportTypes = [
 type ReportId = (typeof reportTypes)[number]["id"];
 
 const Reports = () => {
+  const { userType, user } = useSelector((state: RootState) => state.auth);
+  const isSiteManager =
+    userType === "siteManager" || user?.role === "siteManager";
+
+  const visibleReportTypes = useMemo(() => {
+    if (isSiteManager) {
+      return reportTypes.filter(
+        (r) => r.id !== "contractorReport" && r.id !== "capitalReport",
+      );
+    }
+    return reportTypes;
+  }, [isSiteManager]);
+
   const [selectedReport, setSelectedReport] =
     useState<ReportId>("clientReport");
   const [sites, setSites] = useState<ReportSite[]>([]);
   const [loadingSites, setLoadingSites] = useState(true);
+
+  // If a site manager previously had or navigated to an unauthorized report, fallback to clientReport
+  useEffect(() => {
+    if (
+      isSiteManager &&
+      (selectedReport === "contractorReport" ||
+        selectedReport === "capitalReport")
+    ) {
+      setSelectedReport("clientReport");
+    }
+  }, [isSiteManager, selectedReport]);
 
   const fetchSites = async () => {
     setLoadingSites(true);
@@ -158,7 +184,7 @@ const Reports = () => {
 
       {/* Report Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5">
-        {reportTypes.map((report) => {
+        {visibleReportTypes.map((report) => {
           const Icon = report.icon;
           const isSelected = selectedReport === report.id;
           return (
@@ -239,10 +265,12 @@ const Reports = () => {
             {selectedReport === "vendorReport" && (
               <VendorReportView sites={sites} />
             )}
-            {selectedReport === "contractorReport" && (
+            {selectedReport === "contractorReport" && !isSiteManager && (
               <ContractorReportView sites={sites} />
             )}
-            {selectedReport === "capitalReport" && <CapitalLenderReportView />}
+            {selectedReport === "capitalReport" && !isSiteManager && (
+              <CapitalLenderReportView />
+            )}
             {selectedReport === "expenseReport" && (
               <Card>
                 <ExpenseReport sites={sites} />

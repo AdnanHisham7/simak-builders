@@ -251,96 +251,114 @@ export const sendPasswordResetEmail = async (email: string, token: string): Prom
 };
 
 // Send initial password email
-export const sendInitialPasswordEmail = async (email: string, password: string): Promise<void> => {
-  const content = `
-    <p>Your account has been successfully created! We're thrilled to welcome you to our platform.</p>
-    <p>Here are your login credentials:</p>
+export const sendInitialPasswordEmail = async (email: string, password: string): Promise<boolean> => {
+  try {
+    const content = `
+      <p>Your account has been successfully created! We're thrilled to welcome you to our platform.</p>
+      <p>Here are your login credentials:</p>
+      
+      <div class="info-box">
+        <p><strong>Email:</strong> ${email}</p>
+      </div>
+      
+      <div class="password-display">
+        ${password}
+      </div>
+      
+      <div class="security-notice">
+        <p><strong>Important Security Notice:</strong> Please change this password immediately after your first login for security purposes.</p>
+      </div>
+      
+      <p>You can now log in to your account and start exploring all the features we have to offer.</p>
+    `;
     
-    <div class="info-box">
-      <p><strong>Email:</strong> ${email}</p>
-    </div>
+    const footer = `
+      <strong>Security Tips:</strong><br>
+      • Never share your password with anyone<br>
+      • Use a strong, unique password<br>
+      • Enable two-factor authentication if available<br>
+      • Log out from shared devices
+    `;
     
-    <div class="password-display">
-      ${password}
-    </div>
-    
-    <div class="security-notice">
-      <p><strong>Important Security Notice:</strong> Please change this password immediately after your first login for security purposes.</p>
-    </div>
-    
-    <p>You can now log in to your account and start exploring all the features we have to offer.</p>
-  `;
-  
-  const footer = `
-    <strong>Security Tips:</strong><br>
-    • Never share your password with anyone<br>
-    • Use a strong, unique password<br>
-    • Enable two-factor authentication if available<br>
-    • Log out from shared devices
-  `;
-  
-  await transporter.sendMail({
-    to: email,
-    subject: '🎉 Welcome! Your account is ready',
-    html: getEmailTemplate(
-      'Welcome to Simak Builders',
-      content,
-      'Login to Your Account',
-      `${env.FRONTEND_URL}?redirect=/login`,
-      footer
-    ),
-  });
+    await transporter.sendMail({
+      to: email,
+      subject: '🎉 Welcome! Your account is ready',
+      html: getEmailTemplate(
+        'Welcome to Simak Builders',
+        content,
+        'Login to Your Account',
+        `${env.FRONTEND_URL}?redirect=/login`,
+        footer
+      ),
+    });
+    return true;
+  } catch (error: any) {
+    console.warn(`[EmailService] Failed to send initial password email to ${email}:`, error?.message || error);
+    return false;
+  }
 };
 
 // Send password changed confirmation email
-export const sendPasswordChangedEmail = async (email: string): Promise<void> => {
-  const content = `
-    <p>This is a confirmation that the password for your account was just changed.</p>
-    <div class="security-notice">
-      <p><strong>Didn't do this?</strong> If you did not change your password, please contact our support team immediately and secure your account.</p>
-    </div>
-  `;
+export const sendPasswordChangedEmail = async (email: string): Promise<boolean> => {
+  try {
+    const content = `
+      <p>This is a confirmation that the password for your account was just changed.</p>
+      <div class="security-notice">
+        <p><strong>Didn't do this?</strong> If you did not change your password, please contact our support team immediately and secure your account.</p>
+      </div>
+    `;
 
-  await transporter.sendMail({
-    to: email,
-    subject: 'Your password was changed',
-    html: getEmailTemplate(
-      'Password Changed',
-      content,
-      'Login to Your Account',
-      `${env.FRONTEND_URL}?redirect=/login`,
-    ),
-  });
+    await transporter.sendMail({
+      to: email,
+      subject: 'Your password was changed',
+      html: getEmailTemplate(
+        'Password Changed',
+        content,
+        'Login to Your Account',
+        `${env.FRONTEND_URL}?redirect=/login`,
+      ),
+    });
+    return true;
+  } catch (error: any) {
+    console.warn(`[EmailService] Failed to send password changed email to ${email}:`, error?.message || error);
+    return false;
+  }
 };
 
 // Send regenerated password email
-export const sendRegeneratedPasswordEmail = async (email: string, password: string): Promise<void> => {
-  const content = `
-    <p>Your password has been successfully regenerated as requested.</p>
-    <p>Here is your new password:</p>
+export const sendRegeneratedPasswordEmail = async (email: string, password: string): Promise<boolean> => {
+  try {
+    const content = `
+      <p>Your password has been successfully regenerated as requested.</p>
+      <p>Here is your new password:</p>
+      
+      <div class="password-display">
+        ${password}
+      </div>
+      
+      <div class="security-notice">
+        <p><strong>Important:</strong> For your security, please change this password to something memorable after logging in.</p>
+      </div>
+    `;
     
-    <div class="password-display">
-      ${password}
-    </div>
+    const footer = `
+      <strong>Didn't request this?</strong> If you didn't request a password regeneration, please contact our support team immediately as this could indicate unauthorized access to your account.
+    `;
     
-    <div class="security-notice">
-      <p><strong>Important:</strong> For your security, please change this password to something memorable after logging in.</p>
-    </div>
-  `;
-  
-  const footer = `
-    <strong>Didn't request this?</strong> If you didn't request a password regeneration, please contact our support team immediately as this could indicate unauthorized access to your account.
-  `;
-  
-  await transporter.sendMail({
-    to: email,
-    subject: 'Your new password is ready',
-    html: getEmailTemplate(
-      'Password Successfully Regenerated',
-      content,
-      'Login with New Password',
-      `${env.FRONTEND_URL}?redirect=/login`,
-      footer
-    ),
-  });
+    await transporter.sendMail({
+      to: email,
+      subject: 'Your new password is ready',
+      html: getEmailTemplate(
+        'Password Successfully Regenerated',
+        content,
+        'Login with New Password',
+        `${env.FRONTEND_URL}?redirect=/login`,
+        footer
+      ),
+    });
+    return true;
+  } catch (error: any) {
+    console.warn(`[EmailService] Failed to send regenerated password email to ${email}:`, error?.message || error);
+    return false;
+  }
 };

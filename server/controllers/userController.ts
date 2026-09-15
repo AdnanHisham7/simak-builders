@@ -11,7 +11,7 @@ import { sendInitialPasswordEmail } from "../services/emailService";
 import { CompanyModel } from "@models/Company";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { Types } from "mongoose";
-import { cacheGet, cacheSet } from "@config/redis";
+import { cacheDel, cacheGet, cacheSet } from "@config/redis";
 
 const USERS_BY_ROLE_CACHE_TTL_SECONDS = 20;
 
@@ -23,7 +23,16 @@ const getUsers = async (req: Request, res: Response, next: NextFunction) => {
     // }
 
     const users = await UserModel.find({});
-    res.status(HttpStatus.OK).json(users);
+    // Map to the expected response format
+    const response = users.map((user) => ({
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      assignedSites: user.assignedSites,
+      profileImage: user.profileImage,
+    }));
+    res.status(HttpStatus.OK).json(response);
   } catch (error) {
     next(error);
   }
@@ -85,7 +94,8 @@ const getUsersByRole = async (
           id: site._id,
           name: site.name,
         })) || [],
-      password: user.password,
+      password: user.plainPassword || (user.password?.startsWith("$2") ? "" : user.password),
+      plainPassword: user.plainPassword || undefined,
       siteExpensesBalance: user.siteExpensesBalance,
     }));
 
@@ -140,15 +150,27 @@ const regeneratePassword = async (
     const newPassword = Math.random().toString(36).slice(-8); // Generate random password
     const hashedPassword = await bcrypt.hash(newPassword, 10); // Hash with bcrypt
     user.password = hashedPassword; // Store hashed password
+    user.plainPassword = newPassword; // Store plain password for admin copying
     await user.save();
 
-    // Send the plain password via email
-    await emailService.sendRegeneratedPasswordEmail(user.email, newPassword);
+    await cacheDel(`users:role:${user.role}:active`);
+    await cacheDel(`users:role:${user.role}:withDeleted`);
+
+    // Safely send the plain password via email (non-blocking if SMTP credentials fail)
+    let emailSent = false;
+    try {
+      emailSent = await emailService.sendRegeneratedPasswordEmail(user.email, newPassword);
+    } catch (emailErr: any) {
+      console.warn("Failed to send regenerated password email:", emailErr?.message || emailErr);
+    }
 
     // Return response with the plain password
     res.status(HttpStatus.OK).json({
-      message: "Password regenerated",
+      message: emailSent
+        ? "Password regenerated and email sent successfully"
+        : "Password regenerated successfully",
       newPassword: newPassword,
+      emailSent,
     });
   } catch (error) {
     next(error);
@@ -192,6 +214,7 @@ const createSiteManager = async (
       name,
       email,
       password: hashedPassword,
+      plainPassword: password,
       role,
       assignedSites: assignedSites || [],
       isEmailVerified: true,
@@ -205,7 +228,14 @@ const createSiteManager = async (
       );
     }
 
-    await sendInitialPasswordEmail(email, password);
+    await cacheDel(`users:role:${role}:active`);
+    await cacheDel(`users:role:${role}:withDeleted`);
+
+    try {
+      await sendInitialPasswordEmail(email, password);
+    } catch (emailErr: any) {
+      console.warn("Failed to send initial password email:", emailErr?.message || emailErr);
+    }
 
     res.status(HttpStatus.CREATED).json({
       message: "Site manager created successfully",
@@ -213,6 +243,8 @@ const createSiteManager = async (
         id: user._id,
         name,
         email,
+        password,
+        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSites,
       },
@@ -287,6 +319,7 @@ const createSupervisor = async (
       name,
       email,
       password: hashedPassword,
+      plainPassword: password,
       role,
       assignedSites: assignedSites || [],
       isEmailVerified: true,
@@ -298,13 +331,24 @@ const createSupervisor = async (
         { $push: { siteManagers: user._id } } // Assuming supervisors are added to siteManagers for simplicity
       );
     }
-    await sendInitialPasswordEmail(email, password);
+
+    await cacheDel(`users:role:${role}:active`);
+    await cacheDel(`users:role:${role}:withDeleted`);
+
+    try {
+      await sendInitialPasswordEmail(email, password);
+    } catch (emailErr: any) {
+      console.warn("Failed to send initial password email:", emailErr?.message || emailErr);
+    }
+
     res.status(HttpStatus.CREATED).json({
       message: "Supervisor created successfully",
       user: {
         id: user._id,
         name,
         email,
+        password,
+        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSites,
       },
@@ -366,6 +410,7 @@ const createArchitect = async (
       name,
       email,
       password: hashedPassword,
+      plainPassword: password,
       role: "architect",
       assignedSites: assignedSites || [],
       isEmailVerified: true,
@@ -379,7 +424,14 @@ const createArchitect = async (
       );
     }
 
-    await sendInitialPasswordEmail(email, password);
+    await cacheDel(`users:role:architect:active`);
+    await cacheDel(`users:role:architect:withDeleted`);
+
+    try {
+      await sendInitialPasswordEmail(email, password);
+    } catch (emailErr: any) {
+      console.warn("Failed to send initial password email:", emailErr?.message || emailErr);
+    }
 
     res.status(HttpStatus.CREATED).json({
       message: "Architect created successfully",
@@ -387,6 +439,8 @@ const createArchitect = async (
         id: user._id,
         name,
         email,
+        password,
+        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSites,
       },
@@ -455,13 +509,21 @@ const createClient = async (
       name,
       email,
       password: hashedPassword,
+      plainPassword: password,
       role: "client",
       assignedSites: [], // Empty array for clients
       isEmailVerified: true,
     });
     await user.save();
 
-    await sendInitialPasswordEmail(email, password);
+    await cacheDel(`users:role:client:active`);
+    await cacheDel(`users:role:client:withDeleted`);
+
+    try {
+      await sendInitialPasswordEmail(email, password);
+    } catch (emailErr: any) {
+      console.warn("Failed to send initial password email:", emailErr?.message || emailErr);
+    }
 
     res.status(HttpStatus.CREATED).json({
       message: "Client created successfully",
@@ -469,6 +531,8 @@ const createClient = async (
         id: user._id.toString(),
         name,
         email,
+        password,
+        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSite: null,
       },
@@ -675,6 +739,7 @@ const createUser = async (req: Request, res: Response, next: NextFunction) => {
       name,
       email,
       password: hashedPassword,
+      plainPassword: tempPassword,
       role,
       assignedSites:
         !assignedSites || role === "companyAdmin" || role === "supervisor"

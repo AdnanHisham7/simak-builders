@@ -174,10 +174,7 @@ const verifyMiscellaneousExpense = async (
       if (!stillExists) {
         throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
       }
-      throw new ApiError(
-        "Expense is already verified",
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new ApiError("Expense is already verified", HttpStatus.BAD_REQUEST);
     }
 
     const totalExpense = expense.amount + (expense.tip || 0);
@@ -556,7 +553,7 @@ const getMiscellaneousExpenseSuggestions = async (
 const getMiscellaneousExpenseById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { expenseId } = req.params;
@@ -565,12 +562,18 @@ const getMiscellaneousExpenseById = async (
       .populate("vendor")
       .populate("addedBy", "name email role")
       .populate("deductFromUserId", "name email")
-      .populate("purchaseId");
+      .populate({
+        path: "purchaseId",
+        populate: [
+          { path: "vendor", select: "name companyName phone email" },
+          { path: "site", select: "name code address" },
+        ],
+      });
 
     if (!expense) {
       throw new ApiError(
         "Miscellaneous expense not found",
-        HttpStatus.NOT_FOUND
+        HttpStatus.NOT_FOUND,
       );
     }
 

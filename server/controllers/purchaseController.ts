@@ -421,7 +421,10 @@ const updatePurchaseItem = async (
     const wasVerified = purchase.status === "verified";
 
     // If already verified and name/category changed, adjust stocks dynamically
-    if (wasVerified && (oldName !== canonicalName || oldCategory !== String(category).trim())) {
+    if (
+      wasVerified &&
+      (oldName !== canonicalName || oldCategory !== String(category).trim())
+    ) {
       // 1. Deduct quantity from old stock asset item
       const oldStock = await StockModel.findOne({
         name: oldName,
@@ -540,7 +543,9 @@ const deletePurchase = async (
         });
         await site.save();
         updatedSiteExpenses = site.expenses;
-        newSiteTransactions.push(site.transactions[site.transactions.length - 1]);
+        newSiteTransactions.push(
+          site.transactions[site.transactions.length - 1],
+        );
       }
 
       // 3. Reverse source deduction (only for cash purchases)
@@ -834,7 +839,7 @@ const deleteBillUpload = async (
 const getPurchaseById = async (
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ) => {
   try {
     const { purchaseId } = req.params;
@@ -848,7 +853,14 @@ const getPurchaseById = async (
       throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
     }
 
-    res.status(HttpStatus.OK).json(purchase);
+    const linkedMiscellaneousExpense = await MiscellaneousExpenseModel.findOne({
+      purchaseId: purchase._id,
+    }).select("_id name amount tip category status date sourceOfFunds notes paymentMethod");
+
+    const purchaseObj = purchase.toObject();
+    (purchaseObj as any).linkedMiscellaneousExpense = linkedMiscellaneousExpense || null;
+
+    res.status(HttpStatus.OK).json(purchaseObj);
   } catch (error) {
     next(error);
   }

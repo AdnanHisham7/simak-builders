@@ -435,6 +435,7 @@ const resetPassword = async (
       }
       const hashedPassword = await authService.hashPassword(password);
       user.password = hashedPassword;
+      user.plainPassword = password;
       user.resetToken = undefined;
       await user.save();
       res
@@ -640,6 +641,7 @@ const changePassword = async (
     }
 
     user.password = await authService.hashPassword(newPassword);
+    user.plainPassword = newPassword;
 
     const currentSessionId = req.user?.sessionId;
     user.sessions = user.sessions.filter(

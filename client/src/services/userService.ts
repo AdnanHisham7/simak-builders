@@ -11,6 +11,7 @@ export interface User {
   role: string;
   assignedSites: Site[];
   password?: string;
+  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   siteExpensesBalance: number;
@@ -66,7 +67,8 @@ export const getUsersByRole = async (
         })) || [],
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted || false,
-      password: user.password,
+      password: user.plainPassword || user.password,
+      plainPassword: user.plainPassword,
       siteExpensesBalance: user.siteExpensesBalance,
       profileImage: user.profileImage,
     }));
@@ -97,6 +99,7 @@ export const regeneratePassword = async (id: string): Promise<string> => {
     const response = await privateClient.post(
       `/users/${id}/regenerate-password`
     );
+    invalidateCache("users-by-role:");
     return response.data.newPassword; // Expecting newPassword in response
   } catch (error) {
     throw error;

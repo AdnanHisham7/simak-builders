@@ -18,6 +18,7 @@ import {
   Coins,
   Store,
   FileText,
+  Truck,
 } from "lucide-react";
 import { RootState } from "@/store/store";
 import {
@@ -174,6 +175,70 @@ export const MiscellaneousExpenseDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* Linked Purchase Order Banner */}
+      {expense.purchaseId && (
+        <div className="rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-sky-50/50 to-slate-50 p-4 sm:p-5 shadow-xs">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-xs">
+                <Truck size={20} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Linked to Purchase Order #
+                    {typeof expense.purchaseId === "object"
+                      ? expense.purchaseId._id?.slice(-8)
+                      : String(expense.purchaseId).slice(-8)}
+                  </h3>
+                  <Badge variant="info">Transportation Service</Badge>
+                  {typeof expense.purchaseId === "object" && expense.purchaseId.status && (
+                    <Badge
+                      variant={
+                        expense.purchaseId.status === "verified" ? "success" : "warning"
+                      }
+                    >
+                      Purchase:{" "}
+                      {expense.purchaseId.status === "verified"
+                        ? "Verified"
+                        : "Pending Verification"}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                  This expense represents the delivery / freight charge recorded for a purchase
+                  order.
+                  {typeof expense.purchaseId === "object" && expense.purchaseId.totalAmount !== undefined && (
+                    <>
+                      {" "}The vendor invoice is{" "}
+                      <strong className="text-slate-800 font-semibold">
+                        ₹{formatNumber(expense.purchaseId.totalAmount)}
+                      </strong>
+                      {expense.purchaseId.vendor?.name
+                        ? ` from ${expense.purchaseId.vendor.name}`
+                        : ""}
+                      . It is tracked as an independent miscellaneous service expense to keep the
+                      supplier material invoice separate from site logistics fees.
+                    </>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {relatedPurchaseUrl && (
+              <div className="shrink-0 self-end md:self-center">
+                <Link
+                  to={relatedPurchaseUrl}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                >
+                  View Related Purchase <ExternalLink size={13} />
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* KPI Metric Cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-l-4 border-l-brand-600">
@@ -272,15 +337,51 @@ export const MiscellaneousExpenseDetail: React.FC = () => {
             </div>
 
             {relatedPurchaseUrl && (
-              <div className="mt-3 rounded-lg border border-brand-100 bg-brand-50/50 p-2.5">
-                <p className="text-xs text-brand-800 font-medium">
-                  Linked to Purchase Order
-                </p>
+              <div className="mt-3 rounded-lg border border-blue-200/80 bg-blue-50/50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-blue-950 flex items-center gap-1.5">
+                    <Truck size={14} className="text-blue-600" />
+                    Linked Purchase Order
+                  </p>
+                  {typeof expense.purchaseId === "object" && expense.purchaseId.status && (
+                    <Badge
+                      variant={
+                        expense.purchaseId.status === "verified" ? "success" : "warning"
+                      }
+                    >
+                      {expense.purchaseId.status}
+                    </Badge>
+                  )}
+                </div>
+                {typeof expense.purchaseId === "object" && (
+                  <div className="text-xs text-slate-600 space-y-1">
+                    {expense.purchaseId.vendor?.name && (
+                      <p>
+                        <span className="text-slate-500">Vendor:</span>{" "}
+                        <span className="font-medium text-slate-800">
+                          {expense.purchaseId.vendor.name}
+                        </span>
+                      </p>
+                    )}
+                    <p>
+                      <span className="text-slate-500">Materials Bill:</span>{" "}
+                      <span className="font-semibold text-slate-800">
+                        ₹{formatNumber(expense.purchaseId.totalAmount || 0)}
+                      </span>
+                    </p>
+                    <p>
+                      <span className="text-slate-500">Combined Landed Cost:</span>{" "}
+                      <span className="font-semibold text-emerald-700">
+                        ₹{formatNumber((expense.purchaseId.totalAmount || 0) + totalExpenseCost)}
+                      </span>
+                    </p>
+                  </div>
+                )}
                 <Link
                   to={relatedPurchaseUrl}
-                  className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:text-brand-900"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 pt-1"
                 >
-                  View Related Purchase <ExternalLink size={12} />
+                  View Full Purchase Order <ExternalLink size={12} />
                 </Link>
               </div>
             )}

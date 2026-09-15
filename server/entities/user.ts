@@ -14,6 +14,7 @@ export interface User {
   name: string;
   email: string;
   password: string;
+  plainPassword?: string;
   profileImage?: string;
   phone?: string;
   role: UserRole;

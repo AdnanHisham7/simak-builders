@@ -26,6 +26,9 @@ import {
   RotateCcw,
   Plus,
   Loader2,
+  Eye,
+  EyeOff,
+  KeyRound,
 } from "lucide-react";
 import AddSupervisorModal from "./AddSupervisorModal";
 import EditSupervisorModal from "./EditSupervisorModal";
@@ -45,7 +48,8 @@ interface Supervisor {
   id: string;
   name: string;
   email: string;
-  password: string;
+  password?: string;
+  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   sites: Site[];
@@ -69,6 +73,22 @@ const Supervisors: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState<{ [key: string]: boolean }>({});
   const [isRestoring, setIsRestoring] = useState<{ [key: string]: boolean }>({});
   const [showDeleted, setShowDeleted] = useState(false);
+  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
+
+  const toggleShowPassword = (id: string) =>
+    setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
+
+  const handleCopyPassword = (supervisor: Supervisor) => {
+    const pwd = supervisor.plainPassword || (supervisor.password && !supervisor.password.startsWith("$2") ? supervisor.password : "");
+    if (pwd) {
+      navigator.clipboard
+        .writeText(pwd)
+        .then(() => toast.success(`Password for ${supervisor.name} copied to clipboard!`))
+        .catch(() => toast.error("Failed to copy password."));
+    } else {
+      toast.error(`Password not available for ${supervisor.name}. Click 'Regenerate password' to set and copy a new one.`);
+    }
+  };
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -100,7 +120,8 @@ const Supervisors: React.FC = () => {
             name: user.name,
             sites: user.assignedSites || [],
             email: user.email,
-            password: user.password || "********",
+            password: user.plainPassword || user.password || "",
+            plainPassword: user.plainPassword,
             isBlocked: user.isBlocked,
             isDeleted: user.isDeleted || false,
             profileImage: user.profileImage,
@@ -173,7 +194,7 @@ const Supervisors: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: "Confirm Password Regeneration",
-      message: `Are you sure you want to regenerate the password for ${supervisor.name}?`,
+      message: `Are you sure you want to regenerate the password for ${supervisor.name}? A new password will be generated and copied to your clipboard.`,
       isLoading: false,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isLoading: true }));
@@ -182,14 +203,13 @@ const Supervisors: React.FC = () => {
           const newPassword = await regeneratePassword(supervisor.id);
           navigator.clipboard
             .writeText(newPassword)
-            .then(() => toast.success("Password copied to clipboard!"))
-            .catch(() => toast.error("Failed to copy password."));
+            .then(() => toast.success(`Password for ${supervisor.name} copied to clipboard: ${newPassword}`, { duration: 6000 }))
+            .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
           setSupervisors((prev) =>
-            prev.map((a) => (a.id === supervisor.id ? { ...a, password: newPassword } : a)),
+            prev.map((a) => (a.id === supervisor.id ? { ...a, password: newPassword, plainPassword: newPassword } : a)),
           );
-          toast.success("Password regenerated successfully!");
-        } catch (err) {
-          toast.error("Failed to regenerate password.");
+        } catch (err: any) {
+          toast.error(err?.response?.data?.message || "Failed to regenerate password.");
         } finally {
           setIsRegenerating((prev) => ({ ...prev, [supervisor.id]: false }));
           setConfirmModal((prev) => ({ ...prev, isLoading: false, isOpen: false }));
@@ -484,6 +504,27 @@ const Supervisors: React.FC = () => {
                             <span className="text-sm text-console-text">{supervisor.email}</span>
                             <CopyButton value={supervisor.email} label="Email" />
                           </div>
+                          <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
+                            <KeyRound size={12} className="text-console-muted shrink-0" />
+                            {supervisor.plainPassword || (supervisor.password && !supervisor.password.startsWith("$2")) ? (
+                              <>
+                                <span className="font-mono text-console-text">
+                                  {showPassword[supervisor.id] ? (supervisor.plainPassword || supervisor.password) : "••••••••"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => toggleShowPassword(supervisor.id)}
+                                  className="text-console-muted hover:text-console-text transition-colors p-0.5"
+                                  aria-label={showPassword[supervisor.id] ? "Hide password" : "Show password"}
+                                >
+                                  {showPassword[supervisor.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                                </button>
+                                <CopyButton value={supervisor.plainPassword || supervisor.password || ""} label="Password" />
+                              </>
+                            ) : (
+                              <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3.5">
                           <span
@@ -560,6 +601,16 @@ const Supervisors: React.FC = () => {
                                     className="rounded-lg p-2 text-console-muted transition-colors hover:bg-warning-50 hover:text-warning-700"
                                   >
                                     <Pencil size={14} />
+                                  </button>
+                                </Tooltip>
+                                <Tooltip label="Copy current password">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyPassword(supervisor)}
+                                    aria-label="Copy current password"
+                                    className="rounded-lg p-2 text-console-muted transition-colors hover:bg-slate-100 hover:text-brand-700"
+                                  >
+                                    <KeyRound size={14} />
                                   </button>
                                 </Tooltip>
                                 <Tooltip label="Regenerate password">
@@ -672,7 +723,7 @@ const Supervisors: React.FC = () => {
         onClose={() => setIsAddModalOpen(false)}
         onSubmit={async (newSupervisor: { name: string; email: string }) => {
           try {
-            await createSupervisor(newSupervisor);
+            const created: any = await createSupervisor(newSupervisor);
             const updatedSupervisors = await getUsersByRole("supervisor", showDeleted);
             setSupervisors(
               updatedSupervisors.map((user) => ({
@@ -680,12 +731,18 @@ const Supervisors: React.FC = () => {
                 name: user.name,
                 sites: user.assignedSites || [],
                 email: user.email,
-                password: user.password || "********",
+                password: user.plainPassword || user.password || "",
+                plainPassword: user.plainPassword,
                 isBlocked: user.isBlocked,
               })),
             );
             setIsAddModalOpen(false);
-            toast.success("Supervisor added successfully!");
+            if (created?.password) {
+              await navigator.clipboard.writeText(created.password).catch(() => {});
+              toast.success(`Supervisor added! Password copied to clipboard: ${created.password}`, { duration: 6000 });
+            } else {
+              toast.success("Supervisor added successfully!");
+            }
           } catch (err) {
             toast.error("Failed to add supervisor.");
           }
