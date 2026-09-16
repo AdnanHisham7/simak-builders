@@ -24,6 +24,7 @@ import projectRoutes from "@routes/projectRoutes";
 import itemRoutes from "@routes/itemRoutes";
 import feedbackRoutes from "@routes/feedbackRoutes";
 import expenseRequestRoutes from "@routes/expenseRequestRoutes";
+import syncRoutes from "@routes/syncRoutes";
 import { env } from "./config/env";
 import morgan from "morgan";
 
@@ -114,6 +115,12 @@ app.use("/api/projects", projectRoutes);
 app.use("/api/items", itemRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/expense-requests", expenseRequestRoutes);
+app.use("/api/sync", syncRoutes);
+
+// Lightweight Health Check Endpoint for Connectivity Verification
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
 
 // Error Handler
 app.use(errorMiddleware);

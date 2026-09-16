@@ -36,11 +36,15 @@ const MiscellaneousExpenseSchema = new Schema(
       default: "cash",
     },
     vendor: { type: Schema.Types.ObjectId, ref: "Vendor", required: false },
+    clientMutationId: { type: String, index: true },
+    version: { type: Number, default: 1 },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 MiscellaneousExpenseSchema.index({ site: 1, createdAt: -1 });
+MiscellaneousExpenseSchema.index({ updatedAt: -1 });
 
 export const MiscellaneousExpenseModel = model(
   "MiscellaneousExpense",

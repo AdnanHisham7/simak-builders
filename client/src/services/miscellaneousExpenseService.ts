@@ -1,4 +1,8 @@
 import { privateClient } from "@/api";
+import {
+  localAddMiscellaneousExpense,
+  localGetMiscellaneousExpensesBySite,
+} from "@/offline/repositories/expenseRepository";
 
 export const addMiscellaneousExpense = async (data: {
   siteId: string | null;
@@ -13,15 +17,11 @@ export const addMiscellaneousExpense = async (data: {
   vendorId: string | undefined;
   date: string;
 }) => {
-  const response = await privateClient.post("/miscellaneous-expenses", data);
-  return response.data;
+  return localAddMiscellaneousExpense(data);
 };
 
 export const getMiscellaneousExpensesBySite = async (siteId: string) => {
-  const response = await privateClient.get(
-    `/miscellaneous-expenses/site?siteId=${siteId}`,
-  );
-  return response.data;
+  return localGetMiscellaneousExpensesBySite(siteId);
 };
 
 export const getMiscellaneousExpenseById = async (expenseId: string) => {

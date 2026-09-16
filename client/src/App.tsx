@@ -1,5 +1,6 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { offlinePreparation } from "@/offline/sync/offlinePreparation";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import ToastProvider from "./components/ui/ToastProvider.tsx";
@@ -61,6 +62,12 @@ const App: React.FC = () => {
   const isAuthenticated = useSelector(
     (state: RootState) => state.auth.isAuthenticated,
   );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      offlinePreparation.prepareForOffline().catch(() => {});
+    }
+  }, [isAuthenticated]);
 
   usePreloadImage(loginIllustration, !isAuthenticated);
   usePreloadImage(signupIllustration, !isAuthenticated);

@@ -39,4 +39,6 @@ export interface Site {
   }>;
   createdAt: Date;
   updatedAt: Date;
+  version?: number;
+  deletedAt?: Date | null;
 }

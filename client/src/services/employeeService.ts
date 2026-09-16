@@ -28,23 +28,35 @@ export interface Attendance {
   updatedAt: string;
 }
 
+import { offlineDB } from "@/offline/db";
+
 export const getEmployees = async (): Promise<Employee[]> => {
   return withCache(
     EMPLOYEES_FULL_LIST_CACHE_KEY,
     EMPLOYEES_FULL_LIST_CACHE_TTL_MS,
     async () => {
-      const response = await privateClient.get("/employees");
-      return response.data.map((employee: any) => ({
-        id: employee._id,
-        name: employee.name,
-        email: employee.email,
-        phone: employee.phone,
-        position: employee.position,
-        dailyWage: employee.dailyWage,
-        totalPaidSalary: employee.totalPaidSalary,
-        createdAt: employee.createdAt,
-        updatedAt: employee.updatedAt,
-      }));
+      try {
+        const response = await privateClient.get("/employees");
+        const list = response.data.map((employee: any) => ({
+          id: employee._id || employee.id,
+          name: employee.name,
+          email: employee.email,
+          phone: employee.phone,
+          position: employee.position,
+          dailyWage: employee.dailyWage,
+          totalPaidSalary: employee.totalPaidSalary,
+          createdAt: employee.createdAt,
+          updatedAt: employee.updatedAt,
+        }));
+        for (const emp of list) {
+          offlineDB.employees.put({ ...emp, syncStatus: "synced" }).catch(() => {});
+        }
+        return list;
+      } catch (err) {
+        const local = await offlineDB.employees.toArray();
+        if (local && local.length > 0) return local as any;
+        throw err;
+      }
     }
   );
 };

@@ -63,6 +63,8 @@ const SiteSchema = new Schema<Site>(
         },
       },
     ],
+    version: { type: Number, default: 1 },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

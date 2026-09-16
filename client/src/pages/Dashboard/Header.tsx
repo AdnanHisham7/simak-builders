@@ -8,6 +8,7 @@ import ProfileDropdown from "@/components/layout/ProfileDropDown";
 import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
+import { OfflineStatusBadge } from "@/components/layout/OfflineStatusBadge";
 
 interface Notification {
   _id: string;
@@ -85,6 +86,7 @@ export default function Header({
       </Tooltip>
 
       <div className="flex items-center gap-3">
+        <OfflineStatusBadge />
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           Back to site
         </Button>
