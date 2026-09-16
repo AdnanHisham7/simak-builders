@@ -153,11 +153,7 @@ class OfflinePreparationManager {
     };
 
     if (typeof window !== "undefined") {
-      if ("requestIdleCallback" in window) {
-        (window as any).requestIdleCallback(() => runPrefetch(), { timeout: 4000 });
-      } else {
-        setTimeout(runPrefetch, 1200);
-      }
+      setTimeout(runPrefetch, 2000);
     }
   }
 }
