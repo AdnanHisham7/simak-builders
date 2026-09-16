@@ -84,9 +84,13 @@ class OfflinePreparationManager {
       this.notify({ progressPercent: 75, message: "Downloading vendors list..." });
       await getVendors();
 
-      // 4. Sync latest data delta (100%)
-      this.notify({ progressPercent: 90, message: "Reconciling recent transactions..." });
+      // 4. Sync latest data delta (85%)
+      this.notify({ progressPercent: 85, message: "Reconciling recent transactions..." });
       await syncEngine.syncNow();
+
+      // 5. Preload all app route bundles into cache for seamless offline tab switching
+      this.notify({ progressPercent: 95, message: "Caching application pages for offline use..." });
+      this.prefetchRouteBundles();
 
       this.hasPreparedSession = true;
       this.notify({
@@ -104,6 +108,56 @@ class OfflinePreparationManager {
         message: "Offline data ready (partial sync)",
       });
       return false;
+    }
+  }
+
+  public prefetchRouteBundles() {
+    const prefetchLoaders = [
+      () => import("@/features/dashboard/AdminDashboard"),
+      () => import("@/features/enquiries/ListEnquiries"),
+      () => import("@/features/sites/Sites"),
+      () => import("@/features/sites/SiteDetail"),
+      () => import("@/features/purchases/PurchaseDetail"),
+      () => import("@/features/expenses/MiscellaneousExpenseDetail"),
+      () => import("@/features/employees/Employees"),
+      () => import("@/features/contractors/Contractors"),
+      () => import("@/features/vendors/Vendors"),
+      () => import("@/features/salary/Salary"),
+      () => import("@/features/stocks/Stocks"),
+      () => import("@/features/reports/Reports"),
+      () => import("@/features/settings/Settings"),
+      () => import("@/pages/profile/Profile"),
+      () => import("@/features/feedback/AdminFeedback"),
+      () => import("@/features/expenseRequests/AdminExpenseRequests"),
+      () => import("@/features/company/CompanyPage"),
+      () => import("@/features/clients/Clients"),
+      () => import("@/features/team/SiteManagers"),
+      () => import("@/features/team/Supervisors"),
+      () => import("@/features/team/Architects"),
+      () => import("@/pages/siteManager/SiteManagerDashboard"),
+      () => import("@/features/team/ArchitectDashboard"),
+      () => import("@/features/team/ArchitectExpenseRequests"),
+      () => import("@/features/clients/ClientDashboard"),
+      () => import("@/features/clients/ClientSiteProgress"),
+      () => import("@/features/clients/ClientFeedback"),
+    ];
+
+    const runPrefetch = () => {
+      for (const loader of prefetchLoaders) {
+        try {
+          loader().catch(() => {});
+        } catch {
+          // ignore prefetch errors
+        }
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      if ("requestIdleCallback" in window) {
+        (window as any).requestIdleCallback(() => runPrefetch(), { timeout: 4000 });
+      } else {
+        setTimeout(runPrefetch, 1200);
+      }
     }
   }
 }

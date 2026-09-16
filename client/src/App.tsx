@@ -27,6 +27,7 @@ import AboutUs from "./pages/AboutUs.tsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy.tsx";
 import RedirectHandler from "./router/RedirectHandler.tsx";
 import PageLoader from "./components/ui/PageLoader.tsx";
+import { RouteErrorBoundary } from "./components/common/RouteErrorBoundary.tsx";
 import { RootState } from "./store/store.ts";
 
 const AdminDashboard = lazy(() => import("./features/dashboard/AdminDashboard.tsx"));
@@ -66,6 +67,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated) {
       offlinePreparation.prepareForOffline().catch(() => {});
+      offlinePreparation.prefetchRouteBundles();
     }
   }, [isAuthenticated]);
 
@@ -77,7 +79,8 @@ const App: React.FC = () => {
       <ToastProvider />
       <Router>
         <RedirectHandler />
-        <Suspense fallback={<PageLoader fullHeight label="Loading" />}>
+        <RouteErrorBoundary>
+          <Suspense fallback={<PageLoader fullHeight label="Loading" />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/portfolio" element={<Portfolio />} />
@@ -176,6 +179,7 @@ const App: React.FC = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+      </RouteErrorBoundary>
       </Router>
     </GoogleOAuthProvider>
   );
