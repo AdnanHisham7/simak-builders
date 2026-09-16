@@ -278,23 +278,56 @@ export interface SiteStats {
 
 export const getSiteStats = async (): Promise<SiteStats> => {
   return withCache(SITES_STATS_CACHE_KEY, SITES_CACHE_TTL_MS, async () => {
-    const response = await privateClient?.get("/sites/stats", {
-      withCredentials: true,
-    });
-    return (
-      response.data || {
-        totalSites: 0,
-        totalBudget: 0,
-        completedSites: 0,
-        activeSites: 0,
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const local = await offlineDB.sites.toArray();
+      const completed = local.filter((s) => s.status === "Completed").length;
+      const active = local.filter((s) => s.status === "InProgress" || s.status === "active").length;
+      const totalBudget = local.reduce((acc, s) => acc + (s.budget || 0), 0);
+      return {
+        totalSites: local.length,
+        totalBudget,
+        completedSites: completed,
+        activeSites: active,
         statuses: ["InProgress", "Completed"],
-      }
-    );
+      };
+    }
+
+    try {
+      const response = await privateClient?.get("/sites/stats", {
+        withCredentials: true,
+      });
+      return (
+        response.data || {
+          totalSites: 0,
+          totalBudget: 0,
+          completedSites: 0,
+          activeSites: 0,
+          statuses: ["InProgress", "Completed"],
+        }
+      );
+    } catch {
+      const local = await offlineDB.sites.toArray();
+      const completed = local.filter((s) => s.status === "Completed").length;
+      const active = local.filter((s) => s.status === "InProgress" || s.status === "active").length;
+      const totalBudget = local.reduce((acc, s) => acc + (s.budget || 0), 0);
+      return {
+        totalSites: local.length,
+        totalBudget,
+        completedSites: completed,
+        activeSites: active,
+        statuses: ["InProgress", "Completed"],
+      };
+    }
   });
 };
 
 export const getSites = async () => {
   return withCache(SITES_FULL_LIST_CACHE_KEY, SITES_CACHE_TTL_MS, async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      const local = await offlineDB.sites.toArray();
+      if (local && local.length > 0) return local;
+    }
+
     try {
       const response = await privateClient?.get("/sites", { withCredentials: true });
       const mapped = response.data?.map(mapSiteData) || [];
@@ -328,6 +361,24 @@ export const getSitesPaginated = async (params: {
 }): Promise<PaginatedSitesResult> => {
   const cacheKey = `sites:paginated:p${params.page}:l${params.limit}:s${params.search || ""}:st${params.status || ""}`;
   return withCache(cacheKey, SITES_CACHE_TTL_MS, async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      let local = await offlineDB.sites.toArray();
+      if (params.search) {
+        const term = params.search.toLowerCase();
+        local = local.filter((s) => s.name?.toLowerCase().includes(term));
+      }
+      if (params.status && params.status !== "All Statuses") {
+        local = local.filter((s) => s.status === params.status);
+      }
+      return {
+        sites: local,
+        total: local.length,
+        page: 1,
+        limit: params.limit,
+        totalPages: Math.ceil(local.length / params.limit) || 1,
+      };
+    }
+
     try {
       const response = await privateClient?.get("/sites", {
         withCredentials: true,
@@ -372,6 +423,11 @@ export const getSitesPaginated = async (params: {
 };
 
 export const getSiteDetails = async (siteId: string) => {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    const cached = await offlineDB.sites.get(siteId);
+    if (cached) return cached;
+  }
+
   try {
     const response = await privateClient?.get(`/sites/${siteId}`);
     const mapped = mapSiteDetailsData(

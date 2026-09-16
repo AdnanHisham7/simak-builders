@@ -48,7 +48,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   }, []);
 
   useEffect(() => {
-    if (userType !== "admin") return;
+    if (userType !== "admin" || (typeof navigator !== "undefined" && !navigator.onLine)) return;
 
     let isMounted = true;
     const fetchUnseenCount = async () => {
@@ -67,7 +67,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   }, [userType]);
 
   useEffect(() => {
-    if (userType !== "admin") return;
+    if (userType !== "admin" || (typeof navigator !== "undefined" && !navigator.onLine)) return;
 
     let isMounted = true;
     const fetchPendingDeactivationCount = async () => {
@@ -86,7 +86,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   }, [userType]);
 
   useEffect(() => {
-    if (userType !== "admin") return;
+    if (userType !== "admin" || (typeof navigator !== "undefined" && !navigator.onLine)) return;
 
     let isMounted = true;
     const fetchFeedbackOpenCount = async () => {
@@ -105,7 +105,7 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   }, [userType]);
 
   useEffect(() => {
-    if (userType !== "admin") return;
+    if (userType !== "admin" || (typeof navigator !== "undefined" && !navigator.onLine)) return;
 
     let isMounted = true;
     const fetchExpenseRequestPendingCount = async () => {

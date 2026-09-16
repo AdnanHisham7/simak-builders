@@ -48,12 +48,13 @@ const PortalLayout = ({ children, menus, roleLabel }: PortalLayoutProps) => {
   const items = menus.flatMap((section) => section.items);
 
   const fetchNotifications = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
     setLoadingNotifications(true);
     try {
       const response = await privateClient.get("/notifications");
       setNotifications(response.data);
     } catch (error) {
-      toast.error("Failed to load notifications");
+      // Non-critical when offline
     } finally {
       setLoadingNotifications(false);
     }

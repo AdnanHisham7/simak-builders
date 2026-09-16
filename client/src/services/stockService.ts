@@ -36,8 +36,15 @@ export interface StockUsage {
 
 export const getStocks = async (): Promise<Stock[]> => {
   return withCache(STOCKS_FULL_LIST_CACHE_KEY, STOCKS_FULL_LIST_CACHE_TTL_MS, async () => {
-    const response = await privateClient.get(`/stocks`);
-    return response.data;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return [];
+    }
+    try {
+      const response = await privateClient.get(`/stocks`);
+      return response.data || [];
+    } catch {
+      return [];
+    }
   });
 };
 
@@ -56,29 +63,55 @@ export const getStocksPaginated = async (params: {
   category?: string;
   site?: string;
 }): Promise<PaginatedStocksResult> => {
-  const response = await privateClient.get(`/stocks`, {
-    params: {
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return {
+      stocks: [],
+      total: 0,
       page: params.page,
       limit: params.limit,
-      ...(params.search ? { search: params.search } : {}),
-      ...(params.category ? { category: params.category } : {}),
-      ...(params.site ? { site: params.site } : {}),
-    },
-  });
-  return {
-    stocks: response.data?.stocks || [],
-    total: response.data?.total || 0,
-    page: response.data?.page || params.page,
-    limit: response.data?.limit || params.limit,
-    totalPages: response.data?.totalPages || 1,
-  };
+      totalPages: 1,
+    };
+  }
+  try {
+    const response = await privateClient.get(`/stocks`, {
+      params: {
+        page: params.page,
+        limit: params.limit,
+        ...(params.search ? { search: params.search } : {}),
+        ...(params.category ? { category: params.category } : {}),
+        ...(params.site ? { site: params.site } : {}),
+      },
+    });
+    return {
+      stocks: response.data?.stocks || [],
+      total: response.data?.total || 0,
+      page: response.data?.page || params.page,
+      limit: response.data?.limit || params.limit,
+      totalPages: response.data?.totalPages || 1,
+    };
+  } catch {
+    return {
+      stocks: [],
+      total: 0,
+      page: params.page,
+      limit: params.limit,
+      totalPages: 1,
+    };
+  }
 };
 
 export const getStocksBySite = async (siteId: string): Promise<Stock[]> => {
-  const response = await privateClient.get(`/stocks/by-site`, {
-    params: { siteId },
-  });
-  return response.data;
+  if (typeof navigator !== "undefined" && !navigator.onLine) {
+    return [];
+  }
+  try {
+    const response = await privateClient.get(`/stocks/by-site`, {
+      params: { siteId },
+    });
+    return response.data || [];
+  } catch {
+    return [];
+  }
 };
 
 export const addStock = async (stockData: {

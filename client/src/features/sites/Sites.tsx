@@ -199,6 +199,7 @@ const Sites: React.FC = () => {
   };
 
   const loadModalUsers = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
     if (clients.length > 0 && siteManagers.length > 0 && architects.length > 0) {
       return;
     }
@@ -212,7 +213,7 @@ const Sites: React.FC = () => {
       setSiteManagers(managerList);
       setArchitects(architectList);
     } catch {
-      toast.error("Failed to load user lists for site assignment");
+      // Non-critical when offline
     }
   };
 
@@ -222,7 +223,7 @@ const Sites: React.FC = () => {
   };
 
   useEffect(() => {
-    if (userType === "admin") {
+    if (userType === "admin" && (typeof navigator === "undefined" || navigator.onLine)) {
       const timer = setTimeout(() => {
         void loadModalUsers();
       }, 1500);

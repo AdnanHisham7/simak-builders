@@ -38,12 +38,13 @@ export default function Header({
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
     setLoading(true);
     try {
       const response = await privateClient.get("/notifications");
       setNotifications(response.data);
     } catch (error) {
-      toast.error("Failed to load notifications");
+      // Non-critical when offline
     } finally {
       setLoading(false);
     }
