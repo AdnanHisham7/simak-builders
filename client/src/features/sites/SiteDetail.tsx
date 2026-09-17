@@ -2599,30 +2599,32 @@ const SiteDetail: React.FC = () => {
           </div>
 
           {/* Search Input Bar */}
-          <div className="mt-4 mb-4 flex items-center justify-between gap-3">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+          <div className="mb-5">
+            <div className="relative max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
               <input
                 type="text"
                 placeholder="Search by name, uploader, phase, notes..."
                 value={documentSearchQuery}
                 onChange={(e) => setDocumentSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9.5 pr-8 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition-all"
+                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-8 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
               {documentSearchQuery && (
                 <button
                   type="button"
                   onClick={() => setDocumentSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-console-muted hover:text-console-text"
+                  aria-label="Clear search"
                 >
                   <X size={14} />
                 </button>
               )}
             </div>
-
-            <p className="text-xs text-slate-500 hidden sm:block">
-              Showing <strong>{filteredDocuments.length}</strong> of {allDocuments.length} documents
-            </p>
+            {documentSearchQuery.trim() && (
+              <p className="mt-2 text-sm text-console-muted">
+                Found {filteredDocuments.length} matching {filteredDocuments.length === 1 ? "document" : "documents"}.
+              </p>
+            )}
           </div>
 
           {/* Document Cards List */}
