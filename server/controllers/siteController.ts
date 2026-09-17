@@ -798,6 +798,13 @@ const uploadDocument = async (
       throw new ApiError("Invalid or missing category", HttpStatus.BAD_REQUEST);
     }
 
+    const phaseId = req.body.phaseId;
+    let phaseName = req.body.phaseName;
+    if (phaseId && !phaseName && Array.isArray(site.phases)) {
+      const p = site.phases.find((item: any) => String(item._id) === String(phaseId));
+      if (p) phaseName = p.name;
+    }
+
     const document: any = {
       name: file.originalname,
       size: file.size,
@@ -807,10 +814,39 @@ const uploadDocument = async (
       public_id: file.filename,
       uploadedBy: req.user?.userId,
       category: category,
+      version: 1,
+      versions: [],
+      notes: req.body.notes || "",
+      status: req.body.requestSignature === "true" ? "pending_signature" : "draft",
+      phaseId: phaseId || undefined,
+      phaseName: phaseName || undefined,
     };
+
+    if (req.body.requestSignature === "true" && site.client) {
+      document.signRequests = [
+        {
+          requestedTo: site.client,
+          requestedRole: "client",
+          requestedBy: req.user?.userId,
+          requestedAt: new Date(),
+          status: "pending",
+        },
+      ];
+    }
 
     site.documents.push(document);
     await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    if (req.body.requestSignature === "true" && site.client) {
+      await NotificationModel.create({
+        user: site.client,
+        type: "document_signature_request",
+        status: "pending",
+        relatedId: site._id,
+        message: `E-Signature requested for document "${file.originalname}" on site "${site.name}".`,
+      });
+    }
 
     res
       .status(HttpStatus.CREATED)
@@ -1220,6 +1256,329 @@ const getSiteBudgetAnalysis = async (
   }
 };
 
+const uploadDocumentVersion = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId, documentId } = req.params;
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const docIndex = site.documents.findIndex(
+      (d: any) => String(d._id) === String(documentId) || String(d.id) === String(documentId)
+    );
+    if (docIndex === -1) {
+      throw new ApiError("Document not found", HttpStatus.NOT_FOUND);
+    }
+
+    const file = req.file;
+    if (!file) throw new ApiError("No file uploaded", HttpStatus.BAD_REQUEST);
+
+    const currentDoc: any = site.documents[docIndex];
+    const previousVersionNumber = currentDoc.version || 1;
+
+    if (!currentDoc.versions) currentDoc.versions = [];
+    currentDoc.versions.push({
+      version: previousVersionNumber,
+      name: currentDoc.name,
+      size: currentDoc.size,
+      type: currentDoc.type,
+      url: currentDoc.url,
+      public_id: currentDoc.public_id,
+      uploadDate: currentDoc.uploadDate,
+      uploadedBy: currentDoc.uploadedBy,
+      notes: currentDoc.notes || "",
+    });
+
+    currentDoc.version = previousVersionNumber + 1;
+    currentDoc.name = file.originalname;
+    currentDoc.size = file.size;
+    currentDoc.type = file.mimetype;
+    currentDoc.url = file.path;
+    currentDoc.public_id = file.filename;
+    currentDoc.uploadDate = new Date();
+    currentDoc.uploadedBy = req.user?.userId;
+    currentDoc.notes = req.body.notes || "";
+    currentDoc.status = req.body.requestSignature === "true" ? "pending_signature" : "draft";
+    currentDoc.signature = undefined;
+    currentDoc.rejectionReason = undefined;
+
+    await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "site",
+      resourceId: site._id,
+      details: `Uploaded v${currentDoc.version} for document ${currentDoc.name} on site ${site.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: `Document updated to v${currentDoc.version}`,
+      document: currentDoc,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const requestDocumentSignature = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId, documentId } = req.params;
+    const { requestedToUserId, role, message, phaseId } = req.body;
+
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const docIndex = site.documents.findIndex(
+      (d: any) => String(d._id) === String(documentId) || String(d.id) === String(documentId)
+    );
+    if (docIndex === -1) throw new ApiError("Document not found", HttpStatus.NOT_FOUND);
+
+    const doc: any = site.documents[docIndex];
+    doc.status = "pending_signature";
+
+    if (phaseId) {
+      doc.phaseId = phaseId;
+      if (Array.isArray(site.phases)) {
+        const p = site.phases.find((item: any) => String(item._id) === String(phaseId));
+        if (p) doc.phaseName = p.name;
+      }
+    }
+
+    const targetUserId = requestedToUserId || site.client;
+    if (!doc.signRequests) doc.signRequests = [];
+    doc.signRequests.push({
+      requestedTo: targetUserId,
+      requestedRole: role || "client",
+      requestedBy: req.user?.userId,
+      requestedAt: new Date(),
+      status: "pending",
+    });
+
+    await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    if (targetUserId) {
+      await NotificationModel.create({
+        user: targetUserId,
+        type: "document_signature_request",
+        status: "pending",
+        relatedId: site._id,
+        message: message || `E-Signature requested for document "${doc.name}" on site "${site.name}"${doc.phaseName ? ` for phase "${doc.phaseName}"` : ""}.`,
+      });
+    }
+
+    res.status(HttpStatus.OK).json({
+      message: "Signature requested successfully",
+      document: doc,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const signDocument = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId, documentId } = req.params;
+    const { signerName, signerRole, signatureDataUrl, comments, completePhase } = req.body;
+
+    if (!signatureDataUrl) {
+      throw new ApiError("Signature data is required", HttpStatus.BAD_REQUEST);
+    }
+
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const docIndex = site.documents.findIndex(
+      (d: any) => String(d._id) === String(documentId) || String(d.id) === String(documentId)
+    );
+    if (docIndex === -1) throw new ApiError("Document not found", HttpStatus.NOT_FOUND);
+
+    const doc: any = site.documents[docIndex];
+    const userRole = req.user?.role || "client";
+    let userName = signerName;
+    if (!userName && req.user?.userId) {
+      const u = await UserModel.findById(req.user.userId, "name").lean();
+      if (u) userName = (u as any).name;
+    }
+    if (!userName) userName = "Signer";
+
+    doc.status = "signed";
+    doc.signature = {
+      signedBy: req.user?.userId,
+      signerName: userName,
+      signerRole: signerRole || userRole,
+      signatureDataUrl,
+      signedAt: new Date(),
+      comments: comments || "",
+    };
+
+    if (Array.isArray(doc.signRequests)) {
+      doc.signRequests.forEach((sr: any) => {
+        if (String(sr.requestedTo) === String(req.user?.userId) || sr.status === "pending") {
+          sr.status = "signed";
+        }
+      });
+    }
+
+    let phaseCompleted = false;
+    if (doc.phaseId && completePhase && Array.isArray(site.phases)) {
+      const phase = site.phases.find((p: any) => String(p._id) === String(doc.phaseId));
+      if (phase && phase.status !== "completed") {
+        phase.status = "completed";
+        phase.completionDate = new Date();
+        phaseCompleted = true;
+      }
+    }
+
+    await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    const recipients = new Set<string>();
+    const [siteManagers, admins] = await Promise.all([
+      UserModel.find({ role: "siteManager", assignedSites: site._id }, "_id").lean(),
+      UserModel.find({ role: "admin" }, "_id").lean(),
+    ]);
+    siteManagers.forEach((m: any) => recipients.add(String(m._id)));
+    admins.forEach((a: any) => recipients.add(String(a._id)));
+
+    for (const recipientId of recipients) {
+      if (String(recipientId) !== String(req.user?.userId)) {
+        await NotificationModel.create({
+          user: recipientId,
+          type: "document_signed",
+          status: "approved",
+          relatedId: site._id,
+          message: `Document "${doc.name}" was signed by ${userName} (${signerRole || userRole}) on site "${site.name}".`,
+        });
+      }
+    }
+
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "site",
+      resourceId: site._id,
+      details: `E-Signed document ${doc.name} (v${doc.version || 1}) on site ${site.name}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Document signed successfully",
+      document: doc,
+      phaseCompleted,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const rejectDocumentSignature = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId, documentId } = req.params;
+    const { reason } = req.body;
+
+    const site = await SiteModel.findById(siteId);
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const docIndex = site.documents.findIndex(
+      (d: any) => String(d._id) === String(documentId) || String(d.id) === String(documentId)
+    );
+    if (docIndex === -1) throw new ApiError("Document not found", HttpStatus.NOT_FOUND);
+
+    const doc: any = site.documents[docIndex];
+    doc.status = "rejected";
+    doc.rejectionReason = reason || "Declined by signer";
+
+    if (Array.isArray(doc.signRequests)) {
+      doc.signRequests.forEach((sr: any) => {
+        if (String(sr.requestedTo) === String(req.user?.userId) || sr.status === "pending") {
+          sr.status = "rejected";
+        }
+      });
+    }
+
+    await site.save();
+    await bumpCacheVersion(SITES_CACHE_NAMESPACE);
+
+    if (doc.uploadedBy) {
+      await NotificationModel.create({
+        user: doc.uploadedBy,
+        type: "document_signature_rejected",
+        status: "rejected",
+        relatedId: site._id,
+        message: `Signature request for "${doc.name}" was rejected. Reason: ${reason || "None specified"}.`,
+      });
+    }
+
+    res.status(HttpStatus.OK).json({
+      message: "Document signature rejected",
+      document: doc,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getDocumentVersions = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId, documentId } = req.params;
+    const site = await SiteModel.findById(siteId)
+      .populate("documents.uploadedBy", "name email")
+      .populate("documents.versions.uploadedBy", "name email")
+      .populate("documents.signature.signedBy", "name email")
+      .lean();
+    if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+
+    const doc: any = site.documents.find(
+      (d: any) => String(d._id) === String(documentId) || String(d.id) === String(documentId)
+    );
+    if (!doc) throw new ApiError("Document not found", HttpStatus.NOT_FOUND);
+
+    res.status(HttpStatus.OK).json({
+      current: {
+        id: doc._id,
+        name: doc.name,
+        version: doc.version || 1,
+        url: doc.url,
+        size: doc.size,
+        type: doc.type,
+        uploadDate: doc.uploadDate,
+        uploadedBy: doc.uploadedBy,
+        notes: doc.notes,
+        status: doc.status || "draft",
+        phaseId: doc.phaseId,
+        phaseName: doc.phaseName,
+        signature: doc.signature,
+        rejectionReason: doc.rejectionReason,
+      },
+      versions: doc.versions || [],
+      signRequests: doc.signRequests || [],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   createSite,
   updateSite,
@@ -1229,6 +1588,11 @@ export default {
   getSiteStats,
   updatePhaseStatus,
   uploadDocument,
+  uploadDocumentVersion,
+  requestDocumentSignature,
+  signDocument,
+  rejectDocumentSignature,
+  getDocumentVersions,
   approvePhase,
   rejectPhase,
   getSiteByClient,

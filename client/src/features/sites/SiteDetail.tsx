@@ -48,10 +48,14 @@ import {
   Search,
   Briefcase,
   ExternalLink,
+  PenTool,
+  History,
 } from "lucide-react";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
 import SiteBudgetDashboard from "./SiteBudgetDashboard";
+import SignDocumentModal from "./SignDocumentModal";
+import DocumentVersionsModal from "./DocumentVersionsModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -239,6 +243,9 @@ const SiteDetail: React.FC = () => {
   const [verifyingMiscIds, setVerifyingMiscIds] = useState<Set<string>>(
     new Set(),
   );
+
+  const [selectedDocForVersions, setSelectedDocForVersions] = useState<any | null>(null);
+  const [selectedDocForSign, setSelectedDocForSign] = useState<any | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -2241,36 +2248,107 @@ const SiteDetail: React.FC = () => {
                   <p className="mt-2 text-sm text-console-muted">No documents match the search</p>
                 ) : (
                   <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                    {group.docs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between rounded-lg bg-console-bg p-3 transition-colors hover:bg-slate-100"
-                      >
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <FileText size={15} className="shrink-0 text-console-muted" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-console-text">{doc.name}</p>
-                            <div className="flex items-center gap-2 text-xs text-console-muted">
-                              <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                              <span>•</span>
-                              <User size={11} />
-                              <span>{doc.uploadedBy.name}</span>
-                              <span>•</span>
-                              <Calendar size={11} />
-                              <span>{formatDate(doc.uploadDate)}</span>
+                    {group.docs.map((doc: any) => {
+                      const isSigned = doc.status === "signed";
+                      const isPending = doc.status === "pending_signature";
+                      const isRejected = doc.status === "rejected";
+                      return (
+                        <div
+                          key={doc.id || doc._id}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-console-bg p-3.5 transition-colors hover:bg-slate-100/90 border border-slate-200/60"
+                        >
+                          <div className="flex min-w-0 flex-1 items-start gap-3">
+                            <FileText size={18} className="shrink-0 text-brand-600 mt-0.5" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-sm font-semibold text-console-text">{doc.name}</p>
+                                <span className="rounded-md bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-700">
+                                  v{doc.version || 1}
+                                </span>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                                    isSigned
+                                      ? "bg-emerald-100 text-emerald-800"
+                                      : isPending
+                                      ? "bg-amber-100 text-amber-800"
+                                      : isRejected
+                                      ? "bg-rose-100 text-rose-800"
+                                      : "bg-slate-100 text-slate-600"
+                                  )}
+                                >
+                                  {isSigned ? (
+                                    <>
+                                      <CheckCircle2 size={11} /> Signed
+                                    </>
+                                  ) : isPending ? (
+                                    <>
+                                      <Clock size={11} /> Pending Sign-off
+                                    </>
+                                  ) : isRejected ? (
+                                    "Rejected"
+                                  ) : (
+                                    "Draft"
+                                  )}
+                                </span>
+                              </div>
+
+                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-console-muted">
+                                <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                                <span>•</span>
+                                <User size={11} />
+                                <span>{doc.uploadedBy?.name || "Member"}</span>
+                                <span>•</span>
+                                <Calendar size={11} />
+                                <span>{formatDate(doc.uploadDate)}</span>
+                                {doc.phaseName && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                                      Phase: {doc.phaseName}
+                                    </span>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </div>
+
+                          <div className="flex items-center gap-1.5 self-end sm:self-center">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDocForVersions(doc)}
+                              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                              title="Version History & Sign Requests"
+                            >
+                              <History size={13} />
+                              <span>History</span>
+                            </button>
+
+                            {!isSigned && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDocForSign(doc)}
+                                className="flex items-center gap-1 rounded-lg bg-brand-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-brand-800 transition-colors"
+                                title="Sign Document"
+                              >
+                                <PenTool size={13} />
+                                <span>Sign</span>
+                              </button>
+                            )}
+
+                            <a
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100 transition-colors"
+                              title="Download document"
+                            >
+                              <Download size={14} />
+                            </a>
+                          </div>
                         </div>
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded p-1.5 hover:bg-slate-200"
-                        >
-                          <Download size={15} className="text-console-muted" />
-                        </a>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -2386,6 +2464,39 @@ const SiteDetail: React.FC = () => {
           onClose={() => setIsClientPaymentsModalOpen(false)}
           onPaymentChanged={() => {
             getSiteDetails(siteId!).then((updated) => setSite(updated as ExtendedSite));
+          }}
+        />
+      )}
+
+      {selectedDocForVersions && (
+        <DocumentVersionsModal
+          isOpen={Boolean(selectedDocForVersions)}
+          onClose={() => setSelectedDocForVersions(null)}
+          siteId={site.id}
+          document={selectedDocForVersions}
+          sitePhases={site.phases}
+          canUploadVersion={canUploadDocuments}
+          onDocumentUpdated={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
+          }}
+          onOpenSignModal={(doc) => {
+            setSelectedDocForSign(doc);
+          }}
+        />
+      )}
+
+      {selectedDocForSign && (
+        <SignDocumentModal
+          isOpen={Boolean(selectedDocForSign)}
+          onClose={() => setSelectedDocForSign(null)}
+          siteId={site.id}
+          document={selectedDocForSign}
+          defaultSignerName={user?.name}
+          defaultSignerRole={userType || "client"}
+          onSigned={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
           }}
         />
       )}

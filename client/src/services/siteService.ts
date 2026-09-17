@@ -2,8 +2,37 @@ import { privateClient } from "@/api";
 import { withCache, invalidateCache } from "@/helpers/requestCache";
 import { offlineDB } from "@/offline/db";
 
+export interface DocumentVersion {
+  version: number;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  public_id?: string;
+  uploadDate: string;
+  uploadedBy?: { id?: string; name?: string; email?: string } | any;
+  notes?: string;
+}
+
+export interface DocumentSignature {
+  signedBy?: { id?: string; name?: string; email?: string } | any;
+  signerName: string;
+  signerRole: string;
+  signatureDataUrl?: string;
+  signedAt: string;
+  comments?: string;
+}
+
+export interface DocumentSignRequest {
+  requestedTo?: { id?: string; name?: string; email?: string } | any;
+  requestedRole: string;
+  requestedAt: string;
+  status: "pending" | "signed" | "rejected";
+}
+
 export interface Document {
   id: string;
+  _id?: string;
   name: string;
   size: number;
   type: string;
@@ -11,6 +40,15 @@ export interface Document {
   url: string;
   uploadedBy: { id: string; name: string };
   category: "client" | "site";
+  version?: number;
+  versions?: DocumentVersion[];
+  notes?: string;
+  status?: "draft" | "pending_signature" | "signed" | "rejected";
+  phaseId?: string;
+  phaseName?: string;
+  signature?: DocumentSignature;
+  signRequests?: DocumentSignRequest[];
+  rejectionReason?: string;
 }
 
 export interface Transaction {
@@ -551,5 +589,74 @@ export interface SiteBudgetAnalysis {
 
 export const getSiteBudgetAnalysis = async (siteId: string): Promise<SiteBudgetAnalysis> => {
   const response = await privateClient.get(`/sites/${siteId}/budget-analysis`);
+  return response.data;
+};
+
+export const uploadDocumentVersion = async (
+  siteId: string,
+  documentId: string,
+  formData: FormData
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/version`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const requestDocumentSignature = async (
+  siteId: string,
+  documentId: string,
+  data: { requestedToUserId?: string; role?: string; message?: string; phaseId?: string }
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/request-signature`,
+    data
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const signDocument = async (
+  siteId: string,
+  documentId: string,
+  data: {
+    signerName: string;
+    signerRole?: string;
+    signatureDataUrl: string;
+    comments?: string;
+    completePhase?: boolean;
+  }
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/sign`,
+    data
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const rejectDocumentSignature = async (
+  siteId: string,
+  documentId: string,
+  reason: string
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/reject`,
+    { reason }
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const getDocumentVersions = async (
+  siteId: string,
+  documentId: string
+) => {
+  const response = await privateClient.get(
+    `/sites/${siteId}/documents/${documentId}/versions`
+  );
   return response.data;
 };
