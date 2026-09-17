@@ -841,6 +841,8 @@ const uploadDocument = async (
     await site.save();
     await bumpCacheVersion(SITES_CACHE_NAMESPACE);
 
+    const savedDoc: any = site.documents[site.documents.length - 1];
+
     if (req.body.requestSignature === "true" && site.client) {
       await NotificationModel.create({
         user: site.client,
@@ -848,6 +850,10 @@ const uploadDocument = async (
         status: "pending",
         relatedId: site._id,
         message: `E-Signature requested for document "${file.originalname}" on site "${site.name}".`,
+        metadata: {
+          documentId: savedDoc?._id,
+          siteId: site._id,
+        },
       });
     }
 
@@ -1413,6 +1419,10 @@ const requestDocumentSignature = async (
         status: "pending",
         relatedId: site._id,
         message: message || `E-Signature requested for document "${doc.name}" on site "${site.name}"${doc.phaseName ? ` for phase "${doc.phaseName}"` : ""}.`,
+        metadata: {
+          documentId: doc._id,
+          siteId: site._id,
+        },
       });
     }
 
@@ -1502,6 +1512,10 @@ const signDocument = async (
           status: "approved",
           relatedId: site._id,
           message: `Document "${doc.name}" was signed by ${userName} (${signerRole || userRole}) on site "${site.name}".`,
+          metadata: {
+            documentId: doc._id,
+            siteId: site._id,
+          },
         });
       }
     }
@@ -1563,6 +1577,10 @@ const rejectDocumentSignature = async (
         status: "rejected",
         relatedId: site._id,
         message: `Signature request for "${doc.name}" was rejected. Reason: ${reason || "None specified"}.`,
+        metadata: {
+          documentId: doc._id,
+          siteId: site._id,
+        },
       });
     }
 

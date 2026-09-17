@@ -183,7 +183,9 @@ const SiteDetail: React.FC = () => {
   const [selectedDayAttendance, setSelectedDayAttendance] = useState<
     any[] | null
   >(null);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const hasTriggeredSiteDetailHighlightRef = useRef(false);
   const [selectedTab, setSelectedTab] = useState<
     (typeof TAB_CONFIG)[number]["id"]
   >(() => {
@@ -200,6 +202,56 @@ const SiteDetail: React.FC = () => {
       setSelectedTab(tabParam as (typeof TAB_CONFIG)[number]["id"]);
     }
   }, [searchParams]);
+
+  // Contextual smooth scroll-down and 2-second highlight when arriving via notification or action button
+  useEffect(() => {
+    if (loading || !site) return;
+    const highlightParam = searchParams.get("highlight");
+    const tabParam = searchParams.get("tab");
+
+    if (!highlightParam && tabParam !== "documents" && tabParam !== "phases" && tabParam !== "stocks" && tabParam !== "budget") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      let targetEl: HTMLElement | null = null;
+      let matchedId: string | null = null;
+
+      if (highlightParam && highlightParam !== "documents" && highlightParam !== "phases" && highlightParam !== "stocks" && highlightParam !== "budget") {
+        targetEl = document.getElementById(`highlight-${highlightParam}`);
+        if (targetEl) matchedId = highlightParam;
+      }
+
+      if (!targetEl) {
+        if (tabParam === "budget" || highlightParam === "budget") {
+          targetEl = document.getElementById("site-budget-tab-section");
+        } else if (tabParam === "documents" || highlightParam === "documents") {
+          targetEl = document.getElementById("site-documents-tab-section");
+        } else if (tabParam === "stocks" || highlightParam === "stocks") {
+          targetEl = document.getElementById("site-stocks-tab-section");
+        } else if (tabParam === "overview" || highlightParam === "phases") {
+          targetEl = document.getElementById("site-overview-tab-section");
+        }
+      }
+
+      if (targetEl) {
+        hasTriggeredSiteDetailHighlightRef.current = true;
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        if (matchedId) {
+          setHighlightedItemId(matchedId);
+          const clearTimer = setTimeout(() => setHighlightedItemId(null), 2000);
+          return () => clearTimeout(clearTimer);
+        }
+
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("highlight");
+        setSearchParams(nextParams, { replace: true });
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [loading, site, searchParams, selectedTab]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
     useState(false);
@@ -1368,7 +1420,20 @@ const SiteDetail: React.FC = () => {
           onClick={() => setIsTransactionsModalOpen(true)}
           action={{
             label: "Burn rate",
-            onClick: () => setSelectedTab("budget"),
+            onClick: () => {
+              setSelectedTab("budget");
+              setTimeout(() => {
+                const budgetSection = document.getElementById("site-budget-tab-section");
+                if (budgetSection) {
+                  budgetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else {
+                  const nav = document.getElementById("site-tabs-navigation");
+                  if (nav) {
+                    nav.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }
+              }, 80);
+            },
           }}
         />
 
@@ -1425,7 +1490,7 @@ const SiteDetail: React.FC = () => {
         </div>
       </SectionCard>
 
-      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div id="site-tabs-navigation" className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1 scroll-mt-6">
         {TAB_CONFIG.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -1448,21 +1513,25 @@ const SiteDetail: React.FC = () => {
       </div>
 
       {selectedTab === "overview" && (
-        <SiteProgressTimeline
-          phases={site.phases}
-          siteCreatedAt={site.createdAt}
-          siteName={site.name}
-          userType={userType}
-          onUpdateStatus={handlePhaseStatusChange}
-          onResetPhases={() => setResetPhasesConfirmOpen(true)}
-        />
+        <div id="site-overview-tab-section" className="scroll-mt-6">
+          <SiteProgressTimeline
+            phases={site.phases}
+            siteCreatedAt={site.createdAt}
+            siteName={site.name}
+            userType={userType}
+            onUpdateStatus={handlePhaseStatusChange}
+            onResetPhases={() => setResetPhasesConfirmOpen(true)}
+          />
+        </div>
       )}
 
       {selectedTab === "budget" && (
-        <SiteBudgetDashboard
-          siteId={site.id}
-          siteBudget={site.budget}
-        />
+        <div id="site-budget-tab-section" className="scroll-mt-6">
+          <SiteBudgetDashboard
+            siteId={site.id}
+            siteBudget={site.budget}
+          />
+        </div>
       )}
 
       {selectedTab === "team" && (
@@ -1992,7 +2061,8 @@ const SiteDetail: React.FC = () => {
       )}
 
       {selectedTab === "stocks" && (
-        <SectionCard>
+        <div id="site-stocks-tab-section" className="scroll-mt-6">
+          <SectionCard>
           <div className="mb-5 flex items-center justify-between">
             <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
               <Package size={20} className="text-brand-600" />
@@ -2082,8 +2152,18 @@ const SiteDetail: React.FC = () => {
                     const thresh = stock.lowStockThreshold ?? 10;
                     const isOut = stock.quantity <= 0;
                     const isLow = stock.quantity <= thresh;
+                    const isItemHighlighted = highlightedItemId === stock._id;
                     return (
-                      <tr key={stock._id} className="hover:bg-console-bg">
+                      <tr
+                        key={stock._id}
+                        id={`highlight-${stock._id}`}
+                        className={cn(
+                          "transition-all duration-700",
+                          isItemHighlighted
+                            ? "bg-amber-100/90 font-semibold ring-2 ring-amber-400"
+                            : "hover:bg-console-bg",
+                        )}
+                      >
                         <td className="whitespace-nowrap px-4 py-3.5 text-sm font-medium text-console-text">
                           {stock.name}
                         </td>
@@ -2124,6 +2204,7 @@ const SiteDetail: React.FC = () => {
             </div>
           )}
         </SectionCard>
+        </div>
       )}
 
       {selectedTab === "miscellaneous" && (
@@ -2334,7 +2415,8 @@ const SiteDetail: React.FC = () => {
       )}
 
       {selectedTab === "documents" && (
-        <SectionCard>
+        <div id="site-documents-tab-section" className="scroll-mt-6">
+          <SectionCard>
           {/* Header & Quick Actions */}
           <div className="flex flex-col gap-4 border-b border-console-border pb-5 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -2622,10 +2704,20 @@ const SiteDetail: React.FC = () => {
 
                 const ext = (doc.name || "").split(".").pop()?.toUpperCase() || "DOC";
 
+                const isItemHighlighted =
+                  highlightedItemId === doc.id ||
+                  highlightedItemId === doc._id;
+
                 return (
                   <div
                     key={doc.id || doc._id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-xs hover:border-slate-300 hover:bg-slate-50/50 transition-all"
+                    id={`highlight-${doc._id || doc.id}`}
+                    className={cn(
+                      "flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-xl border p-3.5 shadow-xs transition-all duration-700",
+                      isItemHighlighted
+                        ? "ring-4 ring-brand-500/60 border-brand-400 bg-brand-50/80 shadow-2xl scale-[1.015]"
+                        : "border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/50",
+                    )}
                   >
                     <div className="flex min-w-0 flex-1 items-start gap-3">
                       {/* File Icon Badge */}
@@ -2825,6 +2917,7 @@ const SiteDetail: React.FC = () => {
             </div>
           )}
         </SectionCard>
+        </div>
       )}
 
       {isAddPurchaseModalOpen && (

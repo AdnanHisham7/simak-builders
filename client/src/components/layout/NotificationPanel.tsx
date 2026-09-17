@@ -32,6 +32,7 @@ interface Notification {
   message: string;
   status: "pending" | "approved" | "rejected" | "read";
   createdAt: string;
+  metadata?: Record<string, any>;
 }
 
 interface NotificationPanelProps {
@@ -90,24 +91,26 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
       type === "document_signature_rejected" ||
       type === "document_rejected"
     ) {
+      const docId = notif.metadata?.documentId;
+      const highlightQuery = docId ? `&highlight=${docId}` : `&highlight=documents`;
       if (role === "client") {
-        return `/client/site-progress?siteId=${relId}&tab=documents`;
+        return `/client/site-progress?siteId=${relId}&tab=documents${highlightQuery}`;
       }
       if (role === "sitemanager") {
-        return `/siteManager/sites/${relId}?tab=documents`;
+        return `/siteManager/sites/${relId}?tab=documents${highlightQuery}`;
       }
-      return `/admin/sites/${relId}?tab=documents`;
+      return `/admin/sites/${relId}?tab=documents${highlightQuery}`;
     }
 
     // 2. Phase Status Verification
     if (type === "phase_status_verification") {
       if (role === "client") {
-        return `/client/site-progress?siteId=${relId}&tab=phases`;
+        return `/client/site-progress?siteId=${relId}&tab=phases&highlight=phases`;
       }
       if (role === "sitemanager") {
-        return `/siteManager/sites/${relId}?tab=overview`;
+        return `/siteManager/sites/${relId}?tab=overview&highlight=phases`;
       }
-      return `/admin/sites/${relId}?tab=overview`;
+      return `/admin/sites/${relId}?tab=overview&highlight=phases`;
     }
 
     // 3. Purchase Verification
@@ -132,9 +135,11 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
       type === "stock_low_alert" ||
       type === "stock_depleted"
     ) {
+      const stockId = notif.metadata?.stockId;
+      const highlightQuery = stockId ? `&highlight=${stockId}` : `&highlight=stocks`;
       if (role === "sitemanager") {
         return relId
-          ? `/siteManager/sites/${relId}?tab=stocks`
+          ? `/siteManager/sites/${relId}?tab=stocks${highlightQuery}`
           : `/siteManager/dashboard`;
       }
       return `/admin/stocks`;

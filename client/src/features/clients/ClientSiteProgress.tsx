@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Building,
   Wallet,
@@ -105,6 +106,11 @@ const ClientSiteProgress: React.FC = () => {
   const [selectedDocForSign, setSelectedDocForSign] = useState<any | null>(null);
   const [selectedDocForReject, setSelectedDocForReject] = useState<any | null>(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedDocId, setHighlightedDocId] = useState<string | null>(null);
+  const [highlightedContainer, setHighlightedContainer] = useState(false);
+  const hasTriggeredHighlightRef = useRef(false);
+
   const loadSite = async (siteIdToLoad: string) => {
     try {
       const data = await getClientDashboard({
@@ -131,7 +137,10 @@ const ClientSiteProgress: React.FC = () => {
       try {
         const sitesData = await getClientSites();
         setSites(sitesData);
-        if (sitesData.length > 0) {
+        const querySiteId = searchParams.get("siteId");
+        if (querySiteId && sitesData.some((s) => s._id === querySiteId)) {
+          setSelectedSiteId(querySiteId);
+        } else if (sitesData.length > 0) {
           setSelectedSiteId(sitesData[0]._id);
         } else {
           setLoading(false);
@@ -144,11 +153,90 @@ const ClientSiteProgress: React.FC = () => {
     loadSites();
   }, []);
 
+  // Update selected site if search parameter siteId changes
+  useEffect(() => {
+    const querySiteId = searchParams.get("siteId");
+    if (
+      querySiteId &&
+      querySiteId !== selectedSiteId &&
+      sites.some((s) => s._id === querySiteId)
+    ) {
+      setSelectedSiteId(querySiteId);
+      hasTriggeredHighlightRef.current = false;
+    }
+  }, [searchParams, sites, selectedSiteId]);
+
   useEffect(() => {
     if (!selectedSiteId) return;
     setLoading(true);
     loadSite(selectedSiteId);
   }, [selectedSiteId]);
+
+  // Contextual smooth scroll-down and 2-second highlighter on targeted document / container
+  useEffect(() => {
+    if (loading || !site || hasTriggeredHighlightRef.current) return;
+    const highlightParam = searchParams.get("highlight");
+    const tabParam = searchParams.get("tab");
+
+    if (!highlightParam && tabParam !== "documents" && tabParam !== "phases") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      let targetEl: HTMLElement | null = null;
+      let matchedDocId: string | null = null;
+
+      if (highlightParam && highlightParam !== "documents" && highlightParam !== "phases") {
+        targetEl = document.getElementById(`highlight-${highlightParam}`);
+        if (targetEl) matchedDocId = highlightParam;
+      }
+
+      if (!targetEl && (highlightParam === "documents" || tabParam === "documents")) {
+        const clientDocs = (site.documents || []).filter(
+          (d) =>
+            d.category === "client" ||
+            d.signRequests?.some((r: any) => r.role === "client") ||
+            d.status === "pending_signature"
+        );
+        const pendingDoc = clientDocs.find((d) => d.status === "pending_signature");
+        if (pendingDoc) {
+          targetEl = document.getElementById(`highlight-${pendingDoc._id}`);
+          if (targetEl) matchedDocId = pendingDoc._id;
+        }
+        if (!targetEl) {
+          targetEl = document.getElementById("client-documents-section");
+        }
+      } else if (!targetEl && (highlightParam === "phases" || tabParam === "phases")) {
+        targetEl = document.getElementById("client-phases-section");
+      }
+
+      if (targetEl) {
+        hasTriggeredHighlightRef.current = true;
+        targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+
+        if (matchedDocId) {
+          setHighlightedDocId(matchedDocId);
+        } else {
+          setHighlightedContainer(true);
+        }
+
+        // Clean up URL parameter cleanly
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("highlight");
+        setSearchParams(nextParams, { replace: true });
+
+        // Exactly 2-second highlighter pulse and smooth fade out
+        const clearTimer = setTimeout(() => {
+          setHighlightedDocId(null);
+          setHighlightedContainer(false);
+        }, 2000);
+
+        return () => clearTimeout(clearTimer);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [loading, site, searchParams]);
 
   if (loading) {
     return <PageLoader label="Loading site progress" />;
@@ -240,76 +328,90 @@ const ClientSiteProgress: React.FC = () => {
         />
       </div>
 
-      <SiteProgressTimeline
-        phases={phases.map((p) => ({
-          id: p._id,
-          name: p.name,
-          status: p.status,
-          completionDate: p.completionDate,
-        }))}
-        siteName={site?.name}
-        readOnly={true}
-        userType="client"
-      />
+      <div id="client-phases-section" className="scroll-mt-6">
+        <SiteProgressTimeline
+          phases={phases.map((p) => ({
+            id: p._id,
+            name: p.name,
+            status: p.status,
+            completionDate: p.completionDate,
+          }))}
+          siteName={site?.name}
+          readOnly={true}
+          userType="client"
+        />
+      </div>
 
-      <Card
-        title="Shared Documents & E-Signatures"
-        description="Review, download, sign, or manage approvals for your construction site documents."
+      <div
+        id="client-documents-section"
+        className={`scroll-mt-6 rounded-2xl transition-all duration-700 ${
+          highlightedContainer
+            ? "ring-4 ring-brand-500/50 shadow-2xl bg-brand-50/20 p-1"
+            : ""
+        }`}
       >
-        {clientDocuments.length === 0 ? (
-          <EmptyState
-            icon={FileText}
-            title="No documents shared yet"
-            description="Documents your team shares for this site will show up here."
-          />
-        ) : (
-          <div className="space-y-3">
-            {clientDocuments.map((doc) => {
-              const isSigned = doc.status === "signed";
-              const isPending = doc.status === "pending_signature";
-              const isRejected = doc.status === "rejected";
-              const uploaderName =
-                typeof doc.uploadedBy === "object" && doc.uploadedBy?.name
-                  ? doc.uploadedBy.name
-                  : "Site Manager";
+        <Card
+          title="Shared Documents & E-Signatures"
+          description="Review, download, sign, or manage approvals for your construction site documents."
+        >
+          {clientDocuments.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title="No documents shared yet"
+              description="Documents your team shares for this site will show up here."
+            />
+          ) : (
+            <div className="space-y-3">
+              {clientDocuments.map((doc) => {
+                const isSigned = doc.status === "signed";
+                const isPending = doc.status === "pending_signature";
+                const isRejected = doc.status === "rejected";
+                const isItemHighlighted = highlightedDocId === doc._id;
+                const uploaderName =
+                  typeof doc.uploadedBy === "object" && doc.uploadedBy?.name
+                    ? doc.uploadedBy.name
+                    : "Site Manager";
 
-              const currentUserId = user?.id || (user as any)?._id;
-              const uploaderId = typeof doc.uploadedBy === "object" ? (doc.uploadedBy?.id || (doc.uploadedBy as any)?._id) : doc.uploadedBy;
-              const isUploader = Boolean(currentUserId && uploaderId && String(currentUserId) === String(uploaderId));
+                const currentUserId = user?.id || (user as any)?._id;
+                const uploaderId = typeof doc.uploadedBy === "object" ? (doc.uploadedBy?.id || (doc.uploadedBy as any)?._id) : doc.uploadedBy;
+                const isUploader = Boolean(currentUserId && uploaderId && String(currentUserId) === String(uploaderId));
 
-              const isRequestedSigner = Boolean(
-                doc.signRequests?.some((sr: any) => {
-                  const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
-                  if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) return true;
-                  const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
-                  return targetRole === "client";
-                }) ||
-                doc.category === "client" ||
-                doc.status === "pending_signature"
-              );
+                const isRequestedSigner = Boolean(
+                  doc.signRequests?.some((sr: any) => {
+                    const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                    if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) return true;
+                    const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                    return targetRole === "client";
+                  }) ||
+                  doc.category === "client" ||
+                  doc.status === "pending_signature"
+                );
 
-              // Sign only shown to uploader and requested signer
-              const showSign = !isSigned && (isUploader || isRequestedSigner);
-              // Reject NEVER shown to uploader
-              const showReject = !isSigned && !isUploader && isRequestedSigner;
+                // Sign only shown to uploader and requested signer
+                const showSign = !isSigned && (isUploader || isRequestedSigner);
+                // Reject NEVER shown to uploader
+                const showReject = !isSigned && !isUploader && isRequestedSigner;
 
-              const firstReq = doc.signRequests?.[0];
-              const reqRole = firstReq?.requestedRole || firstReq?.role || "Client";
-              const reqMsg = firstReq?.message;
+                const firstReq = doc.signRequests?.[0];
+                const reqRole = firstReq?.requestedRole || firstReq?.role || "Client";
+                const reqMsg = firstReq?.message;
 
-              return (
-                <div
-                  key={doc._id}
-                  className={`flex flex-col gap-3 rounded-xl border p-4 transition-shadow sm:flex-row sm:items-center sm:justify-between ${
-                    isPending
-                      ? "border-amber-300 bg-amber-50/40"
-                      : isSigned
-                      ? "border-emerald-200 bg-emerald-50/20"
-                      : isRejected
-                      ? "border-rose-200 bg-rose-50/20"
-                      : "border-console-border bg-console-bg"
-                  }`}
-                >
+                return (
+                  <div
+                    key={doc._id}
+                    id={`highlight-${doc._id}`}
+                    className={`flex flex-col gap-3 rounded-xl border p-4 transition-all duration-700 sm:flex-row sm:items-center sm:justify-between ${
+                      isItemHighlighted
+                        ? "ring-4 ring-brand-500/60 border-brand-400 bg-brand-50/80 shadow-2xl scale-[1.015]"
+                        : isPending
+                        ? "border-amber-300 bg-amber-50/40 hover:border-amber-400"
+                        : isSigned
+                        ? "border-emerald-200 bg-emerald-50/20"
+                        : isRejected
+                        ? "border-rose-200 bg-rose-50/20"
+                        : "border-console-border bg-console-bg"
+                    }`}
+                  >
                   <div className="flex items-start gap-3 min-w-0">
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-xs ${
@@ -452,6 +554,7 @@ const ClientSiteProgress: React.FC = () => {
           </div>
         )}
       </Card>
+      </div>
 
       {/* Signature Modal */}
       {selectedDocForSign && (

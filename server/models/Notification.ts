@@ -11,6 +11,7 @@ const NotificationSchema = new Schema(
     },
     relatedId: { type: Schema.Types.ObjectId, required: true },
     message: { type: String, required: true },
+    metadata: { type: Schema.Types.Mixed },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
