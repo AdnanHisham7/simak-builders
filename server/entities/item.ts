@@ -5,6 +5,7 @@ export interface Item {
   normalizedName: string;
   category?: string;
   defaultUnit?: string;
+  lowStockThreshold?: number;
   createdBy?: Types.ObjectId;
   createdAt?: Date;
   updatedAt?: Date;

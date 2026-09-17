@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import app from "./app";
 import { connectDB } from "./config/database";
+import { initStockAlertCron } from "./services/stockAlertCron";
 
 const PORT = process.env.PORT || 5000;
 
@@ -18,6 +19,7 @@ if (!fs.existsSync(uploadsDir)) {
 (async () => {
   try {
     await connectDB();
+    initStockAlertCron();
     app.listen(PORT, () => {
       console.log(`✅ Server running on port ${PORT}`);
     });

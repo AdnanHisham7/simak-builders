@@ -7,6 +7,7 @@ const ItemSchema = new Schema<Item>(
     normalizedName: { type: String, required: true },
     category: { type: String },
     defaultUnit: { type: String },
+    lowStockThreshold: { type: Number, default: 10, min: 0 },
     createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
   { timestamps: true }

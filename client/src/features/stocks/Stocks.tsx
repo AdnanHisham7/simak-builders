@@ -8,8 +8,11 @@ import {
   requestStockTransfer,
   logStockUsage,
   addStock,
+  getLowStockAlerts,
+  runLowStockCheck,
   Stock,
   StockTransfer,
+  LowStockAlertsResponse,
 } from "@/services/stockService";
 import debounce from "lodash/debounce";
 import { getSites, Site } from "@/services/siteService";
@@ -18,6 +21,7 @@ import { RootState } from "@/store/store";
 import RequestTransferModal from "./RequestTransferModal";
 import AddStockModal from "./AddStockModal";
 import LogUsageModal from "./LogUsageModal";
+import EditThresholdModal from "./EditThresholdModal";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import {
@@ -39,6 +43,10 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  AlertTriangle,
+  BellRing,
+  Sliders,
+  RefreshCw,
 } from "lucide-react";
 import { Card, StatCard } from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -51,15 +59,16 @@ import { cn } from "@/lib/cn";
 
 const getStockStatusVariant = (
   quantity: number,
+  threshold: number = 10,
 ): "error" | "warning" | "success" => {
-  if (quantity <= 10) return "error";
-  if (quantity <= 50) return "warning";
+  if (quantity <= 0) return "error";
+  if (quantity <= threshold) return "warning";
   return "success";
 };
 
-const getStockStatusText = (quantity: number) => {
-  if (quantity <= 10) return "Low stock";
-  if (quantity <= 50) return "Medium stock";
+const getStockStatusText = (quantity: number, threshold: number = 10) => {
+  if (quantity <= 0) return "Out of stock";
+  if (quantity <= threshold) return `Low stock (≤${threshold})`;
   return "In stock";
 };
 
@@ -79,6 +88,16 @@ const Stocks: React.FC = () => {
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
 
+  const [alertsData, setAlertsData] = useState<LowStockAlertsResponse | null>(null);
+  const [runningCheck, setRunningCheck] = useState(false);
+  const [onlyLowStock, setOnlyLowStock] = useState(false);
+  const [editingStockThreshold, setEditingStockThreshold] = useState<{
+    id: string;
+    name: string;
+    unit: string;
+    currentThreshold?: number;
+  } | null>(null);
+
   const [scopedStocks, setScopedStocks] = useState<Stock[]>([]);
   const [scopedTotal, setScopedTotal] = useState(0);
   const [scopedTotalPages, setScopedTotalPages] = useState(1);
@@ -88,6 +107,16 @@ const Stocks: React.FC = () => {
   const scopedItemsPerPage = 12;
 
   const { userType } = useSelector((state: RootState) => state.auth);
+
+  const fetchAlerts = async (siteIdFilter?: string | null) => {
+    try {
+      const siteIdParam = siteIdFilter && siteIdFilter !== "company" ? siteIdFilter : undefined;
+      const data = await getLowStockAlerts(siteIdParam);
+      setAlertsData(data);
+    } catch {
+      // ignore
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -101,6 +130,7 @@ const Stocks: React.FC = () => {
       setSites(sitesData);
       setTransfers(transfersData);
       setPageError(null);
+      await fetchAlerts(filterSite);
     } catch (err) {
       setPageError("Failed to fetch data");
     } finally {
@@ -111,6 +141,10 @@ const Stocks: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    fetchAlerts(filterSite);
+  }, [filterSite]);
 
   useEffect(() => {
     const debounced = debounce((value: string) => {
@@ -243,6 +277,20 @@ const Stocks: React.FC = () => {
     }
   };
 
+  const handleRunHealthCheck = async () => {
+    setRunningCheck(true);
+    try {
+      const res = await runLowStockCheck();
+      toast.success(res.message || "Inventory stock check completed");
+      await fetchAlerts(filterSite);
+      await fetchData();
+    } catch {
+      toast.error("Failed to run stock check");
+    } finally {
+      setRunningCheck(false);
+    }
+  };
+
   const filteredStocks = stocks.filter((stock) => {
     const matchesSearch = stock.name
       .toLowerCase()
@@ -251,7 +299,10 @@ const Stocks: React.FC = () => {
       ? stock.site?._id === filterSite ||
         (filterSite === "company" && !stock.site)
       : true;
-    return matchesSearch && matchesSite;
+    const matchesLowStock = onlyLowStock
+      ? stock.quantity <= (stock.lowStockThreshold ?? 10)
+      : true;
+    return matchesSearch && matchesSite && matchesLowStock;
   });
 
   const canManageStocks = userType === "siteManager" || userType === "admin";
@@ -279,44 +330,74 @@ const Stocks: React.FC = () => {
         />
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {list.map((stock) => (
-            <button
-              type="button"
-              key={stock._id}
-              onClick={() =>
-                setSelectedStock(selectedStock === stock._id ? null : stock._id)
-              }
-              className={cn(
-                "rounded-console border p-4 text-left transition-shadow hover:shadow-console-lg",
-                selectedStock === stock._id
-                  ? "border-brand-400 ring-2 ring-brand-100"
-                  : "border-console-border",
-              )}
-            >
-              <div className="mb-3 flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate text-sm font-semibold text-console-text" title={stock.name}>
-                    {stock.name}
-                  </h3>
-                  <p className="mt-0.5 text-xs text-console-muted">
-                    {stock.site ? stock.site.name : "Company"}
-                  </p>
+          {list.map((stock) => {
+            const thresh = stock.lowStockThreshold ?? 10;
+            const isLow = stock.quantity <= thresh;
+            const isOut = stock.quantity <= 0;
+            return (
+              <div
+                key={stock._id}
+                onClick={() =>
+                  setSelectedStock(selectedStock === stock._id ? null : stock._id)
+                }
+                className={cn(
+                  "rounded-console border p-4 text-left transition-shadow cursor-pointer relative",
+                  isOut
+                    ? "border-danger-300 bg-danger-50/20 hover:shadow-console-lg"
+                    : isLow
+                    ? "border-amber-300 bg-amber-50/20 hover:shadow-console-lg"
+                    : selectedStock === stock._id
+                    ? "border-brand-400 ring-2 ring-brand-100"
+                    : "border-console-border hover:shadow-console-lg",
+                )}
+              >
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold text-console-text" title={stock.name}>
+                      {stock.name}
+                    </h3>
+                    <p className="mt-0.5 text-xs text-console-muted">
+                      {stock.site ? stock.site.name : "Company"}
+                    </p>
+                  </div>
+                  <Badge variant={getStockStatusVariant(stock.quantity, thresh)}>
+                    {getStockStatusText(stock.quantity, thresh)}
+                  </Badge>
                 </div>
-                <Badge variant={getStockStatusVariant(stock.quantity)}>
-                  {getStockStatusText(stock.quantity)}
-                </Badge>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-xl font-semibold text-console-text">{stock.quantity}</div>
+                    <div className="text-xs uppercase tracking-wide text-console-muted">{stock.unit}</div>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                    <Package size={18} />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between border-t border-console-border/70 pt-2.5 text-xs text-console-muted">
+                  <span>
+                    Reorder min: <strong className="text-console-text">{thresh} {stock.unit}</strong>
+                  </span>
+                  {canManageStocks && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingStockThreshold({
+                          id: stock._id,
+                          name: stock.name,
+                          unit: stock.unit,
+                          currentThreshold: thresh,
+                        });
+                      }}
+                      className="flex items-center gap-1 font-medium text-brand-600 hover:text-brand-800 hover:underline"
+                    >
+                      <Sliders size={12} /> Set min
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xl font-semibold text-console-text">{stock.quantity}</div>
-                  <div className="text-xs uppercase tracking-wide text-console-muted">{stock.unit}</div>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                  <Package size={18} />
-                </div>
-              </div>
-            </button>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-hidden rounded-console border border-console-border">
@@ -325,35 +406,63 @@ const Stocks: React.FC = () => {
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Reorder Threshold</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Site</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                {canManageStocks && (
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-console-border bg-white">
-              {list.map((stock) => (
-                <tr key={stock._id} className="hover:bg-console-bg">
-                  <td className="px-4 py-3.5">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
-                        <Package size={16} />
+              {list.map((stock) => {
+                const thresh = stock.lowStockThreshold ?? 10;
+                return (
+                  <tr key={stock._id} className="hover:bg-console-bg">
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-brand-700">
+                          <Package size={16} />
+                        </div>
+                        <span className="text-sm font-medium text-console-text">{stock.name}</span>
                       </div>
-                      <span className="text-sm font-medium text-console-text">{stock.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <span className="text-sm font-semibold text-console-text">{stock.quantity}</span>{" "}
-                    <span className="text-xs text-console-muted">{stock.unit}</span>
-                  </td>
-                  <td className="px-4 py-3.5 text-sm text-console-text">
-                    {stock.site ? stock.site.name : "Company"}
-                  </td>
-                  <td className="px-4 py-3.5">
-                    <Badge variant={getStockStatusVariant(stock.quantity)}>
-                      {getStockStatusText(stock.quantity)}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="text-sm font-semibold text-console-text">{stock.quantity}</span>{" "}
+                      <span className="text-xs text-console-muted">{stock.unit}</span>
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-console-muted">
+                      <span className="font-medium text-console-text">{thresh}</span> {stock.unit}
+                    </td>
+                    <td className="px-4 py-3.5 text-sm text-console-text">
+                      {stock.site ? stock.site.name : "Company"}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <Badge variant={getStockStatusVariant(stock.quantity, thresh)}>
+                        {getStockStatusText(stock.quantity, thresh)}
+                      </Badge>
+                    </td>
+                    {canManageStocks && (
+                      <td className="px-4 py-3.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setEditingStockThreshold({
+                              id: stock._id,
+                              name: stock.name,
+                              unit: stock.unit,
+                              currentThreshold: thresh,
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-console-border bg-white px-2.5 py-1 text-xs font-medium text-console-text hover:bg-console-bg"
+                        >
+                          <Sliders size={12} /> Set min
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -427,6 +536,64 @@ const Stocks: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Low Stock Alert Banner */}
+      {alertsData && alertsData.totalLowStock > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50/90 p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white shadow-sm">
+              <BellRing size={20} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-semibold text-amber-950">
+                  Low Stock Reorder Alert
+                </h3>
+                <Badge variant={alertsData.criticalCount > 0 ? "error" : "warning"}>
+                  {alertsData.totalLowStock} item{alertsData.totalLowStock !== 1 ? "s" : ""} need attention
+                </Badge>
+              </div>
+              <p className="mt-0.5 text-xs text-amber-800">
+                {alertsData.criticalCount > 0 && (
+                  <span className="font-semibold text-rose-700 mr-2">
+                    • {alertsData.criticalCount} depleted / zero-stock
+                  </span>
+                )}
+                <span>
+                  • {alertsData.warningCount} below configured site threshold. Automated cron checks run daily at 08:00 AM.
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant={onlyLowStock ? "primary" : "secondary"}
+              onClick={() => setOnlyLowStock(!onlyLowStock)}
+              className={
+                onlyLowStock
+                  ? "bg-amber-600 hover:bg-amber-700 text-white border-transparent"
+                  : "border-amber-300 text-amber-950 bg-white hover:bg-amber-100"
+              }
+            >
+              <AlertTriangle size={14} />
+              {onlyLowStock ? "Show All Stocks" : "Show Low Stock Only"}
+            </Button>
+            {userType === "admin" && (
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={runningCheck}
+                onClick={handleRunHealthCheck}
+                className="border-amber-300 text-amber-950 bg-white hover:bg-amber-100"
+              >
+                <RefreshCw size={14} className={runningCheck ? "animate-spin" : ""} />
+                Check Now
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div className="space-y-6">
@@ -728,6 +895,23 @@ const Stocks: React.FC = () => {
           onClose={() => setIsAddStockOpen(false)}
           onSubmit={handleAddStock}
           sites={sites}
+        />
+      )}
+      {editingStockThreshold && (
+        <EditThresholdModal
+          isOpen={!!editingStockThreshold}
+          onClose={() => setEditingStockThreshold(null)}
+          stock={editingStockThreshold}
+          onSuccess={(newThreshold) => {
+            setStocks((prev) =>
+              prev.map((s) =>
+                s._id === editingStockThreshold.id
+                  ? { ...s, lowStockThreshold: newThreshold }
+                  : s,
+              ),
+            );
+            fetchAlerts(filterSite);
+          }}
         />
       )}
     </div>
