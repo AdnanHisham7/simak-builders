@@ -2419,11 +2419,12 @@ const SiteDetail: React.FC = () => {
         <div id="site-documents-tab-section" className="scroll-mt-6">
           <SectionCard>
           {/* Header & Quick Actions */}
-          <div className="flex flex-col gap-4 border-b border-console-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-console-text">Documents & Contracts</h3>
-                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+              <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+                <FileText size={20} className="text-brand-600" />
+                <span>Documents &amp; Contracts</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
                   {allDocuments.length}
                 </span>
                 {pendingDocumentsCount > 0 && (
@@ -2432,57 +2433,45 @@ const SiteDetail: React.FC = () => {
                     {pendingDocumentsCount} awaiting sign-off
                   </span>
                 )}
-              </div>
-              <p className="mt-0.5 text-xs text-console-muted">
-                Track blueprints, engineering documents, client contracts, and version revisions.
+              </h2>
+              <p className="mt-1 text-sm text-console-muted">
+                Track blueprints, engineering documents, client contracts, and version revisions
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2">
               {allDocuments.length > 0 && (
-                <button
-                  type="button"
+                <Button
+                  size="sm"
+                  variant="secondary"
                   onClick={downloadSiteDocumentsZip}
-                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
                   title="Download all documents as ZIP"
                 >
-                  <Download size={14} className="text-slate-500" />
-                  <span>Download All (ZIP)</span>
-                </button>
+                  <Download size={14} /> Download ZIP
+                </Button>
               )}
 
               {canUploadDocuments && (
-                <div className="flex items-center gap-1.5">
-                  {documentCategoryTab === "client" ? (
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleUpload(site.id, e.target.files[0], "client");
-                          }
-                        }}
-                      />
-                      <Upload size={14} />
-                      <span>Upload Client Document</span>
-                    </label>
-                  ) : (
-                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-brand-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-brand-800 transition-colors">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleUpload(site.id, e.target.files[0], "site");
-                          }
-                        }}
-                      />
-                      <Upload size={14} />
-                      <span>Upload Site Document</span>
-                    </label>
-                  )}
-                </div>
+                <label className={cn(
+                  "cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors",
+                  documentCategoryTab === "client"
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-brand-700 hover:bg-brand-800",
+                )}>
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleUpload(site.id, e.target.files[0], documentCategoryTab);
+                      }
+                    }}
+                  />
+                  <Upload size={14} />
+                  <span>
+                    {documentCategoryTab === "client" ? "Upload Client Document" : "Upload Site Document"}
+                  </span>
+                </label>
               )}
             </div>
           </div>
