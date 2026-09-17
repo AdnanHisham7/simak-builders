@@ -2712,18 +2712,6 @@ const SiteDetail: React.FC = () => {
                             )}
                           </button>
 
-                          {/* Category Badge */}
-                          <span
-                            className={cn(
-                              "rounded-md px-2 py-0.5 text-[10px] font-semibold",
-                              doc.category === "client"
-                                ? "bg-indigo-50 text-indigo-700 border border-indigo-100/80"
-                                : "bg-sky-50 text-sky-700 border border-sky-100/80",
-                            )}
-                          >
-                            {doc.category === "client" ? "Client Document" : "Site Document"}
-                          </span>
-
                           {/* Clickable Status Badge with Floating Popover */}
                           <div className="relative inline-block">
                             <button
