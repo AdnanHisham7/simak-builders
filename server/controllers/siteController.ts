@@ -9,8 +9,8 @@ import { PurchaseModel } from "@models/Purchase";
 import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
 import { ContractorTransactionModel } from "@models/ContractorTransaction";
 import archiver from "archiver";
-import { createReadStream } from "fs";
-import { join } from "path";
+import { createReadStream, existsSync } from "fs";
+import path, { join } from "path";
 import * as fs from "fs/promises";
 import axios from "axios";
 import cloudinary from "../services/cloudinaryService";
@@ -907,6 +907,16 @@ const downloadSiteDocumentsZip = async (
     archive.pipe(res);
 
     for (const doc of documents) {
+      if (doc.public_id?.startsWith("local:") || (doc.url && doc.url.includes("/uploads/"))) {
+        const fileName = doc.public_id?.startsWith("local:")
+          ? doc.public_id.replace("local:", "")
+          : path.basename(doc.url);
+        const localFilePath = join(process.cwd(), "uploads", fileName);
+        if (existsSync(localFilePath)) {
+          archive.file(localFilePath, { name: doc.name });
+          continue;
+        }
+      }
       const response = await axios.get(doc.url, { responseType: "stream" });
 
       archive.append(response.data, { name: doc.name });
@@ -949,6 +959,16 @@ const downloadPurchaseBillsZip = async (
     archive.pipe(res);
 
     for (const bill of billUploads) {
+      if (bill.public_id?.startsWith("local:") || (bill.url && bill.url.includes("/uploads/"))) {
+        const fileName = bill.public_id?.startsWith("local:")
+          ? bill.public_id.replace("local:", "")
+          : path.basename(bill.url);
+        const localFilePath = join(process.cwd(), "uploads", fileName);
+        if (existsSync(localFilePath)) {
+          archive.file(localFilePath, { name: bill.name });
+          continue;
+        }
+      }
       const response = await axios.get(bill.url, { responseType: "stream" });
 
       archive.append(response.data, { name: bill.name });
@@ -984,11 +1004,19 @@ const markSiteAsCompleted = async (
       for (const doc of site.documents) {
         if (doc.public_id) {
           try {
-            await cloudinary.uploader.destroy(doc.public_id, {
-              resource_type: "auto",
-            });
+            if (doc.public_id.startsWith("local:")) {
+              const fname = doc.public_id.replace("local:", "");
+              const localPath = join(process.cwd(), "uploads", fname);
+              if (existsSync(localPath)) {
+                await fs.unlink(localPath).catch(() => {});
+              }
+            } else {
+              await cloudinary.uploader.destroy(doc.public_id, {
+                resource_type: "auto",
+              });
+            }
           } catch (err) {
-            console.error(`Cloudinary delete failed:`, err);
+            console.error(`Document delete failed:`, err);
           }
         }
       }
@@ -1002,9 +1030,17 @@ const markSiteAsCompleted = async (
       for (const purchase of purchases) {
         if (purchase.billUpload?.public_id) {
           try {
-            await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
-              resource_type: "auto",
-            });
+            if (purchase.billUpload.public_id.startsWith("local:")) {
+              const fname = purchase.billUpload.public_id.replace("local:", "");
+              const localPath = join(process.cwd(), "uploads", fname);
+              if (existsSync(localPath)) {
+                await fs.unlink(localPath).catch(() => {});
+              }
+            } else {
+              await cloudinary.uploader.destroy(purchase.billUpload.public_id, {
+                resource_type: "auto",
+              });
+            }
           } catch (err) {
             console.error("Cloudinary delete failed:", err);
           }
