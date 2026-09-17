@@ -10,6 +10,7 @@ import {
   Download,
 } from "lucide-react";
 import { getClientDashboard, getClientSites } from "@/services/clientService";
+import SiteProgressTimeline, { TimelinePhase } from "../sites/SiteProgressTimeline";
 import { Card, StatCard } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -204,45 +205,17 @@ const ClientSiteProgress: React.FC = () => {
         />
       </div>
 
-      <Card title="Construction Phases" description="Status of every phase for this site">
-        {phases.length === 0 ? (
-          <EmptyState
-            icon={Clock}
-            title="No phases recorded yet"
-            description="Your site manager hasn't added construction phases for this site yet."
-          />
-        ) : (
-          <ol className="space-y-3">
-            {phases.map((phase, index) => {
-              const config = phaseStatusConfig[phase.status];
-              const Icon = config.icon;
-              return (
-                <li
-                  key={phase._id}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-console-border bg-console-bg px-4 py-3"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-console-surface text-console-muted">
-                      <Icon size={16} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-console-text">
-                        {index + 1}. {phase.name}
-                      </p>
-                      {phase.completionDate && (
-                        <p className="text-xs text-console-muted">
-                          Completed on {formatDate(phase.completionDate)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant={config.badge}>{config.label}</Badge>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </Card>
+      <SiteProgressTimeline
+        phases={phases.map((p) => ({
+          id: p._id,
+          name: p.name,
+          status: p.status,
+          completionDate: p.completionDate,
+        }))}
+        siteName={site?.name}
+        readOnly={true}
+        userType="client"
+      />
 
       <Card title="Shared Documents" description="Documents shared with you for this site">
         {clientDocuments.length === 0 ? (
