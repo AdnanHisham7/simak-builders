@@ -503,3 +503,53 @@ export const updateSupervisionPercentage = async (
   invalidateCache(SITES_CACHE_PREFIX);
   return response.data;
 };
+
+export interface SiteBudgetAnalysis {
+  siteId: string;
+  siteName: string;
+  totalBudget: number;
+  totalSpent: number;
+  remainingBudget: number;
+  budgetUtilization: number;
+  averageMonthlyBurnRate: number;
+  estimatedMonthsRemaining: number;
+  healthStatus: "on_track" | "warning" | "exceeded";
+  activeMonths: number;
+  breakdown: {
+    purchases: number;
+    purchasesPaid: number;
+    purchasesPending: number;
+    miscellaneous: number;
+    contractor: number;
+    attendance: number;
+    unaccounted: number;
+  };
+  categoryBreakdown: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  monthlyTrends: Array<{
+    key: string;
+    month: string;
+    purchases: number;
+    contractor: number;
+    miscellaneous: number;
+    attendance: number;
+    other: number;
+    monthlySpend: number;
+    cumulativeSpend: number;
+    plannedSpend: number;
+  }>;
+  topCostDrivers: Array<{
+    name: string;
+    quantity: number;
+    unit: string;
+    totalAmount: number;
+  }>;
+}
+
+export const getSiteBudgetAnalysis = async (siteId: string): Promise<SiteBudgetAnalysis> => {
+  const response = await privateClient.get(`/sites/${siteId}/budget-analysis`);
+  return response.data;
+};

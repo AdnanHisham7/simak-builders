@@ -8,6 +8,7 @@ const router = Router();
 router.get("/", authMiddleware, siteController.getSites);
 router.get("/stats", authMiddleware, siteController.getSiteStats);
 router.get("/:siteId", authMiddleware, siteController.getSiteDetails);
+router.get("/:siteId/budget-analysis", authMiddleware, siteController.getSiteBudgetAnalysis);
 router.post("/", authMiddleware, siteController.createSite);
 router.put("/", authMiddleware, siteController.updateSite);
 router.put("/:siteId/phases/:phaseId/status", authMiddleware, siteController.updatePhaseStatus);

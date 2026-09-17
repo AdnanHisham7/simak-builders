@@ -6,6 +6,8 @@ import { HttpStatus } from "@utils/enums/httpStatus";
 import { ActivityLogModel } from "@models/ActivityLog";
 import { NotificationModel } from "@models/Notification";
 import { PurchaseModel } from "@models/Purchase";
+import { MiscellaneousExpenseModel } from "@models/MiscellaneousExpense";
+import { ContractorTransactionModel } from "@models/ContractorTransaction";
 import archiver from "archiver";
 import { createReadStream } from "fs";
 import { join } from "path";
@@ -994,6 +996,230 @@ const markSiteAsCompleted = async (
   }
 };
 
+const getSiteBudgetAnalysis = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId } = req.params;
+    const site = await SiteModel.findById(siteId).lean();
+    if (!site) {
+      throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
+    }
+
+    const [purchases, miscExpenses, contractorTransactions] = await Promise.all([
+      PurchaseModel.find({ site: siteId, deletedAt: null }).lean(),
+      MiscellaneousExpenseModel.find({ site: siteId, deletedAt: null }).lean(),
+      ContractorTransactionModel.find({ site: siteId }).populate("contractor", "name").lean(),
+    ]);
+
+    // 1. Purchases totals & category breakdown
+    let totalPurchases = 0;
+    let totalPurchasesPaid = 0;
+    const purchaseCategoryMap: Record<string, number> = {};
+    const topItemCostsMap: Record<string, { quantity: number; unit: string; totalAmount: number }> = {};
+
+    purchases.forEach((p: any) => {
+      const pAmount = (Number(p.totalAmount) || 0) + (Number(p.transportationFee) || 0);
+      totalPurchases += pAmount;
+      if (p.payment?.isPaid) {
+        totalPurchasesPaid += pAmount;
+      } else if (p.payment?.paidAmount) {
+        totalPurchasesPaid += Number(p.payment.paidAmount) || 0;
+      }
+
+      if (Array.isArray(p.items)) {
+        p.items.forEach((item: any) => {
+          const cat = item.category?.trim() || "Materials";
+          const itemAmt = Number(item.totalAmount) || 0;
+          purchaseCategoryMap[cat] = (purchaseCategoryMap[cat] || 0) + itemAmt;
+
+          const itemName = item.name?.trim() || "Unknown Item";
+          if (!topItemCostsMap[itemName]) {
+            topItemCostsMap[itemName] = { quantity: 0, unit: item.unit || "", totalAmount: 0 };
+          }
+          topItemCostsMap[itemName].quantity += Number(item.quantity) || 0;
+          topItemCostsMap[itemName].totalAmount += itemAmt;
+        });
+      }
+    });
+
+    // 2. Miscellaneous expenses totals & category breakdown
+    let totalMisc = 0;
+    const miscCategoryMap: Record<string, number> = {};
+    miscExpenses.forEach((m: any) => {
+      const mAmt = (Number(m.amount) || 0) + (Number(m.tip) || 0);
+      totalMisc += mAmt;
+      const cat = m.category?.trim() || "miscellaneous";
+      miscCategoryMap[cat] = (miscCategoryMap[cat] || 0) + mAmt;
+    });
+
+    // 3. Contractor transactions totals & contractor breakdown
+    let totalContractor = 0;
+    contractorTransactions.forEach((c: any) => {
+      const cAmt = Number(c.amount) || 0;
+      totalContractor += cAmt;
+    });
+
+    // 4. Attendance / Supervision / Direct Transactions
+    let totalAttendance = 0;
+    if (Array.isArray(site.transactions)) {
+      site.transactions.forEach((tx: any) => {
+        if (tx.type === "attendance") {
+          totalAttendance += Number(tx.amount) || 0;
+        }
+      });
+    }
+
+    const granularSum = totalPurchases + totalMisc + totalContractor + totalAttendance;
+    const unaccountedSiteExpense = Math.max(0, (site.expenses || 0) - granularSum);
+    const totalSpent = granularSum + unaccountedSiteExpense;
+
+    // 5. Monthly Trend & Burn-Rate Series
+    const monthlyDataMap: Record<string, {
+      month: string;
+      purchases: number;
+      contractor: number;
+      miscellaneous: number;
+      attendance: number;
+      other: number;
+      total: number;
+    }> = {};
+
+    const addMonthly = (date: Date | string | undefined, amount: number, field: "purchases" | "contractor" | "miscellaneous" | "attendance" | "other") => {
+      if (!date || !amount) return;
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      if (!monthlyDataMap[key]) {
+        const monthLabel = d.toLocaleString("en-US", { month: "short", year: "numeric" });
+        monthlyDataMap[key] = {
+          month: monthLabel,
+          purchases: 0,
+          contractor: 0,
+          miscellaneous: 0,
+          attendance: 0,
+          other: 0,
+          total: 0,
+        };
+      }
+      monthlyDataMap[key][field] += amount;
+      monthlyDataMap[key].total += amount;
+    };
+
+    purchases.forEach((p: any) => addMonthly(p.date || p.createdAt, (Number(p.totalAmount) || 0) + (Number(p.transportationFee) || 0), "purchases"));
+    miscExpenses.forEach((m: any) => addMonthly(m.date || m.createdAt, (Number(m.amount) || 0) + (Number(m.tip) || 0), "miscellaneous"));
+    contractorTransactions.forEach((c: any) => addMonthly(c.date || c.createdAt, Number(c.amount) || 0, "contractor"));
+    if (Array.isArray(site.transactions)) {
+      site.transactions.forEach((tx: any) => {
+        if (tx.type === "attendance") {
+          addMonthly(tx.date, Number(tx.amount) || 0, "attendance");
+        } else if (!["purchase", "miscellaneous", "contractor_payment"].includes(tx.type)) {
+          addMonthly(tx.date, Number(tx.amount) || 0, "other");
+        }
+      });
+    }
+
+    const sortedKeys = Object.keys(monthlyDataMap).sort();
+    if (sortedKeys.length === 0) {
+      const now = new Date();
+      const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      sortedKeys.push(currentKey);
+      monthlyDataMap[currentKey] = {
+        month: now.toLocaleString("en-US", { month: "short", year: "numeric" }),
+        purchases: 0,
+        contractor: 0,
+        miscellaneous: 0,
+        attendance: 0,
+        other: 0,
+        total: 0,
+      };
+    }
+
+    let runningSpend = 0;
+    const totalBudget = site.budget || 0;
+    const numMonths = sortedKeys.length;
+    const monthlyPlannedPace = totalBudget / Math.max(numMonths, 6);
+
+    const monthlyTrends = sortedKeys.map((key, index) => {
+      const entry = monthlyDataMap[key];
+      runningSpend += entry.total;
+      const plannedCumulative = Math.min(totalBudget, Math.round(monthlyPlannedPace * (index + 1)));
+      return {
+        key,
+        month: entry.month,
+        purchases: Math.round(entry.purchases),
+        contractor: Math.round(entry.contractor),
+        miscellaneous: Math.round(entry.miscellaneous),
+        attendance: Math.round(entry.attendance),
+        other: Math.round(entry.other),
+        monthlySpend: Math.round(entry.total),
+        cumulativeSpend: Math.round(runningSpend),
+        plannedSpend: plannedCumulative,
+      };
+    });
+
+    const categoryBreakdown = [
+      { name: "Purchases & Materials", value: Math.round(totalPurchases), color: "#2563eb" },
+      { name: "Contractors", value: Math.round(totalContractor), color: "#7c3aed" },
+      { name: "Machinery & Equipment", value: Math.round(miscCategoryMap["machinery"] || 0), color: "#d97706" },
+      { name: "Rentals", value: Math.round(miscCategoryMap["rental"] || 0), color: "#059669" },
+      { name: "Services", value: Math.round(miscCategoryMap["service"] || 0), color: "#0891b2" },
+      { name: "Labor & Attendance", value: Math.round(totalAttendance), color: "#db2777" },
+      { name: "Other Expenses", value: Math.round((miscCategoryMap["material"] || 0) + unaccountedSiteExpense), color: "#64748b" },
+    ].filter((item) => item.value > 0);
+
+    const activeMonths = Math.max(1, sortedKeys.length);
+    const averageMonthlyBurnRate = Math.round(totalSpent / activeMonths);
+    const remainingBudget = totalBudget - totalSpent;
+    const budgetUtilization = totalBudget > 0 ? Number(((totalSpent / totalBudget) * 100).toFixed(1)) : 0;
+    const estimatedMonthsRemaining =
+      averageMonthlyBurnRate > 0 && remainingBudget > 0
+        ? Number((remainingBudget / averageMonthlyBurnRate).toFixed(1))
+        : 0;
+
+    let healthStatus: "on_track" | "warning" | "exceeded" = "on_track";
+    if (budgetUtilization >= 100) {
+      healthStatus = "exceeded";
+    } else if (budgetUtilization >= 80 || (remainingBudget < averageMonthlyBurnRate && remainingBudget > 0)) {
+      healthStatus = "warning";
+    }
+
+    const topCostDrivers = Object.entries(topItemCostsMap)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.totalAmount - a.totalAmount)
+      .slice(0, 5);
+
+    res.status(HttpStatus.OK).json({
+      siteId: site._id,
+      siteName: site.name,
+      totalBudget,
+      totalSpent: Math.round(totalSpent),
+      remainingBudget: Math.round(remainingBudget),
+      budgetUtilization,
+      averageMonthlyBurnRate,
+      estimatedMonthsRemaining,
+      healthStatus,
+      activeMonths,
+      breakdown: {
+        purchases: Math.round(totalPurchases),
+        purchasesPaid: Math.round(totalPurchasesPaid),
+        purchasesPending: Math.round(totalPurchases - totalPurchasesPaid),
+        miscellaneous: Math.round(totalMisc),
+        contractor: Math.round(totalContractor),
+        attendance: Math.round(totalAttendance),
+        unaccounted: Math.round(unaccountedSiteExpense),
+      },
+      categoryBreakdown,
+      monthlyTrends,
+      topCostDrivers,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   createSite,
   updateSite,
@@ -1009,4 +1235,5 @@ export default {
   downloadPurchaseBillsZip,
   downloadSiteDocumentsZip,
   markSiteAsCompleted,
+  getSiteBudgetAnalysis,
 };

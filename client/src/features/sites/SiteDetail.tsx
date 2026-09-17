@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
+import SiteBudgetDashboard from "./SiteBudgetDashboard";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -121,6 +122,7 @@ interface ExtendedSite extends Omit<Site, "transactions"> {
 
 const TAB_CONFIG = [
   { id: "overview", label: "Overview", icon: Eye },
+  { id: "budget", label: "Budget & Burn Rate", icon: TrendingUp },
   { id: "team", label: "Team", icon: Users },
   { id: "contractors", label: "Contractors", icon: Users },
   { id: "attendance", label: "Attendance", icon: Calendar },
@@ -1270,10 +1272,14 @@ const SiteDetail: React.FC = () => {
           icon={TrendingUp}
           helperText={
             site.budget > 0
-              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized`
+              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized • View burn-rate`
               : "No funds received yet"
           }
-          onClick={() => setIsTransactionsModalOpen(true)}
+          onClick={() => setSelectedTab("budget")}
+          action={{
+            label: "Transactions",
+            onClick: () => setIsTransactionsModalOpen(true),
+          }}
         />
 
         <div className="rounded-glass border border-console-border bg-white p-5">
@@ -1359,6 +1365,13 @@ const SiteDetail: React.FC = () => {
           userType={userType}
           onUpdateStatus={handlePhaseStatusChange}
           onResetPhases={() => setResetPhasesConfirmOpen(true)}
+        />
+      )}
+
+      {selectedTab === "budget" && (
+        <SiteBudgetDashboard
+          siteId={site.id}
+          siteBudget={site.budget}
         />
       )}
 
