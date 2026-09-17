@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { RootState } from "@/store/store";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
 import {
@@ -18,6 +20,8 @@ import {
   CheckCircle2,
   DollarSign,
   MessageSquare,
+  Eye,
+  PenTool,
 } from "lucide-react";
 import { createPortal } from "react-dom";
 
@@ -26,7 +30,7 @@ interface Notification {
   type: string;
   relatedId: string;
   message: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "read";
   createdAt: string;
 }
 
@@ -39,13 +43,6 @@ interface NotificationPanelProps {
   loading: boolean;
 }
 
-const NAVIGABLE_NOTIFICATION_ROUTES: Record<string, string> = {
-  client_feedback_submitted: "/admin/feedback",
-  client_feedback_responded: "/client/feedback",
-  expense_request_submitted: "/admin/expense-requests",
-  expense_request_reviewed: "/architect/expense-requests",
-};
-
 const NotificationPanel: React.FC<NotificationPanelProps> = ({
   isOpen,
   onClose,
@@ -55,6 +52,9 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
   loading,
 }) => {
   const navigate = useNavigate();
+  const { user, userType } = useSelector((state: RootState) => state.auth);
+  const currentRole = (userType || (user as any)?.role || "").toLowerCase();
+
   const [isAnimating, setIsAnimating] = useState(false);
   const [filter, setFilter] = useState<
     "all" | "pending" | "approved" | "rejected"
@@ -74,6 +74,129 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
       approve: "approved",
     };
     return map[word] || word + "d";
+  };
+
+  const getNotificationDestination = (
+    notif: Notification,
+    role: string
+  ): string | null => {
+    const relId = notif.relatedId;
+    const type = notif.type;
+
+    // 1. Documents & E-Signatures
+    if (
+      type === "document_signature_request" ||
+      type === "document_signed" ||
+      type === "document_signature_rejected" ||
+      type === "document_rejected"
+    ) {
+      if (role === "client") {
+        return `/client/site-progress?siteId=${relId}&tab=documents`;
+      }
+      if (role === "sitemanager") {
+        return `/siteManager/sites/${relId}?tab=documents`;
+      }
+      return `/admin/sites/${relId}?tab=documents`;
+    }
+
+    // 2. Phase Status Verification
+    if (type === "phase_status_verification") {
+      if (role === "client") {
+        return `/client/site-progress?siteId=${relId}&tab=phases`;
+      }
+      if (role === "sitemanager") {
+        return `/siteManager/sites/${relId}?tab=overview`;
+      }
+      return `/admin/sites/${relId}?tab=overview`;
+    }
+
+    // 3. Purchase Verification
+    if (type === "purchase_verification") {
+      if (role === "sitemanager") {
+        return `/siteManager/purchases/${relId}`;
+      }
+      return `/admin/purchases/${relId}`;
+    }
+
+    // 4. Miscellaneous Expense Verification
+    if (type === "miscellaneous_expense_verification") {
+      if (role === "sitemanager") {
+        return `/siteManager/miscellaneous-expenses/${relId}`;
+      }
+      return `/admin/miscellaneous-expenses/${relId}`;
+    }
+
+    // 5. Stock Transfer & Stock Alerts
+    if (
+      type === "stock_transfer" ||
+      type === "stock_low_alert" ||
+      type === "stock_depleted"
+    ) {
+      if (role === "sitemanager") {
+        return relId
+          ? `/siteManager/sites/${relId}?tab=stocks`
+          : `/siteManager/dashboard`;
+      }
+      return `/admin/stocks`;
+    }
+
+    // 6. Client Payment Verification
+    if (type === "client_payment_verification" || type === "payment_verified") {
+      if (role === "client") {
+        return `/client/dashboard`;
+      }
+      return `/admin/clients`;
+    }
+
+    // 7. Feedback
+    if (type === "client_feedback_submitted") {
+      return "/admin/feedback";
+    }
+    if (type === "client_feedback_responded") {
+      return "/client/feedback";
+    }
+
+    // 8. Expense Requests
+    if (type === "expense_request_submitted") {
+      return "/admin/expense-requests";
+    }
+    if (type === "expense_request_reviewed") {
+      return role === "architect"
+        ? "/architect/expense-requests"
+        : "/admin/expense-requests";
+    }
+
+    return null;
+  };
+
+  const handleViewNotification = async (
+    notification: Notification,
+    e?: React.MouseEvent
+  ) => {
+    if (e) e.stopPropagation();
+    const destination = getNotificationDestination(notification, currentRole);
+
+    // Optimistically mark as read and notify backend so unread badge clears
+    if (notification.status === "pending") {
+      updateNotificationStatus(notification._id, "read");
+      try {
+        await privateClient
+          .patch(`/notifications/${notification._id}/status`, { status: "read" })
+          .catch(async () => {
+            await privateClient.put(
+              `/notifications/${notification._id}/status`,
+              { status: "read" }
+            );
+          });
+      } catch (err) {
+        console.error("Failed to mark notification as read", err);
+      }
+    }
+
+    if (destination) {
+      onClose();
+      navigate(destination);
+    }
   };
 
   const handleAction = async (notification: Notification, action: string) => {
@@ -144,17 +267,13 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     }
   };
 
-  const handleNavigateToSource = (notification: Notification) => {
-    const path = NAVIGABLE_NOTIFICATION_ROUTES[notification.type];
-    if (!path) return;
-    onClose();
-    navigate(`${path}?highlight=${notification.relatedId}`);
-  };
-
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "stock_transfer":
         return <Package className="w-5 h-5 text-blue-500" />;
+      case "stock_low_alert":
+      case "stock_depleted":
+        return <AlertTriangle className="w-5 h-5 text-amber-500" />;
       case "purchase_verification":
         return <ShoppingCart className="w-5 h-5 text-green-500" />;
       case "miscellaneous_expense_verification":
@@ -165,6 +284,13 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         return <DollarSign className="w-5 h-5 text-green-500" />;
       case "payment_verified":
         return <CheckCircle2 className="w-5 h-5 text-green-500" />;
+      case "document_signature_request":
+        return <PenTool className="w-5 h-5 text-amber-500" />;
+      case "document_signed":
+        return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+      case "document_signature_rejected":
+      case "document_rejected":
+        return <XCircle className="w-5 h-5 text-rose-500" />;
       case "client_feedback_submitted":
       case "client_feedback_responded":
         return <MessageSquare className="w-5 h-5 text-brand-500" />;
@@ -184,6 +310,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         return "bg-green-100 text-green-800 border-green-200";
       case "rejected":
         return "bg-red-100 text-red-800 border-red-200";
+      case "read":
+        return "bg-slate-100 text-slate-700 border-slate-200";
       default:
         return "bg-gray-100 text-gray-800 border-gray-200";
     }
@@ -197,6 +325,8 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
         return <Check className="w-3 h-3" />;
       case "rejected":
         return <XCircle className="w-3 h-3" />;
+      case "read":
+        return <Eye className="w-3 h-3 text-slate-500" />;
       default:
         return null;
     }
@@ -360,153 +490,190 @@ return createPortal(
             <div className="h-full overflow-y-auto">
               <div className="p-4 space-y-3">
                 {filteredNotifications.map((notif) => {
-                  const isNavigable = Boolean(
-                    NAVIGABLE_NOTIFICATION_ROUTES[notif.type],
+                  const destinationRoute = getNotificationDestination(
+                    notif,
+                    currentRole
                   );
+                  const isNavigable = Boolean(destinationRoute);
                   return (
-                  <div
-                    key={notif._id}
-                    onClick={
-                      isNavigable
-                        ? () => handleNavigateToSource(notif)
-                        : undefined
-                    }
-                    role={isNavigable ? "button" : undefined}
-                    tabIndex={isNavigable ? 0 : undefined}
-                    onKeyDown={
-                      isNavigable
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              handleNavigateToSource(notif);
+                    <div
+                      key={notif._id}
+                      onClick={
+                        isNavigable
+                          ? (e) => handleViewNotification(notif, e)
+                          : undefined
+                      }
+                      role={isNavigable ? "button" : undefined}
+                      tabIndex={isNavigable ? 0 : undefined}
+                      onKeyDown={
+                        isNavigable
+                          ? (e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleViewNotification(notif);
+                              }
                             }
-                          }
-                        : undefined
-                    }
-                    className={`relative bg-white border rounded-xl p-4 transition-all duration-200 hover:shadow-md ${
-                      isNavigable ? "cursor-pointer hover:border-brand-300" : ""
-                    } ${
-                      notif.status === "pending"
-                        ? "border-yellow-200 bg-yellow-50/30"
-                        : "border-gray-200"
-                    }`}
-                  >
-                    {notif.status === "pending" && (
-                      <div className="absolute top-3 right-3">
-                        <AlertTriangle className="w-4 h-4 text-yellow-500" />
-                      </div>
-                    )}
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0 mt-1">
-                        {getNotificationIcon(notif.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <span
-                            className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
-                              notif.status,
-                            )}`}
-                          >
-                            {getStatusIcon(notif.status)}
-                            <span className="capitalize">{notif.status}</span>
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {formatTimeAgo(notif.createdAt)}
-                          </span>
+                          : undefined
+                      }
+                      className={`relative bg-white border rounded-xl p-4 transition-all duration-200 hover:shadow-md ${
+                        isNavigable ? "cursor-pointer hover:border-brand-300" : ""
+                      } ${
+                        notif.status === "pending"
+                          ? "border-yellow-200 bg-yellow-50/30"
+                          : "border-gray-200"
+                      }`}
+                    >
+                      {notif.status === "pending" && (
+                        <div className="absolute top-3 right-3">
+                          <AlertTriangle className="w-4 h-4 text-yellow-500" />
                         </div>
-                        <p className="text-sm text-gray-800 mb-3 leading-relaxed">
-                          {notif.message}
-                        </p>
-                        {notif.status === "pending" && (
-                          <div className="flex space-x-2">
-                            {notif.type === "stock_transfer" && (
-                              <>
-                                <button
-                                  onClick={() => handleAction(notif, "approve")}
-                                  disabled={
-                                    actionLoading === `${notif._id}-approve`
-                                  }
-                                  className="flex items-center space-x-1 px-3 py-2 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {actionLoading === `${notif._id}-approve` ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Check className="w-3 h-3" />
-                                  )}
-                                  <span>Approve</span>
-                                </button>
-                                <button
-                                  onClick={() => handleAction(notif, "reject")}
-                                  disabled={
-                                    actionLoading === `${notif._id}-reject`
-                                  }
-                                  className="flex items-center space-x-1 px-3 py-2 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {actionLoading === `${notif._id}-reject` ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <XCircle className="w-3 h-3" />
-                                  )}
-                                  <span>Reject</span>
-                                </button>
-                              </>
-                            )}
-                            {(notif.type === "purchase_verification" ||
-                              notif.type ===
-                                "miscellaneous_expense_verification" ||
-                              notif.type === "client_payment_verification") && (
+                      )}
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0 mt-1">
+                          {getNotificationIcon(notif.type)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <span
+                              className={`inline-flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(
+                                notif.status
+                              )}`}
+                            >
+                              {getStatusIcon(notif.status)}
+                              <span className="capitalize">{notif.status}</span>
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {formatTimeAgo(notif.createdAt)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-800 mb-2 leading-relaxed">
+                            {notif.message}
+                          </p>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {destinationRoute && (
                               <button
-                                onClick={() => handleAction(notif, "verify")}
-                                disabled={
-                                  actionLoading === `${notif._id}-verify`
-                                }
-                                className="flex items-center space-x-1 px-3 py-2 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                type="button"
+                                onClick={(e) => handleViewNotification(notif, e)}
+                                className="flex items-center space-x-1.5 px-3 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 transition-colors shadow-xs"
+                                title="View details & mark as read"
                               >
-                                {actionLoading === `${notif._id}-verify` ? (
-                                  <RefreshCw className="w-3 h-3 animate-spin" />
-                                ) : (
-                                  <Check className="w-3 h-3" />
-                                )}
-                                <span>Verify</span>
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>View</span>
                               </button>
                             )}
-                            {notif.type === "phase_status_verification" && (
+
+                            {notif.status === "pending" && (
                               <>
-                                <button
-                                  onClick={() => handleAction(notif, "approve")}
-                                  disabled={
-                                    actionLoading === `${notif._id}-approve`
-                                  }
-                                  className="flex items-center space-x-1 px-3 py-2 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {actionLoading === `${notif._id}-approve` ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <Check className="w-3 h-3" />
-                                  )}
-                                  <span>Approve</span>
-                                </button>
-                                <button
-                                  onClick={() => handleAction(notif, "reject")}
-                                  disabled={
-                                    actionLoading === `${notif._id}-reject`
-                                  }
-                                  className="flex items-center space-x-1 px-3 py-2 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {actionLoading === `${notif._id}-reject` ? (
-                                    <RefreshCw className="w-3 h-3 animate-spin" />
-                                  ) : (
-                                    <XCircle className="w-3 h-3" />
-                                  )}
-                                  <span>Reject</span>
-                                </button>
+                                {notif.type === "stock_transfer" && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAction(notif, "approve");
+                                      }}
+                                      disabled={
+                                        actionLoading === `${notif._id}-approve`
+                                      }
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoading ===
+                                      `${notif._id}-approve` ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3 h-3" />
+                                      )}
+                                      <span>Approve</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAction(notif, "reject");
+                                      }}
+                                      disabled={
+                                        actionLoading === `${notif._id}-reject`
+                                      }
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoading ===
+                                      `${notif._id}-reject` ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <XCircle className="w-3 h-3" />
+                                      )}
+                                      <span>Reject</span>
+                                    </button>
+                                  </>
+                                )}
+                                {(notif.type === "purchase_verification" ||
+                                  notif.type ===
+                                    "miscellaneous_expense_verification" ||
+                                  notif.type ===
+                                    "client_payment_verification") && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleAction(notif, "verify");
+                                    }}
+                                    disabled={
+                                      actionLoading === `${notif._id}-verify`
+                                    }
+                                    className="flex items-center space-x-1 px-3 py-1.5 bg-blue-500 text-white text-xs rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {actionLoading === `${notif._id}-verify` ? (
+                                      <RefreshCw className="w-3 h-3 animate-spin" />
+                                    ) : (
+                                      <Check className="w-3 h-3" />
+                                    )}
+                                    <span>Verify</span>
+                                  </button>
+                                )}
+                                {notif.type === "phase_status_verification" && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAction(notif, "approve");
+                                      }}
+                                      disabled={
+                                        actionLoading === `${notif._id}-approve`
+                                      }
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-500 text-white text-xs rounded-lg hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoading ===
+                                      `${notif._id}-approve` ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3 h-3" />
+                                      )}
+                                      <span>Approve</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAction(notif, "reject");
+                                      }}
+                                      disabled={
+                                        actionLoading === `${notif._id}-reject`
+                                      }
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-red-500 text-white text-xs rounded-lg hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {actionLoading ===
+                                      `${notif._id}-reject` ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <XCircle className="w-3 h-3" />
+                                      )}
+                                      <span>Reject</span>
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>

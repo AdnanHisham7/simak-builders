@@ -319,6 +319,8 @@ const getSiteDetails = async (
     const { siteId } = req.params;
     const site = await SiteModel.findById(siteId)
       .populate("documents.uploadedBy", "name")
+      .populate("documents.signRequests.requestedTo", "name role")
+      .populate("documents.signRequests.requestedBy", "name role")
       .lean();
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
     const [siteManagers, architects, supervisors, client] = await Promise.all(
@@ -830,6 +832,7 @@ const uploadDocument = async (
           requestedBy: req.user?.userId,
           requestedAt: new Date(),
           status: "pending",
+          message: req.body.signatureMessage || req.body.notes || "Please sign this document",
         },
       ];
     }
@@ -1361,6 +1364,7 @@ const requestDocumentSignature = async (
       requestedBy: req.user?.userId,
       requestedAt: new Date(),
       status: "pending",
+      message: message || undefined,
     });
 
     await site.save();

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import {
@@ -183,9 +183,23 @@ const SiteDetail: React.FC = () => {
   const [selectedDayAttendance, setSelectedDayAttendance] = useState<
     any[] | null
   >(null);
+  const [searchParams] = useSearchParams();
   const [selectedTab, setSelectedTab] = useState<
     (typeof TAB_CONFIG)[number]["id"]
-  >("overview");
+  >(() => {
+    const tabParam = new URLSearchParams(window.location.search).get("tab");
+    if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
+      return tabParam as (typeof TAB_CONFIG)[number]["id"];
+    }
+    return "overview";
+  });
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
+      setSelectedTab(tabParam as (typeof TAB_CONFIG)[number]["id"]);
+    }
+  }, [searchParams]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
     useState(false);
@@ -2332,6 +2346,51 @@ const SiteDetail: React.FC = () => {
                       const isSigned = doc.status === "signed";
                       const isPending = doc.status === "pending_signature";
                       const isRejected = doc.status === "rejected";
+
+                      const currentUserId = user?.id || (user as any)?._id;
+                      const docUploaderId = doc.uploadedBy?.id || (typeof doc.uploadedBy === "string" ? doc.uploadedBy : undefined);
+                      const isUploader = Boolean(currentUserId && docUploaderId && String(currentUserId) === String(docUploaderId));
+
+                      // Check if current user is the requested signer
+                      const isRequestedSigner = Boolean(
+                        doc.signRequests?.some((sr: any) => {
+                          const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                          if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) {
+                            return true;
+                          }
+                          const targetRole = sr.requestedRole || sr.role;
+                          if (targetRole) {
+                            const normalizedTarget = targetRole.toLowerCase();
+                            const normalizedUserRole = (userType || (user as any)?.role || "").toLowerCase();
+                            return (
+                              normalizedTarget === normalizedUserRole ||
+                              (normalizedTarget === "client" && normalizedUserRole === "client") ||
+                              (normalizedTarget === "sitemanager" && normalizedUserRole === "sitemanager") ||
+                              (normalizedTarget === "architect" && normalizedUserRole === "architect") ||
+                              (normalizedTarget === "admin" && normalizedUserRole === "admin")
+                            );
+                          }
+                          return false;
+                        }) ||
+                        // Fallback: if category is "client" and current user is client
+                        (doc.status === "pending_signature" && doc.category === "client" && (userType === "client" || (user as any)?.role === "client"))
+                      );
+
+                      // Sign option must only be shown to:
+                      // 1. The uploader
+                      // 2. The required signer
+                      const showSignButton = !isSigned && (isUploader || isRequestedSigner);
+
+                      // Reject option:
+                      // The uploader MUST NEVER be shown the option to reject their own document!
+                      // Shown to the required signer (or manager/admin reviewing an upload that is not their own)
+                      const showRejectButton = !isSigned && !isUploader && (isRequestedSigner || userType === "admin" || userType === "siteManager");
+
+                      const firstReq = doc.signRequests?.[0];
+                      const reqRole = firstReq?.requestedRole || firstReq?.role || (doc.category === "client" ? "Client" : "Required Signer");
+                      const reqPerson = typeof firstReq?.requestedTo === "object" && firstReq?.requestedTo?.name ? ` (${firstReq.requestedTo.name})` : "";
+                      const reqMsg = firstReq?.message;
+
                       return (
                         <div
                           key={doc.id || doc._id}
@@ -2401,12 +2460,12 @@ const SiteDetail: React.FC = () => {
                                 </div>
                               )}
 
-                              {isPending && doc.signRequests && doc.signRequests.length > 0 && (
+                              {isPending && (
                                 <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-xs text-amber-900">
                                   <Clock size={12} className="shrink-0 text-amber-600" />
                                   <span>
-                                    Required Signer: <strong className="capitalize">{doc.signRequests[0].role}</strong>
-                                    {doc.signRequests[0].message ? ` — "${doc.signRequests[0].message}"` : ""}
+                                    Required Signer: <strong className="capitalize">{reqRole}</strong>{reqPerson}
+                                    {reqMsg ? ` — "${reqMsg}"` : ""}
                                   </span>
                                 </div>
                               )}
@@ -2431,28 +2490,28 @@ const SiteDetail: React.FC = () => {
                               <span>History</span>
                             </button>
 
-                            {!isSigned && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedDocForSign(doc)}
-                                  className="flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-emerald-800 transition-colors"
-                                  title="Sign Document"
-                                >
-                                  <PenTool size={13} />
-                                  <span>Sign</span>
-                                </button>
+                            {showSignButton && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDocForSign(doc)}
+                                className="flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-emerald-800 transition-colors"
+                                title="Sign Document"
+                              >
+                                <PenTool size={13} />
+                                <span>Sign</span>
+                              </button>
+                            )}
 
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedDocForReject(doc)}
-                                  className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
-                                  title="Reject Document"
-                                >
-                                  <XCircle size={13} />
-                                  <span>Reject</span>
-                                </button>
-                              </>
+                            {showRejectButton && (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedDocForReject(doc)}
+                                className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
+                                title="Reject Document"
+                              >
+                                <XCircle size={13} />
+                                <span>Reject</span>
+                              </button>
                             )}
 
                             <a

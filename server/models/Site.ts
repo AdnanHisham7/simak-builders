@@ -98,6 +98,7 @@ const SiteSchema = new Schema<Site>(
             requestedBy: { type: Schema.Types.ObjectId, ref: "User" },
             requestedAt: { type: Date, default: Date.now },
             status: { type: String, enum: ["pending", "signed", "rejected"], default: "pending" },
+            message: { type: String },
           },
         ],
         rejectionReason: { type: String },

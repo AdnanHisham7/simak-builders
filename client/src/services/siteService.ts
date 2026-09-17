@@ -24,10 +24,13 @@ export interface DocumentSignature {
 }
 
 export interface DocumentSignRequest {
-  requestedTo?: { id?: string; name?: string; email?: string } | any;
+  requestedTo?: { id?: string; _id?: string; name?: string; email?: string } | any;
   requestedRole: string;
+  role?: string;
+  requestedBy?: { id?: string; _id?: string; name?: string } | any;
   requestedAt: string;
   status: "pending" | "signed" | "rejected";
+  message?: string;
 }
 
 export interface Document {
@@ -302,7 +305,16 @@ const mapSiteDetailsData = (
     phaseName: doc?.phaseName,
     notes: doc?.notes,
     signature: doc?.signature,
-    signRequests: doc?.signRequests || [],
+    signRequests:
+      doc?.signRequests?.map((sr: any) => ({
+        requestedTo: sr.requestedTo,
+        requestedRole: sr.requestedRole || sr.role || "client",
+        role: sr.requestedRole || sr.role || "client",
+        requestedBy: sr.requestedBy,
+        requestedAt: sr.requestedAt,
+        status: sr.status || "pending",
+        message: sr.message,
+      })) || [],
     rejectionReason: doc?.rejectionReason,
   })),
   budget: site?.budget || 0,

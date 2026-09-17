@@ -273,6 +273,30 @@ const ClientSiteProgress: React.FC = () => {
                   ? doc.uploadedBy.name
                   : "Site Manager";
 
+              const currentUserId = user?.id || (user as any)?._id;
+              const uploaderId = typeof doc.uploadedBy === "object" ? (doc.uploadedBy?.id || (doc.uploadedBy as any)?._id) : doc.uploadedBy;
+              const isUploader = Boolean(currentUserId && uploaderId && String(currentUserId) === String(uploaderId));
+
+              const isRequestedSigner = Boolean(
+                doc.signRequests?.some((sr: any) => {
+                  const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                  if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) return true;
+                  const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                  return targetRole === "client";
+                }) ||
+                doc.category === "client" ||
+                doc.status === "pending_signature"
+              );
+
+              // Sign only shown to uploader and requested signer
+              const showSign = !isSigned && (isUploader || isRequestedSigner);
+              // Reject NEVER shown to uploader
+              const showReject = !isSigned && !isUploader && isRequestedSigner;
+
+              const firstReq = doc.signRequests?.[0];
+              const reqRole = firstReq?.requestedRole || firstReq?.role || "Client";
+              const reqMsg = firstReq?.message;
+
               return (
                 <div
                   key={doc._id}
@@ -365,9 +389,11 @@ const ClientSiteProgress: React.FC = () => {
                         <div className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50/80 px-2.5 py-1 text-xs text-amber-950">
                           <Clock size={13} className="shrink-0 text-amber-600 mt-0.5" />
                           <span>
-                            {doc.signRequests?.[0]?.message
-                              ? doc.signRequests[0].message
-                              : "Your signature is required to formally approve this document / milestone."}
+                            <strong>Required Signer:</strong>{" "}
+                            <span className="capitalize">{reqRole}</span>{" "}
+                            {reqMsg
+                              ? `— "${reqMsg}"`
+                              : "— Your signature is required to formally approve this document / milestone."}
                           </span>
                         </div>
                       )}
@@ -386,26 +412,27 @@ const ClientSiteProgress: React.FC = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                    {!isSigned && (
-                      <>
-                        <Button
-                          size="sm"
-                          onClick={() => setSelectedDocForSign(doc)}
-                          className="bg-emerald-700 hover:bg-emerald-800 text-white"
-                        >
-                          <PenTool size={13} />
-                          <span>Sign Document</span>
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setSelectedDocForReject(doc)}
-                          className="border-rose-200 text-rose-700 hover:bg-rose-50"
-                        >
-                          <XCircle size={13} />
-                          <span>Reject</span>
-                        </Button>
-                      </>
+                    {showSign && (
+                      <Button
+                        size="sm"
+                        onClick={() => setSelectedDocForSign(doc)}
+                        className="bg-emerald-700 hover:bg-emerald-800 text-white"
+                      >
+                        <PenTool size={13} />
+                        <span>Sign Document</span>
+                      </Button>
+                    )}
+
+                    {showReject && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedDocForReject(doc)}
+                        className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                      >
+                        <XCircle size={13} />
+                        <span>Reject</span>
+                      </Button>
                     )}
 
                     <a
