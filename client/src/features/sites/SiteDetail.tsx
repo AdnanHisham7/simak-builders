@@ -301,7 +301,7 @@ const SiteDetail: React.FC = () => {
   const [miscSearchQuery, setMiscSearchQuery] = useState("");
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
-  const [documentCategoryTab, setDocumentCategoryTab] = useState<"all" | "site" | "client">("all");
+  const [documentCategoryTab, setDocumentCategoryTab] = useState<"site" | "client">("site");
   const [documentStatusFilter, setDocumentStatusFilter] = useState<
     "all" | "pending_signature" | "signed" | "draft" | "rejected"
   >("all");
@@ -1224,7 +1224,7 @@ const SiteDetail: React.FC = () => {
     const query = documentSearchQuery.trim().toLowerCase();
     return allDocuments.filter((doc) => {
       // Category classification filter
-      if (documentCategoryTab !== "all" && doc.category !== documentCategoryTab) {
+      if (doc.category !== documentCategoryTab) {
         return false;
       }
       // Status filter
@@ -1247,14 +1247,6 @@ const SiteDetail: React.FC = () => {
       return true;
     });
   }, [allDocuments, documentCategoryTab, documentStatusFilter, documentSearchQuery]);
-
-  const filteredClientDocuments = useMemo(() => {
-    return filteredDocuments.filter((doc) => doc.category === "client");
-  }, [filteredDocuments]);
-
-  const filteredSiteDocuments = useMemo(() => {
-    return filteredDocuments.filter((doc) => doc.category === "site");
-  }, [filteredDocuments]);
 
   if (loading) {
     return <PageLoader label="Loading site details" />;
@@ -2475,7 +2467,7 @@ const SiteDetail: React.FC = () => {
                       <Upload size={14} />
                       <span>Upload Client Document</span>
                     </label>
-                  ) : documentCategoryTab === "site" ? (
+                  ) : (
                     <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-brand-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-brand-800 transition-colors">
                       <input
                         type="file"
@@ -2489,35 +2481,6 @@ const SiteDetail: React.FC = () => {
                       <Upload size={14} />
                       <span>Upload Site Document</span>
                     </label>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-brand-700 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-brand-800 transition-colors">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleUpload(site.id, e.target.files[0], "site");
-                            }
-                          }}
-                        />
-                        <Upload size={13} />
-                        <span>Upload Site Doc</span>
-                      </label>
-                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files[0]) {
-                              handleUpload(site.id, e.target.files[0], "client");
-                            }
-                          }}
-                        />
-                        <Upload size={13} />
-                        <span>Upload Client Doc</span>
-                      </label>
-                    </div>
                   )}
                 </div>
               )}
@@ -2528,7 +2491,6 @@ const SiteDetail: React.FC = () => {
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div className="inline-flex rounded-xl bg-slate-100 p-1">
               {[
-                { id: "all" as const, label: "All Documents", count: allDocuments.length },
                 { id: "site" as const, label: "Site Documentation", count: siteDocumentsCount },
                 { id: "client" as const, label: "Client Documentation", count: clientDocumentsCount },
               ].map((tab) => {
@@ -2645,7 +2607,7 @@ const SiteDetail: React.FC = () => {
                 type="button"
                 onClick={() => {
                   setDocumentSearchQuery("");
-                  setDocumentCategoryTab("all");
+                  setDocumentCategoryTab("site");
                   setDocumentStatusFilter("all");
                 }}
                 className="mt-2 text-xs font-semibold text-brand-700 hover:underline"
