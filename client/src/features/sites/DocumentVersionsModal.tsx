@@ -32,8 +32,12 @@ interface DocumentVersionsModalProps {
   document: SiteDocument | null;
   sitePhases?: Array<{ id: string; name: string; status: string }>;
   canUploadVersion?: boolean;
+  initialTab?: "history" | "new_version" | "request_sign";
+  canSign?: boolean;
+  canReject?: boolean;
   onDocumentUpdated: () => void;
   onOpenSignModal?: (doc: SiteDocument) => void;
+  onOpenRejectModal?: (doc: SiteDocument) => void;
 }
 
 export const DocumentVersionsModal: React.FC<DocumentVersionsModalProps> = ({
@@ -43,10 +47,16 @@ export const DocumentVersionsModal: React.FC<DocumentVersionsModalProps> = ({
   document,
   sitePhases = [],
   canUploadVersion = true,
+  initialTab = "history",
+  canSign = true,
+  canReject = false,
   onDocumentUpdated,
   onOpenSignModal,
+  onOpenRejectModal,
 }) => {
-  const [activeTab, setActiveTab] = useState<"history" | "new_version" | "request_sign">("history");
+  const [activeTab, setActiveTab] = useState<"history" | "new_version" | "request_sign">(
+    initialTab || "history"
+  );
   const [docDetails, setDocDetails] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -83,9 +93,12 @@ export const DocumentVersionsModal: React.FC<DocumentVersionsModalProps> = ({
 
   useEffect(() => {
     if (isOpen && document) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       fetchVersions();
     }
-  }, [isOpen, document]);
+  }, [isOpen, document, initialTab]);
 
   const handleUploadNewVersion = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -267,15 +280,29 @@ export const DocumentVersionsModal: React.FC<DocumentVersionsModalProps> = ({
                     <Download size={13} />
                     Download
                   </a>
-                  {!isSigned && onOpenSignModal && (
+                  {!isSigned && canSign && onOpenSignModal && (
                     <Button
                       size="sm"
                       onClick={() => {
                         onClose();
                         onOpenSignModal(current);
                       }}
+                      className="bg-emerald-700 hover:bg-emerald-800 text-white"
                     >
                       <PenTool size={13} /> Sign Now
+                    </Button>
+                  )}
+                  {!isSigned && canReject && onOpenRejectModal && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        onClose();
+                        onOpenRejectModal(current);
+                      }}
+                      className="border-rose-200 text-rose-700 hover:bg-rose-50"
+                    >
+                      <XCircle size={13} /> Reject
                     </Button>
                   )}
                 </div>

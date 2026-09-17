@@ -249,6 +249,13 @@ const SiteDetail: React.FC = () => {
   const [miscSearchQuery, setMiscSearchQuery] = useState("");
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
+  const [documentCategoryTab, setDocumentCategoryTab] = useState<"all" | "site" | "client">("all");
+  const [documentStatusFilter, setDocumentStatusFilter] = useState<
+    "all" | "pending_signature" | "signed" | "draft" | "rejected"
+  >("all");
+  const [documentModalInitialTab, setDocumentModalInitialTab] = useState<
+    "history" | "new_version" | "request_sign"
+  >("history");
 
   const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
   const [editMiscName, setEditMiscName] = useState("");
@@ -565,6 +572,15 @@ const SiteDetail: React.FC = () => {
     userType === "admin" ||
     (userType === "siteManager" &&
       site?.siteManagers.some((m) => m.id === user?.id));
+  const canUploadDocuments =
+    userType === "admin" ||
+    (userType === "siteManager" &&
+      site?.siteManagers.some((m) => m.id === user?.id)) ||
+    (userType === "architect" &&
+      site?.architects.some((a) => a.id === user?.id)) ||
+    (userType === "supervisor" &&
+      site?.supervisors.some((s) => s.id === user?.id)) ||
+    userType === "client";
 
   const handleVerify = async (purchaseId: string) => {
     if (verifyingPurchaseIds.has(purchaseId)) return;
@@ -1066,7 +1082,6 @@ const SiteDetail: React.FC = () => {
     userType === "admin" || userType === "siteManager" || userType === "supervisor";
   const canManageStocks = userType === "siteManager" || userType === "admin";
   const canAddMiscellaneous = canAddPurchase;
-  const canUploadDocuments = userType === "admin" || userType === "siteManager";
 
   const filteredPurchases = useMemo(() => {
     const query = purchaseSearchQuery.trim().toLowerCase();
@@ -1125,19 +1140,60 @@ const SiteDetail: React.FC = () => {
     );
   }, [stocks, stockSearchQuery]);
 
-  const filteredClientDocuments = useMemo(() => {
-    const allClientDocs = site?.documents.filter((doc) => doc.category === "client") || [];
+  const allDocuments = useMemo(() => site?.documents || [], [site]);
+
+  const siteDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.category === "site").length,
+    [allDocuments],
+  );
+  const clientDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.category === "client").length,
+    [allDocuments],
+  );
+  const pendingDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.status === "pending_signature").length,
+    [allDocuments],
+  );
+  const signedDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.status === "signed").length,
+    [allDocuments],
+  );
+
+  const filteredDocuments = useMemo(() => {
     const query = documentSearchQuery.trim().toLowerCase();
-    if (!query) return allClientDocs;
-    return allClientDocs.filter((doc) => doc.name.toLowerCase().includes(query));
-  }, [site, documentSearchQuery]);
+    return allDocuments.filter((doc) => {
+      // Category classification filter
+      if (documentCategoryTab !== "all" && doc.category !== documentCategoryTab) {
+        return false;
+      }
+      // Status filter
+      if (documentStatusFilter !== "all" && doc.status !== documentStatusFilter) {
+        return false;
+      }
+      // Search query
+      if (query) {
+        const matchName = (doc.name || "").toLowerCase().includes(query);
+        const matchUploader =
+          typeof doc.uploadedBy === "object" && doc.uploadedBy?.name
+            ? doc.uploadedBy.name.toLowerCase().includes(query)
+            : false;
+        const matchPhase = (doc.phaseName || "").toLowerCase().includes(query);
+        const matchNotes = (doc.notes || "").toLowerCase().includes(query);
+        if (!matchName && !matchUploader && !matchPhase && !matchNotes) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [allDocuments, documentCategoryTab, documentStatusFilter, documentSearchQuery]);
+
+  const filteredClientDocuments = useMemo(() => {
+    return filteredDocuments.filter((doc) => doc.category === "client");
+  }, [filteredDocuments]);
 
   const filteredSiteDocuments = useMemo(() => {
-    const allSiteDocs = site?.documents.filter((doc) => doc.category === "site") || [];
-    const query = documentSearchQuery.trim().toLowerCase();
-    if (!query) return allSiteDocs;
-    return allSiteDocs.filter((doc) => doc.name.toLowerCase().includes(query));
-  }, [site, documentSearchQuery]);
+    return filteredDocuments.filter((doc) => doc.category === "site");
+  }, [filteredDocuments]);
 
   if (loading) {
     return <PageLoader label="Loading site details" />;
@@ -2279,259 +2335,495 @@ const SiteDetail: React.FC = () => {
 
       {selectedTab === "documents" && (
         <SectionCard>
-          <div className="mb-5">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
-              <input
-                type="text"
-                placeholder="Search documents..."
-                value={documentSearchQuery}
-                onChange={(e) => setDocumentSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              />
-            </div>
-            {documentSearchQuery.trim() && (
-              <p className="mt-2 text-sm text-console-muted">
-                Found {filteredClientDocuments.length + filteredSiteDocuments.length} matching documents.
+          {/* Header & Quick Actions */}
+          <div className="flex flex-col gap-4 border-b border-console-border pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-console-text">Documents & Contracts</h3>
+                <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                  {allDocuments.length}
+                </span>
+                {pendingDocumentsCount > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                    <Clock size={11} className="text-amber-600" />
+                    {pendingDocumentsCount} awaiting sign-off
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-console-muted">
+                Track blueprints, engineering documents, client contracts, and version revisions.
               </p>
-            )}
-          </div>
+            </div>
 
-          <div className="space-y-6">
-            {[
-              {
-                title: "Client Documentation",
-                docs: filteredClientDocuments,
-                totalCount: clientDocuments.length,
-                category: "client" as const,
-              },
-              {
-                title: "Site Documentation",
-                docs: filteredSiteDocuments,
-                totalCount: siteDocuments.length,
-                category: "site" as const,
-              },
-            ].map((group) => (
-              <div key={group.category}>
-                <div className="flex items-center justify-between">
-                  <h4 className="flex items-center text-sm font-medium text-console-text">
-                    <FileText size={15} className="mr-2" />
-                    {group.title} ({group.totalCount})
-                  </h4>
-                  {canUploadDocuments && (
-                    <label className="relative cursor-pointer">
+            <div className="flex flex-wrap items-center gap-2">
+              {allDocuments.length > 0 && (
+                <button
+                  type="button"
+                  onClick={downloadSiteDocumentsZip}
+                  className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                  title="Download all documents as ZIP"
+                >
+                  <Download size={14} className="text-slate-500" />
+                  <span>Download All (ZIP)</span>
+                </button>
+              )}
+
+              {canUploadDocuments && (
+                <div className="flex items-center gap-1.5">
+                  {documentCategoryTab === "client" ? (
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors">
                       <input
                         type="file"
                         className="hidden"
                         onChange={(e) => {
                           if (e.target.files && e.target.files[0]) {
-                            handleUpload(site.id, e.target.files[0], group.category);
+                            handleUpload(site.id, e.target.files[0], "client");
                           }
                         }}
                       />
-                      <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800">
-                        <Upload size={15} />
-                        <span>Upload {group.category === "client" ? "client" : "site"} document</span>
-                      </div>
+                      <Upload size={14} />
+                      <span>Upload Client Document</span>
                     </label>
+                  ) : documentCategoryTab === "site" ? (
+                    <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-brand-700 px-3.5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-brand-800 transition-colors">
+                      <input
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleUpload(site.id, e.target.files[0], "site");
+                          }
+                        }}
+                      />
+                      <Upload size={14} />
+                      <span>Upload Site Document</span>
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg bg-brand-700 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-brand-800 transition-colors">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleUpload(site.id, e.target.files[0], "site");
+                            }
+                          }}
+                        />
+                        <Upload size={13} />
+                        <span>Upload Site Doc</span>
+                      </label>
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleUpload(site.id, e.target.files[0], "client");
+                            }
+                          }}
+                        />
+                        <Upload size={13} />
+                        <span>Upload Client Doc</span>
+                      </label>
+                    </div>
                   )}
                 </div>
-                {group.totalCount === 0 ? (
-                  <p className="mt-2 text-sm text-console-muted">No documents uploaded yet</p>
-                ) : group.docs.length === 0 ? (
-                  <p className="mt-2 text-sm text-console-muted">No documents match the search</p>
-                ) : (
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                    {group.docs.map((doc: any) => {
-                      const isSigned = doc.status === "signed";
-                      const isPending = doc.status === "pending_signature";
-                      const isRejected = doc.status === "rejected";
-
-                      const currentUserId = user?.id || (user as any)?._id;
-                      const docUploaderId = doc.uploadedBy?.id || (typeof doc.uploadedBy === "string" ? doc.uploadedBy : undefined);
-                      const isUploader = Boolean(currentUserId && docUploaderId && String(currentUserId) === String(docUploaderId));
-
-                      // Check if current user is the requested signer
-                      const isRequestedSigner = Boolean(
-                        doc.signRequests?.some((sr: any) => {
-                          const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
-                          if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) {
-                            return true;
-                          }
-                          const targetRole = sr.requestedRole || sr.role;
-                          if (targetRole) {
-                            const normalizedTarget = targetRole.toLowerCase();
-                            const normalizedUserRole = (userType || (user as any)?.role || "").toLowerCase();
-                            return (
-                              normalizedTarget === normalizedUserRole ||
-                              (normalizedTarget === "client" && normalizedUserRole === "client") ||
-                              (normalizedTarget === "sitemanager" && normalizedUserRole === "sitemanager") ||
-                              (normalizedTarget === "architect" && normalizedUserRole === "architect") ||
-                              (normalizedTarget === "admin" && normalizedUserRole === "admin")
-                            );
-                          }
-                          return false;
-                        }) ||
-                        // Fallback: if category is "client" and current user is client
-                        (doc.status === "pending_signature" && doc.category === "client" && (userType === "client" || (user as any)?.role === "client"))
-                      );
-
-                      // Sign option must only be shown to:
-                      // 1. The uploader
-                      // 2. The required signer
-                      const showSignButton = !isSigned && (isUploader || isRequestedSigner);
-
-                      // Reject option:
-                      // The uploader MUST NEVER be shown the option to reject their own document!
-                      // Shown to the required signer (or manager/admin reviewing an upload that is not their own)
-                      const showRejectButton = !isSigned && !isUploader && (isRequestedSigner || userType === "admin" || userType === "siteManager");
-
-                      const firstReq = doc.signRequests?.[0];
-                      const reqRole = firstReq?.requestedRole || firstReq?.role || (doc.category === "client" ? "Client" : "Required Signer");
-                      const reqPerson = typeof firstReq?.requestedTo === "object" && firstReq?.requestedTo?.name ? ` (${firstReq.requestedTo.name})` : "";
-                      const reqMsg = firstReq?.message;
-
-                      return (
-                        <div
-                          key={doc.id || doc._id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl bg-console-bg p-3.5 transition-colors hover:bg-slate-100/90 border border-slate-200/60"
-                        >
-                          <div className="flex min-w-0 flex-1 items-start gap-3">
-                            <FileText size={18} className="shrink-0 text-brand-600 mt-0.5" />
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="truncate text-sm font-semibold text-console-text">{doc.name}</p>
-                                <span className="rounded-md bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-mono font-bold text-slate-700">
-                                  v{doc.version || 1}
-                                </span>
-                                <span
-                                  className={cn(
-                                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                                    isSigned
-                                      ? "bg-emerald-100 text-emerald-800"
-                                      : isPending
-                                      ? "bg-amber-100 text-amber-800"
-                                      : isRejected
-                                      ? "bg-rose-100 text-rose-800"
-                                      : "bg-slate-100 text-slate-600"
-                                  )}
-                                >
-                                  {isSigned ? (
-                                    <>
-                                      <CheckCircle2 size={11} /> Signed
-                                    </>
-                                  ) : isPending ? (
-                                    <>
-                                      <Clock size={11} /> Pending Sign-off
-                                    </>
-                                  ) : isRejected ? (
-                                    "Rejected"
-                                  ) : (
-                                    "Draft"
-                                  )}
-                                </span>
-                              </div>
-
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-console-muted">
-                                <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                                <span>•</span>
-                                <User size={11} />
-                                <span>Uploaded by: <strong>{doc.uploadedBy?.name || "Member"}</strong></span>
-                                <span>•</span>
-                                <Calendar size={11} />
-                                <span>{formatDate(doc.uploadDate)}</span>
-                                {doc.phaseName && (
-                                  <>
-                                    <span>•</span>
-                                    <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
-                                      Phase: {doc.phaseName}
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-
-                              {/* Signer, Rejection & Required Signer Info */}
-                              {isSigned && doc.signature && (
-                                <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-xs text-emerald-800">
-                                  <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />
-                                  <span>
-                                    Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole}) on {formatDate(doc.signature.signedAt)}
-                                  </span>
-                                </div>
-                              )}
-
-                              {isPending && (
-                                <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-xs text-amber-900">
-                                  <Clock size={12} className="shrink-0 text-amber-600" />
-                                  <span>
-                                    Required Signer: <strong className="capitalize">{reqRole}</strong>{reqPerson}
-                                    {reqMsg ? ` — "${reqMsg}"` : ""}
-                                  </span>
-                                </div>
-                              )}
-
-                              {isRejected && doc.rejectionReason && (
-                                <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-xs text-rose-800">
-                                  <span className="font-semibold">Rejection reason:</span>
-                                  <span>{doc.rejectionReason}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-1.5 self-end sm:self-center">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedDocForVersions(doc)}
-                              className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
-                              title="Version History & Sign Requests"
-                            >
-                              <History size={13} />
-                              <span>History</span>
-                            </button>
-
-                            {showSignButton && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedDocForSign(doc)}
-                                className="flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-emerald-800 transition-colors"
-                                title="Sign Document"
-                              >
-                                <PenTool size={13} />
-                                <span>Sign</span>
-                              </button>
-                            )}
-
-                            {showRejectButton && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedDocForReject(doc)}
-                                className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
-                                title="Reject Document"
-                              >
-                                <XCircle size={13} />
-                                <span>Reject</span>
-                              </button>
-                            )}
-
-                            <a
-                              href={doc.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100 transition-colors"
-                              title="Download document"
-                            >
-                              <Download size={14} />
-                            </a>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+              )}
+            </div>
           </div>
+
+          {/* Classification Navigation Tabs */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              {[
+                { id: "all" as const, label: "All Documents", count: allDocuments.length },
+                { id: "site" as const, label: "Site Documentation", count: siteDocumentsCount },
+                { id: "client" as const, label: "Client Documentation", count: clientDocumentsCount },
+              ].map((tab) => {
+                const isActive = documentCategoryTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDocumentCategoryTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-all",
+                      isActive
+                        ? "bg-white text-brand-700 font-semibold shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 font-medium",
+                    )}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                        isActive ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-600",
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Quick Status Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: "all" as const, label: "All" },
+                { id: "pending_signature" as const, label: "Pending Sign-off", count: pendingDocumentsCount },
+                { id: "signed" as const, label: "Signed", count: signedDocumentsCount },
+                { id: "draft" as const, label: "Draft" },
+                { id: "rejected" as const, label: "Rejected" },
+              ].map((pill) => {
+                const isActive = documentStatusFilter === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setDocumentStatusFilter(pill.id)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1 text-xs transition-colors",
+                      isActive
+                        ? "bg-brand-700 text-white font-medium shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 font-normal",
+                    )}
+                  >
+                    {pill.label}
+                    {pill.count !== undefined && pill.count > 0 && (
+                      <span
+                        className={cn(
+                          "ml-1 rounded-full px-1 text-[10px] font-bold",
+                          isActive ? "bg-brand-800 text-white" : "bg-slate-200 text-slate-700",
+                        )}
+                      >
+                        {pill.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Search Input Bar */}
+          <div className="mt-4 mb-4 flex items-center justify-between gap-3">
+            <div className="relative w-full max-w-sm">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
+              <input
+                type="text"
+                placeholder="Search by name, uploader, phase, notes..."
+                value={documentSearchQuery}
+                onChange={(e) => setDocumentSearchQuery(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9.5 pr-8 text-xs text-slate-800 placeholder-slate-400 focus:border-brand-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-100 transition-all"
+              />
+              {documentSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setDocumentSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 hidden sm:block">
+              Showing <strong>{filteredDocuments.length}</strong> of {allDocuments.length} documents
+            </p>
+          </div>
+
+          {/* Document Cards List */}
+          {allDocuments.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-slate-50/40">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 mb-3">
+                <FileText size={24} />
+              </div>
+              <h4 className="text-sm font-semibold text-slate-800">No documents uploaded yet</h4>
+              <p className="mt-1 text-xs text-slate-500 max-w-md mx-auto">
+                Keep site blueprints, contractor agreements, and milestone approval documents organized with version history.
+              </p>
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 p-6 text-center bg-slate-50/30">
+              <p className="text-xs text-slate-600 font-medium">No documents match the selected filters or search.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentSearchQuery("");
+                  setDocumentCategoryTab("all");
+                  setDocumentStatusFilter("all");
+                }}
+                className="mt-2 text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredDocuments.map((doc: any) => {
+                const isSigned = doc.status === "signed";
+                const isPending = doc.status === "pending_signature";
+                const isRejected = doc.status === "rejected";
+
+                const currentUserId = user?.id || (user as any)?._id;
+                const docUploaderId =
+                  doc.uploadedBy?.id || (typeof doc.uploadedBy === "string" ? doc.uploadedBy : undefined);
+                const isUploader = Boolean(
+                  currentUserId && docUploaderId && String(currentUserId) === String(docUploaderId),
+                );
+
+                // Check if current user is the requested signer
+                const isRequestedSigner = Boolean(
+                  doc.signRequests?.some((sr: any) => {
+                    const targetUserId =
+                      typeof sr.requestedTo === "object"
+                        ? sr.requestedTo?._id || sr.requestedTo?.id
+                        : sr.requestedTo;
+                    if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) {
+                      return true;
+                    }
+                    const targetRole = sr.requestedRole || sr.role;
+                    if (targetRole) {
+                      const normalizedTarget = targetRole.toLowerCase();
+                      const normalizedUserRole = (userType || (user as any)?.role || "").toLowerCase();
+                      return (
+                        normalizedTarget === normalizedUserRole ||
+                        (normalizedTarget === "client" && normalizedUserRole === "client") ||
+                        (normalizedTarget === "sitemanager" && normalizedUserRole === "sitemanager") ||
+                        (normalizedTarget === "architect" && normalizedUserRole === "architect") ||
+                        (normalizedTarget === "admin" && normalizedUserRole === "admin")
+                      );
+                    }
+                    return false;
+                  }) ||
+                    (doc.status === "pending_signature" &&
+                      doc.category === "client" &&
+                      (userType === "client" || (user as any)?.role === "client")),
+                );
+
+                const showSignButton = !isSigned && (isUploader || isRequestedSigner);
+                const showRejectButton =
+                  !isSigned &&
+                  !isUploader &&
+                  (isRequestedSigner || userType === "admin" || userType === "siteManager");
+
+                const firstReq = doc.signRequests?.[0];
+                const reqRole =
+                  firstReq?.requestedRole ||
+                  firstReq?.role ||
+                  (doc.category === "client" ? "Client" : "Required Signer");
+                const reqPerson =
+                  typeof firstReq?.requestedTo === "object" && firstReq?.requestedTo?.name
+                    ? ` (${firstReq.requestedTo.name})`
+                    : "";
+                const reqMsg = firstReq?.message;
+
+                const ext = (doc.name || "").split(".").pop()?.toUpperCase() || "DOC";
+
+                return (
+                  <div
+                    key={doc.id || doc._id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-xs hover:border-slate-300 hover:bg-slate-50/50 transition-all"
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {/* File Icon Badge */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[10px] font-bold">
+                        {ext.slice(0, 4)}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900" title={doc.name}>
+                            {doc.name}
+                          </p>
+
+                          {/* Version Badge Button -> Opens history modal */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDocumentModalInitialTab("history");
+                              setSelectedDocForVersions(doc);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-slate-100 hover:bg-slate-200/80 px-2 py-0.5 text-[11px] font-mono font-semibold text-slate-700 transition-colors cursor-pointer"
+                            title="Click to view revision history"
+                          >
+                            <History size={11} className="text-slate-500" />
+                            v{doc.version || 1}
+                            {doc.versions && doc.versions.length > 0 && (
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                ({doc.versions.length + 1} revs)
+                              </span>
+                            )}
+                          </button>
+
+                          {/* Category Badge */}
+                          <span
+                            className={cn(
+                              "rounded-md px-2 py-0.5 text-[10px] font-semibold",
+                              doc.category === "client"
+                                ? "bg-indigo-50 text-indigo-700 border border-indigo-100/80"
+                                : "bg-sky-50 text-sky-700 border border-sky-100/80",
+                            )}
+                          >
+                            {doc.category === "client" ? "Client Document" : "Site Document"}
+                          </span>
+
+                          {/* Status Badge */}
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                              isSigned
+                                ? "bg-emerald-100 text-emerald-800"
+                                : isPending
+                                ? "bg-amber-100 text-amber-800"
+                                : isRejected
+                                ? "bg-rose-100 text-rose-800"
+                                : "bg-slate-100 text-slate-600",
+                            )}
+                          >
+                            {isSigned ? (
+                              <>
+                                <CheckCircle2 size={11} /> Signed
+                              </>
+                            ) : isPending ? (
+                              <>
+                                <Clock size={11} /> Pending Sign-off
+                              </>
+                            ) : isRejected ? (
+                              <>
+                                <XCircle size={11} /> Rejected
+                              </>
+                            ) : (
+                              "Draft"
+                            )}
+                          </span>
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                          <span>•</span>
+                          <User size={11} className="text-slate-400" />
+                          <span>
+                            Uploaded by: <strong>{doc.uploadedBy?.name || "Member"}</strong>
+                          </span>
+                          <span>•</span>
+                          <Calendar size={11} className="text-slate-400" />
+                          <span>{formatDate(doc.uploadDate)}</span>
+                          {doc.phaseName && (
+                            <>
+                              <span>•</span>
+                              <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                                Phase: {doc.phaseName}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Signed callout */}
+                        {isSigned && doc.signature && (
+                          <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-xs text-emerald-800">
+                            <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />
+                            <span>
+                              Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole}) on{" "}
+                              {formatDate(doc.signature.signedAt)}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Pending Sign-off callout */}
+                        {isPending && (
+                          <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-xs text-amber-900">
+                            <Clock size={12} className="shrink-0 text-amber-600" />
+                            <span>
+                              Required Signer: <strong className="capitalize">{reqRole}</strong>
+                              {reqPerson}
+                              {reqMsg ? ` — "${reqMsg}"` : ""}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Rejected callout */}
+                        {isRejected && doc.rejectionReason && (
+                          <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-xs text-rose-800">
+                            <span className="font-semibold">Rejection reason:</span>
+                            <span>{doc.rejectionReason}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions Toolbar */}
+                    <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDocumentModalInitialTab("history");
+                          setSelectedDocForVersions(doc);
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        title="View revision history"
+                      >
+                        <History size={13} className="text-slate-500" />
+                        <span>History</span>
+                      </button>
+
+                      {canUploadDocuments && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocumentModalInitialTab("new_version");
+                            setSelectedDocForVersions(doc);
+                          }}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                          title="Upload revised version of this document"
+                        >
+                          <Upload size={13} className="text-slate-500" />
+                          <span>New Version</span>
+                        </button>
+                      )}
+
+                      {showSignButton && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocForSign(doc)}
+                          className="flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition-colors"
+                          title="Sign Document"
+                        >
+                          <PenTool size={13} />
+                          <span>Sign</span>
+                        </button>
+                      )}
+
+                      {showRejectButton && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocForReject(doc)}
+                          className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
+                          title="Reject Document"
+                        >
+                          <XCircle size={13} />
+                          <span>Reject</span>
+                        </button>
+                      )}
+
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                        title="View / Download file"
+                      >
+                        <Download size={13} className="text-slate-500" />
+                        <span>View</span>
+                      </a>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </SectionCard>
       )}
 
@@ -2654,12 +2946,46 @@ const SiteDetail: React.FC = () => {
           document={selectedDocForVersions}
           sitePhases={site.phases}
           canUploadVersion={canUploadDocuments}
+          initialTab={documentModalInitialTab}
+          canSign={Boolean(
+            !selectedDocForVersions.signature &&
+            (
+              (user?.id && selectedDocForVersions.uploadedBy?.id && String(user.id) === String(selectedDocForVersions.uploadedBy.id)) ||
+              selectedDocForVersions.signRequests?.some((sr: any) => {
+                const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                if (user?.id && targetUserId && String(user.id) === String(targetUserId)) return true;
+                const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                const userRole = (userType || "").toLowerCase();
+                return targetRole === userRole;
+              }) ||
+              (selectedDocForVersions.status === "pending_signature" && selectedDocForVersions.category === "client" && userType === "client")
+            )
+          )}
+          canReject={Boolean(
+            !selectedDocForVersions.signature &&
+            !(user?.id && selectedDocForVersions.uploadedBy?.id && String(user.id) === String(selectedDocForVersions.uploadedBy.id)) &&
+            (
+              userType === "admin" ||
+              userType === "siteManager" ||
+              selectedDocForVersions.signRequests?.some((sr: any) => {
+                const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                if (user?.id && targetUserId && String(user.id) === String(targetUserId)) return true;
+                const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                const userRole = (userType || "").toLowerCase();
+                return targetRole === userRole;
+              }) ||
+              (selectedDocForVersions.status === "pending_signature" && selectedDocForVersions.category === "client" && userType === "client")
+            )
+          )}
           onDocumentUpdated={async () => {
             const updated = await getSiteDetails(siteId!);
             setSite(updated as ExtendedSite);
           }}
           onOpenSignModal={(doc) => {
             setSelectedDocForSign(doc);
+          }}
+          onOpenRejectModal={(doc) => {
+            setSelectedDocForReject(doc);
           }}
         />
       )}
