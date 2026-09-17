@@ -136,16 +136,18 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
       type === "low_stock_alert" ||
       type === "stock_depleted"
     ) {
-      const siteId = relId || notif.metadata?.siteId;
-      const stockId = notif.metadata?.stockId;
+      // NOTE: For stock alerts, relId is the Stock ID, NEVER a Site ID!
+      // The site ID is located in notif.metadata?.siteId.
+      const siteId = notif.metadata?.siteId;
+      const stockId = notif.metadata?.stockId || (type !== "stock_transfer" ? relId : undefined);
       const highlightQuery = stockId ? `&highlight=${stockId}` : `&highlight=stocks`;
-      if (role === "sitemanager") {
-        return siteId
+      if (siteId) {
+        return role === "sitemanager"
           ? `/siteManager/sites/${siteId}?tab=stocks${highlightQuery}`
-          : `/siteManager/dashboard`;
+          : `/admin/sites/${siteId}?tab=stocks${highlightQuery}`;
       }
-      return siteId
-        ? `/admin/sites/${siteId}?tab=stocks${highlightQuery}`
+      return role === "sitemanager"
+        ? `/siteManager/dashboard`
         : `/admin/stocks`;
     }
 
@@ -715,18 +717,15 @@ return createPortal(
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         onClose();
-                                        const siteId =
-                                          notif.relatedId ||
-                                          notif.metadata?.siteId;
+                                        const siteId = notif.metadata?.siteId;
                                         const stockName =
-                                          notif.metadata?.stockName || "";
-                                        const baseRoute =
-                                          destinationRoute ||
-                                          (role === "sitemanager" && siteId
-                                            ? `/siteManager/sites/${siteId}?tab=stocks`
-                                            : siteId
-                                              ? `/admin/sites/${siteId}?tab=stocks`
-                                              : "/admin/stocks");
+                                          notif.metadata?.stockName ||
+                                          (notif.message.match(/"([^"]+)"/)?.[1] || "");
+                                        const baseRoute = siteId
+                                          ? (role === "sitemanager"
+                                              ? `/siteManager/sites/${siteId}?tab=stocks`
+                                              : `/admin/sites/${siteId}?tab=stocks`)
+                                          : "/admin/stocks";
                                         const reorderParam = `action=reorder${
                                           stockName
                                             ? `&stockName=${encodeURIComponent(
