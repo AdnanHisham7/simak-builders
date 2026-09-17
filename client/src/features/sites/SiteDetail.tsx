@@ -53,6 +53,7 @@ import {
   Sliders,
   BellRing,
   AlertTriangle,
+  XCircle,
 } from "lucide-react";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
