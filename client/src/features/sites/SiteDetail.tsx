@@ -308,6 +308,15 @@ const SiteDetail: React.FC = () => {
   const [documentModalInitialTab, setDocumentModalInitialTab] = useState<
     "history" | "new_version" | "request_sign"
   >("history");
+  const [activeStatusPopoverId, setActiveStatusPopoverId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = () => setActiveStatusPopoverId(null);
+    if (activeStatusPopoverId) {
+      window.addEventListener("click", handleOutsideClick);
+      return () => window.removeEventListener("click", handleOutsideClick);
+    }
+  }, [activeStatusPopoverId]);
 
   const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
   const [editMiscName, setEditMiscName] = useState("");
@@ -2762,35 +2771,137 @@ const SiteDetail: React.FC = () => {
                             {doc.category === "client" ? "Client Document" : "Site Document"}
                           </span>
 
-                          {/* Status Badge */}
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                              isSigned
-                                ? "bg-emerald-100 text-emerald-800"
-                                : isPending
-                                ? "bg-amber-100 text-amber-800"
-                                : isRejected
-                                ? "bg-rose-100 text-rose-800"
-                                : "bg-slate-100 text-slate-600",
+                          {/* Clickable Status Badge with Floating Popover */}
+                          <div className="relative inline-block">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveStatusPopoverId(
+                                  activeStatusPopoverId === (doc.id || doc._id)
+                                    ? null
+                                    : doc.id || doc._id
+                                );
+                              }}
+                              title="Click to view sign-off details"
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition-all cursor-pointer hover:shadow-xs focus:outline-none focus:ring-2 focus:ring-offset-1",
+                                isSigned
+                                  ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200/80 focus:ring-emerald-400"
+                                  : isPending
+                                  ? "bg-amber-100 text-amber-900 hover:bg-amber-200/80 focus:ring-amber-400"
+                                  : isRejected
+                                  ? "bg-rose-100 text-rose-900 hover:bg-rose-200/80 focus:ring-rose-400"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 focus:ring-slate-400",
+                                activeStatusPopoverId === (doc.id || doc._id) && "ring-2 ring-offset-1"
+                              )}
+                            >
+                              {isSigned ? (
+                                <>
+                                  <CheckCircle2 size={11} className="text-emerald-600" /> Signed
+                                </>
+                              ) : isPending ? (
+                                <>
+                                  <Clock size={11} className="text-amber-600" /> Pending Sign-off
+                                </>
+                              ) : isRejected ? (
+                                <>
+                                  <XCircle size={11} className="text-rose-600" /> Rejected
+                                </>
+                              ) : (
+                                "Draft"
+                              )}
+                            </button>
+
+                            {/* Floating Popover on Click */}
+                            {activeStatusPopoverId === (doc.id || doc._id) && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className={cn(
+                                  "absolute left-0 top-full mt-1.5 z-30 w-72 sm:w-80 rounded-xl border p-3 shadow-xl text-xs transition-all",
+                                  isSigned
+                                    ? "border-emerald-200 bg-emerald-50/95 text-emerald-950"
+                                    : isPending
+                                    ? "border-amber-200 bg-amber-50/95 text-amber-950"
+                                    : isRejected
+                                    ? "border-rose-200 bg-rose-50/95 text-rose-950"
+                                    : "border-slate-200 bg-white text-slate-800"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 font-semibold">
+                                  <span className="flex items-center gap-1.5">
+                                    {isSigned && <CheckCircle2 size={13} className="text-emerald-600" />}
+                                    {isPending && <Clock size={13} className="text-amber-600" />}
+                                    {isRejected && <XCircle size={13} className="text-rose-600" />}
+                                    {isSigned
+                                      ? "Signature Details"
+                                      : isPending
+                                      ? "Sign-off Request"
+                                      : isRejected
+                                      ? "Rejection Details"
+                                      : "Document Status"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveStatusPopoverId(null)}
+                                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+
+                                {isSigned && doc.signature && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole})
+                                    </p>
+                                    <p className="text-[11px] opacity-80">
+                                      Date: {formatDate(doc.signature.signedAt)}
+                                    </p>
+                                    {doc.signature.comments && (
+                                      <p className="mt-1 rounded bg-emerald-100/60 p-1.5 text-[11px] italic">
+                                        "{doc.signature.comments}"
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {isPending && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      <strong>Required Signer:</strong>{" "}
+                                      <span className="capitalize">{reqRole}</span>
+                                      {reqPerson}
+                                    </p>
+                                    {reqMsg ? (
+                                      <p className="mt-1 rounded bg-amber-100/60 p-1.5 text-[11px] italic">
+                                        "{reqMsg}"
+                                      </p>
+                                    ) : (
+                                      <p className="text-[11px] opacity-80">
+                                        Awaiting formal sign-off approval from the designated signer.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {isRejected && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      <strong>Rejection reason:</strong>{" "}
+                                      {doc.rejectionReason || "No reason provided."}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {!isSigned && !isPending && !isRejected && (
+                                  <p className="text-[11px] opacity-80">
+                                    This document is currently saved as a draft. Click "Sign / Request" to submit for approval.
+                                  </p>
+                                )}
+                              </div>
                             )}
-                          >
-                            {isSigned ? (
-                              <>
-                                <CheckCircle2 size={11} /> Signed
-                              </>
-                            ) : isPending ? (
-                              <>
-                                <Clock size={11} /> Pending Sign-off
-                              </>
-                            ) : isRejected ? (
-                              <>
-                                <XCircle size={11} /> Rejected
-                              </>
-                            ) : (
-                              "Draft"
-                            )}
-                          </span>
+                          </div>
                         </div>
 
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -2812,37 +2923,6 @@ const SiteDetail: React.FC = () => {
                             </>
                           )}
                         </div>
-
-                        {/* Signed callout */}
-                        {isSigned && doc.signature && (
-                          <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-xs text-emerald-800">
-                            <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />
-                            <span>
-                              Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole}) on{" "}
-                              {formatDate(doc.signature.signedAt)}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Pending Sign-off callout */}
-                        {isPending && (
-                          <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-xs text-amber-900">
-                            <Clock size={12} className="shrink-0 text-amber-600" />
-                            <span>
-                              Required Signer: <strong className="capitalize">{reqRole}</strong>
-                              {reqPerson}
-                              {reqMsg ? ` — "${reqMsg}"` : ""}
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Rejected callout */}
-                        {isRejected && doc.rejectionReason && (
-                          <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-xs text-rose-800">
-                            <span className="font-semibold">Rejection reason:</span>
-                            <span>{doc.rejectionReason}</span>
-                          </div>
-                        )}
                       </div>
                     </div>
 
