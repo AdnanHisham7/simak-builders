@@ -175,6 +175,13 @@ const SiteDetail: React.FC = () => {
   const [isLogUsageModalOpen, setIsLogUsageModalOpen] = useState(false);
   const [isRequestTransferModalOpen, setIsRequestTransferModalOpen] =
     useState(false);
+  const [reorderInitialItem, setReorderInitialItem] = useState<{
+    name?: string;
+    unit?: string;
+    category?: string;
+    quantity?: string | number;
+    price?: string | number;
+  } | null>(null);
   const [attendanceData, setAttendanceData] = useState<
     { date: string; count: number; level: number }[]
   >([]);
@@ -252,6 +259,43 @@ const SiteDetail: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [loading, site, searchParams, selectedTab]);
+
+  const handleQuickReorder = (stockItem: any) => {
+    const thresh = stockItem.lowStockThreshold ?? 10;
+    const suggestedQty = Math.max(thresh * 2 - (stockItem.quantity || 0), 10);
+    setReorderInitialItem({
+      name: stockItem.name,
+      unit: stockItem.unit,
+      category: stockItem.category || "",
+      quantity: suggestedQty,
+      price: stockItem.averagePrice || "",
+    });
+    setIsAddPurchaseModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (loading || !site) return;
+    const actionParam = searchParams.get("action");
+    if (actionParam === "reorder") {
+      const stockName = searchParams.get("stockName");
+      const matchedStock = stocks.find(
+        (s) => s.name.toLowerCase() === (stockName || "").toLowerCase(),
+      );
+      if (matchedStock) {
+        handleQuickReorder(matchedStock);
+      } else if (stockName) {
+        setReorderInitialItem({ name: stockName });
+        setIsAddPurchaseModalOpen(true);
+      } else {
+        setIsAddPurchaseModalOpen(true);
+      }
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      nextParams.delete("stockName");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [loading, site, stocks, searchParams]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
     useState(false);
@@ -2125,6 +2169,23 @@ const SiteDetail: React.FC = () => {
                     )}
                     Reorder supplies soon to prevent construction downtime. Automated cron checks verify stock levels daily.
                   </p>
+                  {canAddPurchase && lowStocks.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleQuickReorder(lowStocks[0])}
+                        className="text-xs py-1 px-3 bg-amber-800 hover:bg-amber-900 text-white border-none shadow-xs"
+                      >
+                        <ShoppingCart size={13} />
+                        <span>Reorder {lowStocks[0].name} (Add Purchase)</span>
+                      </Button>
+                      {lowStocks.length > 1 && (
+                        <span className="text-[11px] text-amber-800 font-medium">
+                          + {lowStocks.length - 1} more low item{lowStocks.length - 1 !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -2143,7 +2204,7 @@ const SiteDetail: React.FC = () => {
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Reorder Min</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
-                    {canManageStocks && (
+                    {(canManageStocks || canAddPurchase) && (
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
                     )}
                   </tr>
@@ -2179,22 +2240,43 @@ const SiteDetail: React.FC = () => {
                             {isOut ? "Out of stock" : isLow ? `Low stock (≤${thresh})` : "In stock"}
                           </Badge>
                         </td>
-                        {canManageStocks && (
+                        {(canManageStocks || canAddPurchase) && (
                           <td className="whitespace-nowrap px-4 py-3.5 text-right">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEditingStockThreshold({
-                                  id: stock._id,
-                                  name: stock.name,
-                                  unit: stock.unit,
-                                  currentThreshold: thresh,
-                                })
-                              }
-                              className="inline-flex items-center gap-1 rounded-md border border-console-border bg-white px-2.5 py-1 text-xs font-medium text-console-text hover:bg-console-bg"
-                            >
-                              <Sliders size={12} /> Set min
-                            </button>
+                            <div className="inline-flex items-center gap-2">
+                              {canAddPurchase && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickReorder(stock)}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors shadow-2xs",
+                                    isLow
+                                      ? "bg-amber-600 text-white hover:bg-amber-700"
+                                      : "border border-console-border bg-white text-console-text hover:bg-console-bg"
+                                  )}
+                                  title="Submit purchase to replenish stock"
+                                >
+                                  <ShoppingCart size={12} />
+                                  <span>Reorder</span>
+                                </button>
+                              )}
+                              {canManageStocks && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingStockThreshold({
+                                      id: stock._id,
+                                      name: stock.name,
+                                      unit: stock.unit,
+                                      currentThreshold: thresh,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-md border border-console-border bg-white px-2.5 py-1 text-xs font-medium text-console-text hover:bg-console-bg"
+                                  title="Set reorder threshold minimum"
+                                >
+                                  <Sliders size={12} /> Set min
+                                </button>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -2945,9 +3027,12 @@ const SiteDetail: React.FC = () => {
         <AddPurchaseModal
           siteId={siteId!}
           isAdmin={userType === "admin"}
+          initialItem={reorderInitialItem || undefined}
           onClose={() => {
             setIsAddPurchaseModalOpen(false);
+            setReorderInitialItem(null);
             if (selectedTab === "purchases") fetchPurchases();
+            fetchStocks();
           }}
         />
       )}

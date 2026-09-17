@@ -133,16 +133,20 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
     if (
       type === "stock_transfer" ||
       type === "stock_low_alert" ||
+      type === "low_stock_alert" ||
       type === "stock_depleted"
     ) {
+      const siteId = relId || notif.metadata?.siteId;
       const stockId = notif.metadata?.stockId;
       const highlightQuery = stockId ? `&highlight=${stockId}` : `&highlight=stocks`;
       if (role === "sitemanager") {
-        return relId
-          ? `/siteManager/sites/${relId}?tab=stocks${highlightQuery}`
+        return siteId
+          ? `/siteManager/sites/${siteId}?tab=stocks${highlightQuery}`
           : `/siteManager/dashboard`;
       }
-      return `/admin/stocks`;
+      return siteId
+        ? `/admin/sites/${siteId}?tab=stocks${highlightQuery}`
+        : `/admin/stocks`;
     }
 
     // 6. Client Payment Verification
@@ -252,6 +256,17 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
           );
           updateNotificationStatus(notification._id, "approved");
         }
+      } else if (
+        notification.type === "low_stock_alert" ||
+        notification.type === "stock_low_alert"
+      ) {
+        if (action === "approve") {
+          await privateClient.patch(
+            `/notifications/${notification._id}/status`,
+            { status: "approved" },
+          );
+          updateNotificationStatus(notification._id, "approved");
+        }
       }
       toast.success(`${getPastTense(action)} successfully`);
     } catch (error: any) {
@@ -277,6 +292,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({
       case "stock_transfer":
         return <Package className="w-5 h-5 text-blue-500" />;
       case "stock_low_alert":
+      case "low_stock_alert":
       case "stock_depleted":
         return <AlertTriangle className="w-5 h-5 text-amber-500" />;
       case "purchase_verification":
@@ -670,6 +686,64 @@ return createPortal(
                                         <XCircle className="w-3 h-3" />
                                       )}
                                       <span>Reject</span>
+                                    </button>
+                                  </>
+                                )}
+                                {(notif.type === "low_stock_alert" ||
+                                  notif.type === "stock_low_alert") && (
+                                  <>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleAction(notif, "approve");
+                                      }}
+                                      disabled={
+                                        actionLoading === `${notif._id}-approve`
+                                      }
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-2xs"
+                                      title="Approve / acknowledge this alert"
+                                    >
+                                      {actionLoading ===
+                                      `${notif._id}-approve` ? (
+                                        <RefreshCw className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Check className="w-3 h-3" />
+                                      )}
+                                      <span>Approve Alert</span>
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onClose();
+                                        const siteId =
+                                          notif.relatedId ||
+                                          notif.metadata?.siteId;
+                                        const stockName =
+                                          notif.metadata?.stockName || "";
+                                        const baseRoute =
+                                          destinationRoute ||
+                                          (role === "sitemanager" && siteId
+                                            ? `/siteManager/sites/${siteId}?tab=stocks`
+                                            : siteId
+                                              ? `/admin/sites/${siteId}?tab=stocks`
+                                              : "/admin/stocks");
+                                        const reorderParam = `action=reorder${
+                                          stockName
+                                            ? `&stockName=${encodeURIComponent(
+                                                stockName,
+                                              )}`
+                                            : ""
+                                        }`;
+                                        const targetUrl = baseRoute.includes("?")
+                                          ? `${baseRoute}&${reorderParam}`
+                                          : `${baseRoute}?${reorderParam}`;
+                                        navigate(targetUrl);
+                                      }}
+                                      className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white text-xs rounded-lg hover:bg-amber-700 transition-colors font-medium shadow-2xs"
+                                      title="Submit purchase to replenish this stock"
+                                    >
+                                      <ShoppingCart className="w-3 h-3" />
+                                      <span>Reorder (Add Purchase)</span>
                                     </button>
                                   </>
                                 )}

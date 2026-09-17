@@ -74,6 +74,16 @@ export const checkLowStockAcrossSites = async (isManual = false): Promise<StockA
           status: "pending",
           relatedId: stock._id,
           message,
+          metadata: {
+            stockId: stock._id,
+            stockName: stock.name,
+            siteId: (stock.site as any)?._id || stock.site,
+            siteName,
+            category: stock.category,
+            unit: stock.unit,
+            quantity: stock.quantity,
+            threshold,
+          },
         });
       }
 
