@@ -1,5 +1,6 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { useSelector } from "react-redux";
+import { offlinePreparation } from "@/offline/sync/offlinePreparation";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import ToastProvider from "./components/ui/ToastProvider.tsx";
@@ -26,6 +27,7 @@ import AboutUs from "./pages/AboutUs.tsx";
 import PrivacyPolicyPage from "./pages/PrivacyPolicy.tsx";
 import RedirectHandler from "./router/RedirectHandler.tsx";
 import PageLoader from "./components/ui/PageLoader.tsx";
+import { RouteErrorBoundary } from "./components/common/RouteErrorBoundary.tsx";
 import { RootState } from "./store/store.ts";
 
 const AdminDashboard = lazy(() => import("./features/dashboard/AdminDashboard.tsx"));
@@ -62,6 +64,13 @@ const App: React.FC = () => {
     (state: RootState) => state.auth.isAuthenticated,
   );
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      offlinePreparation.prepareForOffline().catch(() => {});
+      offlinePreparation.prefetchRouteBundles();
+    }
+  }, [isAuthenticated]);
+
   usePreloadImage(loginIllustration, !isAuthenticated);
   usePreloadImage(signupIllustration, !isAuthenticated);
 
@@ -70,7 +79,8 @@ const App: React.FC = () => {
       <ToastProvider />
       <Router>
         <RedirectHandler />
-        <Suspense fallback={<PageLoader fullHeight label="Loading" />}>
+        <RouteErrorBoundary>
+          <Suspense fallback={<PageLoader fullHeight label="Loading" />}>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/portfolio" element={<Portfolio />} />
@@ -169,6 +179,7 @@ const App: React.FC = () => {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+      </RouteErrorBoundary>
       </Router>
     </GoogleOAuthProvider>
   );

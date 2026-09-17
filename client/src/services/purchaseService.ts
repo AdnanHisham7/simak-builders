@@ -1,8 +1,11 @@
 import { privateClient } from "@/api";
+import {
+  localAddPurchase,
+  localGetPurchasesBySite,
+} from "@/offline/repositories/purchaseRepository";
 
 export const addPurchase = async (purchaseData: any) => {
-  const response = await privateClient.post(`/purchases`, purchaseData);
-  return response.data;
+  return localAddPurchase(purchaseData);
 };
 
 export const verifyPurchase = async (purchaseId: string) => {
@@ -30,11 +33,8 @@ export const getPurchases = async (siteId = null, status = null) => {
   return response.data;
 };
 
-export const getPurchasesBySite = async (siteId: string, status = null) => {
-  const response = await privateClient.get(`/purchases/by-site`, {
-    params: { siteId, status },
-  });
-  return response.data;
+export const getPurchasesBySite = async (siteId: string, status: any = null) => {
+  return localGetPurchasesBySite(siteId, status);
 };
 
 export const getPurchaseById = async (purchaseId: string) => {

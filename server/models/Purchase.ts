@@ -44,11 +44,15 @@ const PurchaseSchema = new Schema<Purchase>(
     },
     deductFromUserId: { type: Schema.Types.ObjectId, ref: "User", required: false },
     notes: { type: String, default: "", trim: true },
+    clientMutationId: { type: String, index: true },
+    version: { type: Number, default: 1 },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 PurchaseSchema.index({ site: 1, createdAt: -1 });
 PurchaseSchema.index({ vendor: 1 });
+PurchaseSchema.index({ updatedAt: -1 });
 
 export const PurchaseModel = model<Purchase>("Purchase", PurchaseSchema);

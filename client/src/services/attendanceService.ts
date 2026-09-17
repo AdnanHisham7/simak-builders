@@ -1,18 +1,17 @@
 import { privateClient } from "@/api";
+import {
+  localMarkAttendance,
+  localGetEmployeesWithAttendance,
+  localGetSiteAttendance,
+} from "@/offline/repositories/attendanceRepository";
 
 export const markAttendance = async (
   employeeId: string,
   siteId: string,
   date: string,
-  status: number // Changed to number
+  status: number
 ) => {
-  const response = await privateClient.post(`/attendance/mark`, {
-    employeeId,
-    siteId,
-    date,
-    status,
-  });
-  return response.data;
+  return localMarkAttendance(employeeId, siteId, date, status);
 };
 
 export const getSiteAttendance = async (
@@ -20,10 +19,7 @@ export const getSiteAttendance = async (
   startDate: string,
   endDate: string
 ) => {
-  const response = await privateClient.get(`/attendance/site/${siteId}`, {
-    params: { startDate, endDate },
-  });
-  return response.data;
+  return localGetSiteAttendance(siteId, startDate, endDate);
 };
 
 export const getAttendanceDetailsForDay = async (siteId: string, date: string) => {
@@ -32,6 +28,5 @@ export const getAttendanceDetailsForDay = async (siteId: string, date: string) =
 };
 
 export const getEmployeesWithAttendance = async (siteId: string, date: string) => {
-  const response = await privateClient.get(`/attendance/site/${siteId}/employees/${date}`);
-  return response.data;
+  return localGetEmployeesWithAttendance(siteId, date);
 };

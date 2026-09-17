@@ -10,11 +10,16 @@ const AttendanceSchema = new Schema<Attendance>(
     dailyWage: { type: Number, required: true },
     isPaid: { type: Boolean, default: false },
     markedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    clientMutationId: { type: String, index: true },
+    version: { type: Number, default: 1 },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
 AttendanceSchema.index({ site: 1, createdAt: -1 });
 AttendanceSchema.index({ employee: 1, date: -1 });
+AttendanceSchema.index({ site: 1, employee: 1, date: 1 });
+AttendanceSchema.index({ updatedAt: -1 });
 
 export const AttendanceModel = model<Attendance>("Attendance", AttendanceSchema);

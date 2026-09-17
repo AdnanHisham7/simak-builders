@@ -6,6 +6,7 @@ export interface PurchaseItem {
   category: string;
   quantity: number;
   price: number;
+  totalAmount?: number;
 }
 
 export interface BillUpload {
@@ -14,6 +15,7 @@ export interface BillUpload {
   type?: string;
   uploadDate?: string;
   url?: string;
+  public_id?: string;
 }
 
 export interface Payment {
@@ -23,6 +25,7 @@ export interface Payment {
 }
 
 export interface Purchase {
+  _id?: Types.ObjectId;
   date: Date;
   site?: Types.ObjectId;
   vendor: Types.ObjectId;
@@ -36,6 +39,9 @@ export interface Purchase {
   sourceOfFunds?: "company" | "siteManager";
   deductFromUserId?: Types.ObjectId;
   notes?: string;
+  clientMutationId?: string;
+  version?: number;
+  deletedAt?: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

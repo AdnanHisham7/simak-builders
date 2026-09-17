@@ -10,6 +10,9 @@ export interface Attendance {
   dailyWage: number; 
   isPaid: boolean;
   markedBy: Types.ObjectId;
+  clientMutationId?: string;
+  version?: number;
+  deletedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -34,7 +34,13 @@ const LoginForm: React.FC<LoginFormProps> = ({
   resendVerificationLoading,
   navigate,
 }) => (
-  <div className="space-y-6">
+  <form
+    onSubmit={(e) => {
+      e.preventDefault();
+      handleSubmit();
+    }}
+    className="space-y-6"
+  >
     <div className="space-y-1.5">
       <label className="block text-sm font-medium text-console-text">Email</label>
       <Input
@@ -92,16 +98,15 @@ const LoginForm: React.FC<LoginFormProps> = ({
     )}
 
     <Button
-      type="button"
+      type="submit"
       loading={isLoading}
       disabled={isLoading}
-      onClick={handleSubmit}
       className="w-full"
       size="lg"
     >
       {isLoading ? "Signing in..." : "Sign in"}
     </Button>
-  </div>
+  </form>
 );
 
 export default LoginForm;

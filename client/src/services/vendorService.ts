@@ -49,21 +49,33 @@ export interface Purchase {
   };
 }
 
+import { offlineDB } from "@/offline/db";
+
 export const getVendors = async (): Promise<Vendor[]> => {
   return withCache(VENDORS_FULL_LIST_CACHE_KEY, VENDORS_FULL_LIST_CACHE_TTL_MS, async () => {
-    const response = await privateClient.get("/vendors");
-    return response.data.map((vendor: any) => ({
-      id: vendor._id,
-      name: vendor.name,
-      email: vendor.email,
-      phone: vendor.phone,
-      createdAt: vendor.createdAt,
-      updatedAt: vendor.updatedAt,
-      totalPurchases: vendor.totalPurchases,
-      totalAmount: vendor.totalAmount,
-      outstandingAmount: vendor.outstandingAmount,
-      status: vendor.status,
-    }));
+    try {
+      const response = await privateClient.get("/vendors");
+      const list = response.data.map((vendor: any) => ({
+        id: vendor._id || vendor.id,
+        name: vendor.name,
+        email: vendor.email,
+        phone: vendor.phone,
+        createdAt: vendor.createdAt,
+        updatedAt: vendor.updatedAt,
+        totalPurchases: vendor.totalPurchases,
+        totalAmount: vendor.totalAmount,
+        outstandingAmount: vendor.outstandingAmount,
+        status: vendor.status,
+      }));
+      for (const ven of list) {
+        offlineDB.vendors.put({ ...ven, syncStatus: "synced" }).catch(() => {});
+      }
+      return list;
+    } catch (err) {
+      const local = await offlineDB.vendors.toArray();
+      if (local && local.length > 0) return local as any;
+      throw err;
+    }
   });
 };
 

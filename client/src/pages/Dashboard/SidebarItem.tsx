@@ -22,7 +22,10 @@ const SidebarItemButton = forwardRef<HTMLButtonElement, SidebarItemProps>(functi
     <button
       ref={ref}
       type="button"
-      onClick={onClick}
+      onClick={(e) => {
+        e.currentTarget.blur();
+        onClick();
+      }}
       className={cn(
         "group relative mx-2 my-0.5 flex w-[calc(100%-1rem)] items-center rounded-lg py-2 text-sm transition-colors duration-200",
         collapsed ? "justify-center px-2" : "px-3",

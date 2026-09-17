@@ -8,6 +8,7 @@ import ProfileDropdown from "@/components/layout/ProfileDropDown";
 import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
+import { OfflineStatusBadge } from "@/components/layout/OfflineStatusBadge";
 
 interface Notification {
   _id: string;
@@ -37,12 +38,13 @@ export default function Header({
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
     setLoading(true);
     try {
       const response = await privateClient.get("/notifications");
       setNotifications(response.data);
     } catch (error) {
-      toast.error("Failed to load notifications");
+      // Non-critical when offline
     } finally {
       setLoading(false);
     }
@@ -85,6 +87,7 @@ export default function Header({
       </Tooltip>
 
       <div className="flex items-center gap-3">
+        <OfflineStatusBadge />
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           Back to site
         </Button>

@@ -11,9 +11,11 @@ import PreferencesCard from "./components/PreferencesCard";
 import CompanyProfileCard from "./components/CompanyProfileCard";
 import DeactivateAccountCard from "./components/DeactivateAccountCard";
 import DeactivationRequestsCard from "./components/DeactivationRequestsCard";
+import { OfflineSyncCard } from "./components/OfflineSyncCard";
 
 const TAB_ACCOUNT = "Account & Security";
 const TAB_PREFERENCES = "Preferences";
+const TAB_OFFLINE = "Offline & Sync";
 const TAB_COMPANY = "Company";
 
 const DEFAULT_PREFERENCES: UserPreferences = {
@@ -29,8 +31,8 @@ const Settings: React.FC = () => {
   const isAdmin = userType === "admin";
 
   const tabs = isAdmin
-    ? [TAB_ACCOUNT, TAB_PREFERENCES, TAB_COMPANY]
-    : [TAB_ACCOUNT, TAB_PREFERENCES];
+    ? [TAB_ACCOUNT, TAB_PREFERENCES, TAB_OFFLINE, TAB_COMPANY]
+    : [TAB_ACCOUNT, TAB_PREFERENCES, TAB_OFFLINE];
 
   const [activeTab, setActiveTab] = useState(TAB_ACCOUNT);
   const [deactivationRequest, setDeactivationRequest] = useState<
@@ -74,6 +76,8 @@ const Settings: React.FC = () => {
           onChange={handlePreferencesChange}
         />
       )}
+
+      {activeTab === TAB_OFFLINE && <OfflineSyncCard />}
 
       {activeTab === TAB_COMPANY && isAdmin && <CompanyProfileCard />}
     </div>

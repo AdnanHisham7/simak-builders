@@ -203,14 +203,18 @@ const AdminDashboard = () => {
         setLoading(false);
 
         try {
-          const [companySummary, receivableSummary] = await Promise.all([
+          const [companyRes, receivableRes] = await Promise.allSettled([
             getCompanySummary(),
             getAmountToBeReceived(),
           ]);
-          setCompanyTotalAmount(companySummary.totalAmount);
-          setAmountToBeReceived(receivableSummary.total);
-        } catch (financialErr) {
-          toast.error("Failed to load company financial summary");
+          if (companyRes.status === "fulfilled") {
+            setCompanyTotalAmount(companyRes.value.totalAmount);
+          }
+          if (receivableRes.status === "fulfilled") {
+            setAmountToBeReceived(receivableRes.value.total);
+          }
+        } catch {
+          // Non-critical offline fallback
         } finally {
           setFinancialSummaryLoading(false);
         }
