@@ -48,6 +48,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const allowedOrigins = [
+  "http://localhost:5173",
   "https://simakbuilders.com",
   "https://www.simakbuilders.com",
 ];
@@ -93,7 +94,6 @@ app.use("/api", generalApiLimiter);
 // app.use("/api/auth", authLimiter);
 // app.use("/api/enquiries", publicFormLimiter);
 // app.use("/api/feedback", publicFormLimiter);
-
 
 // Routes
 app.use("/api/auth", authRoutes);

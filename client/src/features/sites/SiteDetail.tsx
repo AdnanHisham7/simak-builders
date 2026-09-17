@@ -59,6 +59,7 @@ import SiteProgressTimeline from "./SiteProgressTimeline";
 import SiteBudgetDashboard from "./SiteBudgetDashboard";
 import SignDocumentModal from "./SignDocumentModal";
 import DocumentVersionsModal from "./DocumentVersionsModal";
+import RejectDocumentModal from "./RejectDocumentModal";
 import EditThresholdModal from "../stocks/EditThresholdModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
@@ -256,6 +257,7 @@ const SiteDetail: React.FC = () => {
 
   const [selectedDocForVersions, setSelectedDocForVersions] = useState<any | null>(null);
   const [selectedDocForSign, setSelectedDocForSign] = useState<any | null>(null);
+  const [selectedDocForReject, setSelectedDocForReject] = useState<any | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -1289,13 +1291,13 @@ const SiteDetail: React.FC = () => {
           icon={TrendingUp}
           helperText={
             site.budget > 0
-              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized • View burn-rate`
+              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized • Click to view transactions`
               : "No funds received yet"
           }
-          onClick={() => setSelectedTab("budget")}
+          onClick={() => setIsTransactionsModalOpen(true)}
           action={{
-            label: "Transactions",
-            onClick: () => setIsTransactionsModalOpen(true),
+            label: "Burn rate",
+            onClick: () => setSelectedTab("budget"),
           }}
         />
 
@@ -2374,7 +2376,7 @@ const SiteDetail: React.FC = () => {
                                 <span>{(doc.size / 1024).toFixed(1)} KB</span>
                                 <span>•</span>
                                 <User size={11} />
-                                <span>{doc.uploadedBy?.name || "Member"}</span>
+                                <span>Uploaded by: <strong>{doc.uploadedBy?.name || "Member"}</strong></span>
                                 <span>•</span>
                                 <Calendar size={11} />
                                 <span>{formatDate(doc.uploadDate)}</span>
@@ -2387,6 +2389,33 @@ const SiteDetail: React.FC = () => {
                                   </>
                                 )}
                               </div>
+
+                              {/* Signer, Rejection & Required Signer Info */}
+                              {isSigned && doc.signature && (
+                                <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50/70 px-2.5 py-1 text-xs text-emerald-800">
+                                  <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />
+                                  <span>
+                                    Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole}) on {formatDate(doc.signature.signedAt)}
+                                  </span>
+                                </div>
+                              )}
+
+                              {isPending && doc.signRequests && doc.signRequests.length > 0 && (
+                                <div className="mt-1.5 flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1 text-xs text-amber-900">
+                                  <Clock size={12} className="shrink-0 text-amber-600" />
+                                  <span>
+                                    Required Signer: <strong className="capitalize">{doc.signRequests[0].role}</strong>
+                                    {doc.signRequests[0].message ? ` — "${doc.signRequests[0].message}"` : ""}
+                                  </span>
+                                </div>
+                              )}
+
+                              {isRejected && doc.rejectionReason && (
+                                <div className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-rose-200 bg-rose-50/70 px-2.5 py-1 text-xs text-rose-800">
+                                  <span className="font-semibold">Rejection reason:</span>
+                                  <span>{doc.rejectionReason}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
 
@@ -2402,15 +2431,27 @@ const SiteDetail: React.FC = () => {
                             </button>
 
                             {!isSigned && (
-                              <button
-                                type="button"
-                                onClick={() => setSelectedDocForSign(doc)}
-                                className="flex items-center gap-1 rounded-lg bg-brand-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-brand-800 transition-colors"
-                                title="Sign Document"
-                              >
-                                <PenTool size={13} />
-                                <span>Sign</span>
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDocForSign(doc)}
+                                  className="flex items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1 text-xs font-medium text-white shadow-xs hover:bg-emerald-800 transition-colors"
+                                  title="Sign Document"
+                                >
+                                  <PenTool size={13} />
+                                  <span>Sign</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedDocForReject(doc)}
+                                  className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
+                                  title="Reject Document"
+                                >
+                                  <XCircle size={13} />
+                                  <span>Reject</span>
+                                </button>
+                              </>
                             )}
 
                             <a
@@ -2572,6 +2613,20 @@ const SiteDetail: React.FC = () => {
           defaultSignerName={user?.name}
           defaultSignerRole={userType || "client"}
           onSigned={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
+          }}
+        />
+      )}
+
+      {selectedDocForReject && (
+        <RejectDocumentModal
+          isOpen={Boolean(selectedDocForReject)}
+          onClose={() => setSelectedDocForReject(null)}
+          siteId={site.id}
+          documentId={selectedDocForReject.id || selectedDocForReject._id}
+          documentName={selectedDocForReject.name}
+          onSuccess={async () => {
             const updated = await getSiteDetails(siteId!);
             setSite(updated as ExtendedSite);
           }}

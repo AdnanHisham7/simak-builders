@@ -282,17 +282,28 @@ const mapSiteDetailsData = (
         : undefined,
     })) || [],
   documents: site?.documents?.map((doc: any) => ({
-    id: doc?._id.toString(),
+    id: doc?._id?.toString() || doc?.id,
     name: doc?.name,
     size: doc?.size,
     type: doc?.type,
     uploadDate: doc?.uploadDate,
     url: doc?.url,
-    uploadedBy: {
-      id: doc?.uploadedBy._id.toString(),
-      name: doc?.uploadedBy.name,
-    },
+    uploadedBy: doc?.uploadedBy
+      ? {
+          id: doc.uploadedBy._id ? doc.uploadedBy._id.toString() : doc.uploadedBy.toString(),
+          name: doc.uploadedBy.name || "Member",
+        }
+      : undefined,
     category: doc?.category,
+    version: doc?.version || 1,
+    versions: doc?.versions || [],
+    status: doc?.status || "draft",
+    phaseId: doc?.phaseId,
+    phaseName: doc?.phaseName,
+    notes: doc?.notes,
+    signature: doc?.signature,
+    signRequests: doc?.signRequests || [],
+    rejectionReason: doc?.rejectionReason,
   })),
   budget: site?.budget || 0,
   expenses: site?.expenses || 0,
