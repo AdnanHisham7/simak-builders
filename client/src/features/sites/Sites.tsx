@@ -25,6 +25,7 @@ import {
   Inbox,
   Loader2,
   Pencil,
+  BarChart3,
 } from "lucide-react";
 import {
   createSite,
@@ -40,6 +41,8 @@ import debounce from "lodash/debounce";
 import AddSiteModal from "./AddSiteModal";
 import AddPurchaseModal from "./AddPurchaseModal";
 import EditSiteModal, { EditSiteFormValues } from "./EditSiteModal";
+import SiteProgressTimeline from "./SiteProgressTimeline";
+import Modal from "@/components/ui/Modal";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
@@ -75,6 +78,7 @@ interface MappedSite {
   architectCount: number;
   completedPhases: number;
   totalPhases: number;
+  phases?: Site["phases"];
 }
 
 const buildLocation = (address: string, city: string, state: string, zip: string) =>
@@ -97,6 +101,7 @@ const mapSiteForDisplay = (site: Site): MappedSite => ({
   architectCount: site.architectCount || 0,
   completedPhases: site.phases?.filter((p) => p.status === "completed").length || 0,
   totalPhases: site.phases?.length || 0,
+  phases: site.phases || [],
 });
 
 const getProjectStatuses = (sites: MappedSite[]) => {
@@ -175,6 +180,7 @@ const Sites: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [timelineSite, setTimelineSite] = useState<MappedSite | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
   const [siteBeingEdited, setSiteBeingEdited] = useState<MappedSite | null>(null);
   const [selectedProjectStatus, setSelectedProjectStatus] =
@@ -609,23 +615,37 @@ const Sites: React.FC = () => {
                                       {formatDate(site.createdAt)}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-console-muted">Progress:</span>
-                                    <div className="h-1.5 flex-1 rounded-full bg-console-bg">
-                                      <div
-                                        className="h-1.5 rounded-full bg-success-600"
-                                        style={{
-                                          width: `${
-                                            site.totalPhases > 0
-                                              ? (site.completedPhases / site.totalPhases) * 100
-                                              : 0
-                                          }%`,
-                                        }}
-                                      />
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div className="flex flex-1 items-center gap-2">
+                                      <span className="text-xs text-console-muted">Progress:</span>
+                                      <div className="h-1.5 flex-1 rounded-full bg-console-bg">
+                                        <div
+                                          className="h-1.5 rounded-full bg-success-600"
+                                          style={{
+                                            width: `${
+                                              site.totalPhases > 0
+                                                ? (site.completedPhases / site.totalPhases) * 100
+                                                : 0
+                                            }%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span className="text-xs font-medium text-console-muted">
+                                        {site.completedPhases}/{site.totalPhases}
+                                      </span>
                                     </div>
-                                    <span className="text-xs text-console-muted">
-                                      {site.completedPhases}/{site.totalPhases}
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTimelineSite(site);
+                                      }}
+                                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xxs font-medium text-brand-700 hover:bg-brand-50 hover:text-brand-900 transition-colors"
+                                      title="View site progress timeline & Gantt chart"
+                                    >
+                                      <BarChart3 size={12} />
+                                      <span>Timeline</span>
+                                    </button>
                                   </div>
                                 </div>
                               </td>
@@ -800,6 +820,24 @@ const Sites: React.FC = () => {
           }}
           onSubmit={handleEditSubmit}
         />
+      )}
+
+      {timelineSite && (
+        <Modal
+          isOpen={!!timelineSite}
+          onClose={() => setTimelineSite(null)}
+          title={`${timelineSite.name} — Progress Timeline & Gantt View`}
+          description="Interactive milestone roadmap and schedule view"
+          size="full"
+        >
+          <SiteProgressTimeline
+            phases={timelineSite.phases || []}
+            siteCreatedAt={timelineSite.createdAt}
+            siteName={timelineSite.name}
+            readOnly={userType !== "admin" && userType !== "siteManager"}
+            userType={userType}
+          />
+        </Modal>
       )}
     </div>
   );

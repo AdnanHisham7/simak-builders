@@ -50,6 +50,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
+import SiteProgressTimeline from "./SiteProgressTimeline";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -825,9 +826,27 @@ const SiteDetail: React.FC = () => {
     try {
       await updatePhaseStatus(site!.id, phaseId, newStatus);
       const updatedPhases = site!.phases.map((phase) =>
-        phase.id === phaseId ? { ...phase, status: newStatus } : phase,
+        phase.id === phaseId
+          ? {
+              ...phase,
+              status: newStatus,
+              completionDate:
+                newStatus === "completed"
+                  ? new Date().toISOString()
+                  : newStatus === "not started"
+                    ? undefined
+                    : phase.completionDate,
+            }
+          : phase,
       );
       setSite({ ...site!, phases: updatedPhases });
+      toast.success(
+        newStatus === "completed"
+          ? "Phase marked as completed"
+          : newStatus === "pending"
+            ? "Phase completion requested"
+            : "Phase status updated",
+      );
     } catch (err) {
       console.error("Error updating phase status:", err);
       toast.error("Failed to update phase status.");
@@ -1333,82 +1352,14 @@ const SiteDetail: React.FC = () => {
       </div>
 
       {selectedTab === "overview" && (
-        <SectionCard>
-          <div className="mb-5 flex items-center justify-between">
-            <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
-              <CheckCircle2 size={20} className="text-brand-600" />
-              Phase checklist
-            </h2>
-            {userType === "admin" && (
-              <Button size="sm" variant="danger" onClick={() => setResetPhasesConfirmOpen(true)}>
-                Reset phases
-              </Button>
-            )}
-          </div>
-          <div className="grid gap-3">
-            {site.phases.map((phase) => (
-              <div
-                key={phase.id}
-                className={cn(
-                  "flex items-center rounded-xl border p-4 transition-colors",
-                  phase.status === "completed"
-                    ? "border-success-200 bg-success-50"
-                    : phase.status === "pending"
-                      ? "border-warning-200 bg-warning-50"
-                      : "border-console-border bg-console-bg",
-                )}
-              >
-                {phase.status === "not started" && <Circle size={18} className="mr-3.5 text-slate-400" />}
-                {phase.status === "pending" && <Clock size={18} className="mr-3.5 text-warning-500" />}
-                {phase.status === "completed" && (
-                  <CheckCircle2 size={18} className="mr-3.5 text-success-600" />
-                )}
-                {userType === "siteManager" && phase.status === "not started" && (
-                  <button
-                    type="button"
-                    onClick={() => handlePhaseStatusChange(phase.id, "pending")}
-                    className="mr-3.5 rounded-md bg-brand-700 px-3 py-1 text-sm text-white hover:bg-brand-800"
-                  >
-                    Request completion
-                  </button>
-                )}
-                {userType === "siteManager" && phase.status === "pending" && (
-                  <span className="mr-3.5 text-sm text-warning-700">Pending verification</span>
-                )}
-                {userType === "admin" && phase.status === "pending" && (
-                  <button
-                    type="button"
-                    onClick={() => handlePhaseStatusChange(phase.id, "completed")}
-                    className="mr-3.5 rounded-md bg-success-600 px-3 py-1 text-sm text-white hover:bg-success-700"
-                  >
-                    Verify completion
-                  </button>
-                )}
-                {userType === "admin" && phase.status === "not started" && (
-                  <button
-                    type="button"
-                    onClick={() => handlePhaseStatusChange(phase.id, "completed")}
-                    className="mr-3.5 rounded-md bg-brand-700 px-3 py-1 text-sm text-white hover:bg-brand-800"
-                  >
-                    Mark as completed
-                  </button>
-                )}
-                <span
-                  className={cn(
-                    "text-sm font-medium",
-                    phase.status === "completed"
-                      ? "text-success-800"
-                      : phase.status === "pending"
-                        ? "text-warning-800"
-                        : "text-console-text",
-                  )}
-                >
-                  {phase.name}
-                </span>
-              </div>
-            ))}
-          </div>
-        </SectionCard>
+        <SiteProgressTimeline
+          phases={site.phases}
+          siteCreatedAt={site.createdAt}
+          siteName={site.name}
+          userType={userType}
+          onUpdateStatus={handlePhaseStatusChange}
+          onResetPhases={() => setResetPhasesConfirmOpen(true)}
+        />
       )}
 
       {selectedTab === "team" && (
