@@ -406,8 +406,16 @@ const getStoryArchive = async (
 ) => {
   try {
     const userId = req.user?.userId;
+    const userRole = req.user?.role;
     const currentUserId = String(userId);
     const type = (req.query.type as string) || "my"; // "my" | "general"
+
+    if (type === "general" && userRole !== "admin") {
+      throw new ApiError(
+        "Access denied. Only administrators can view the general stories archive.",
+        HttpStatus.FORBIDDEN
+      );
+    }
 
     let filter: any = {};
     if (type === "my") {

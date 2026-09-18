@@ -43,11 +43,15 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
   initialTab = "saved",
 }) => {
   const currentUser = useSelector((state: RootState) => state.auth.user);
+  const userType = useSelector((state: RootState) => state.auth.userType);
+  const isAdmin = userType === "admin" || (currentUser as any)?.role === "admin";
   const currentUserId = String(
     currentUser?._id || (currentUser as any)?.id || ""
   );
 
-  const [activeTab, setActiveTab] = useState<SavedArchiveTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<SavedArchiveTab>(
+    initialTab === "general-archive" && !isAdmin ? "saved" : initialTab
+  );
   const [savedStories, setSavedStories] = useState<StoryItem[]>([]);
   const [myArchiveStories, setMyArchiveStories] = useState<StoryItem[]>([]);
   const [generalArchiveStories, setGeneralArchiveStories] = useState<StoryItem[]>([]);
@@ -55,6 +59,12 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === "general-archive") {
+      setActiveTab("saved");
+    }
+  }, [isAdmin, activeTab]);
 
   const fetchTabStories = async (tab: SavedArchiveTab) => {
     try {
@@ -68,6 +78,10 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
         const list = Array.isArray(data) ? data : (data as any)?.stories || [];
         setMyArchiveStories(list);
       } else if (tab === "general-archive") {
+        if (!isAdmin) {
+          setGeneralArchiveStories([]);
+          return;
+        }
         const data = await getStoryArchive("general");
         const list = Array.isArray(data) ? data : (data as any)?.stories || [];
         setGeneralArchiveStories(list);
@@ -193,7 +207,9 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
                     Saved & Stories Archive
                   </h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Your bookmarked stories, personal archive, and general company updates beyond 24 hours.
+                    {isAdmin
+                      ? "Your bookmarked stories, personal archive, and general company updates beyond 24 hours."
+                      : "Your bookmarked stories and personal archive beyond 24 hours."}
                   </p>
                 </div>
               </div>
@@ -249,24 +265,26 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
                   )}
                 </button>
 
-                {/* Tab 3: General Archive */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("general-archive")}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all ${
-                    activeTab === "general-archive"
-                      ? "bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-300 shadow-sm"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  <Sparkles size={13} />
-                  <span>General Archive</span>
-                  {generalArchiveStories.length > 0 && (
-                    <span className="ml-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 px-1.5 py-0.2 text-[10px] text-indigo-700 dark:text-indigo-300 font-bold">
-                      {generalArchiveStories.length}
-                    </span>
-                  )}
-                </button>
+                {/* Tab 3: General Archive (Admin Only) */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab("general-archive")}
+                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-all ${
+                      activeTab === "general-archive"
+                        ? "bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-300 shadow-sm"
+                        : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    <Sparkles size={13} />
+                    <span>General Archive</span>
+                    {generalArchiveStories.length > 0 && (
+                      <span className="ml-1 rounded-full bg-indigo-100 dark:bg-indigo-900/60 px-1.5 py-0.2 text-[10px] text-indigo-700 dark:text-indigo-300 font-bold">
+                        {generalArchiveStories.length}
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Search Filter */}
@@ -312,7 +330,7 @@ export const WatchLaterModal: React.FC<WatchLaterModalProps> = ({
                       ? "Click the bookmark icon on any story while watching to save it here for later viewing."
                       : activeTab === "my-archive"
                       ? "Stories you upload are automatically saved here forever, even after 24 hours."
-                      : "Stories not connected to any construction site appear here permanently for the whole team."}
+                      : "Stories not connected to any construction site appear here permanently for administrators."}
                   </p>
                 </div>
               ) : (
