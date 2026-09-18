@@ -214,13 +214,13 @@ const SiteManagerDashboard: React.FC = () => {
                   Showing {startIndex + 1} to {Math.min(endIndex, transactions.length)} of{" "}
                   {transactions.length} results
                 </p>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full py-1 px-0.5">
                   <Tooltip label="Previous page">
                     <button
                       type="button"
                       onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 shrink-0"
                     >
                       <ChevronLeft size={16} />
                     </button>
@@ -231,7 +231,7 @@ const SiteManagerDashboard: React.FC = () => {
                       key={p}
                       onClick={() => setCurrentPage(p)}
                       className={cn(
-                        "flex h-8 w-8 items-center justify-center rounded-lg text-sm font-medium transition-colors",
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-colors",
                         p === currentPage ? "bg-brand-700 text-white" : "text-console-muted hover:bg-white",
                       )}
                     >
@@ -243,7 +243,7 @@ const SiteManagerDashboard: React.FC = () => {
                       type="button"
                       onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 shrink-0"
                     >
                       <ChevronRight size={16} />
                     </button>

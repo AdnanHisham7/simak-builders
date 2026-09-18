@@ -115,7 +115,7 @@ const PortalLayout = ({ children, menus, roleLabel }: PortalLayoutProps) => {
                 {companyInitials}
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1 sm:flex-initial">
               <div className="truncate text-sm font-semibold text-console-text">
                 {companyName}
               </div>

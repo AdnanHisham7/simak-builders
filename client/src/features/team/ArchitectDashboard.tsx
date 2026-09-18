@@ -179,12 +179,12 @@ const ArchitectDashboard: React.FC = () => {
             { title: "Site Documentation", docs: siteDocuments, category: "site" as const },
           ].map((group) => (
             <div key={group.category}>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <h4 className="flex items-center text-sm font-medium text-console-text">
-                  <FileText size={14} className="mr-2" />
-                  {group.title} ({group.docs.length})
+                  <FileText size={14} className="mr-2 shrink-0" />
+                  <span>{group.title} ({group.docs.length})</span>
                 </h4>
-                <label className="relative cursor-pointer">
+                <label className="relative cursor-pointer self-start sm:self-auto">
                   <input
                     type="file"
                     className="hidden"
@@ -196,7 +196,7 @@ const ArchitectDashboard: React.FC = () => {
                       }
                     }}
                   />
-                  <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800">
+                  <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-white transition-colors hover:bg-brand-800">
                     <Upload size={14} />
                     <span>
                       {uploadingIds.has(`${site.id}-${group.category}`)
@@ -272,7 +272,7 @@ const ArchitectDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="relative flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div className="relative flex items-center gap-1 rounded-console border border-console-border bg-console-bg p-1 overflow-x-auto no-scrollbar flex-nowrap">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -282,7 +282,7 @@ const ArchitectDashboard: React.FC = () => {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "relative z-10 flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
+                "relative z-10 flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
                 isActive ? "text-brand-700" : "text-console-muted hover:bg-white/60",
               )}
             >
@@ -364,15 +364,15 @@ const ArchitectDashboard: React.FC = () => {
                   {myDocuments.map((doc) => (
                     <div
                       key={doc.id}
-                      className="flex items-center justify-between rounded-lg bg-console-bg p-4 transition-colors hover:bg-slate-100"
+                      className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between rounded-lg bg-console-bg p-3.5 sm:p-4 transition-colors hover:bg-slate-100"
                     >
-                      <div className="flex min-w-0 flex-1 items-center gap-4">
+                      <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                         <FileText size={18} className="shrink-0 text-brand-600" />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-medium text-console-text">
                             {doc.name} <span className="text-xs text-console-muted">({doc.category})</span>
                           </p>
-                          <div className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-console-muted">
+                          <div className="mt-0.5 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-console-muted">
                             <span>{(doc.size / 1024).toFixed(1)} KB</span>
                             <span>
                               Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
@@ -385,7 +385,7 @@ const ArchitectDashboard: React.FC = () => {
                         href={doc.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800"
+                        className="flex items-center justify-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800 self-start sm:self-auto shrink-0"
                       >
                         <Download size={14} />
                         <span>Download</span>
@@ -433,12 +433,12 @@ const ArchitectDashboard: React.FC = () => {
                       .map((assignment) => (
                         <div
                           key={assignment._id}
-                          className="flex items-center justify-between rounded-lg bg-console-bg p-4"
+                          className="flex flex-col sm:flex-row gap-2.5 sm:items-center justify-between rounded-lg bg-console-bg p-3.5 sm:p-4"
                         >
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-3 sm:gap-4">
                             <div
                               className={cn(
-                                "flex h-9 w-9 items-center justify-center rounded-full",
+                                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
                                 assignment.isVerified ? "bg-success-100 text-success-700" : "bg-warning-100 text-warning-700",
                               )}
                             >
@@ -448,7 +448,7 @@ const ArchitectDashboard: React.FC = () => {
                               <p className="text-sm font-medium text-console-text">
                                 ₹{formatNumber(assignment.amount)}
                               </p>
-                              <div className="mt-0.5 flex items-center gap-3 text-xs text-console-muted">
+                              <div className="mt-0.5 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-console-muted">
                                 <span className="flex items-center gap-1">
                                   <Calendar size={11} />
                                   {formatDate(assignment.date)}
@@ -460,9 +460,11 @@ const ArchitectDashboard: React.FC = () => {
                               </div>
                             </div>
                           </div>
-                          <Badge variant={assignment.isVerified ? "success" : "warning"}>
-                            {assignment.isVerified ? "Verified" : "Pending"}
-                          </Badge>
+                          <div className="self-start sm:self-auto shrink-0">
+                            <Badge variant={assignment.isVerified ? "success" : "warning"}>
+                              {assignment.isVerified ? "Verified" : "Pending"}
+                            </Badge>
+                          </div>
                         </div>
                       ))}
                   </div>

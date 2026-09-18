@@ -22,7 +22,7 @@ const AnimatedTabs: React.FC<AnimatedTabsProps> = ({
     <div
       ref={containerRef}
       className={cn(
-        "relative flex gap-1 rounded-xl border border-console-border bg-console-bg/70 p-1 backdrop-blur-sm",
+        "relative flex gap-1 rounded-xl border border-console-border bg-console-bg/70 p-1 backdrop-blur-sm overflow-x-auto no-scrollbar flex-nowrap",
         className,
       )}
     >
@@ -34,7 +34,7 @@ const AnimatedTabs: React.FC<AnimatedTabsProps> = ({
             type="button"
             onClick={() => onTabChange(tab)}
             className={cn(
-              "relative z-10 flex-1 rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors duration-200",
+              "relative z-10 flex-1 shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-center text-sm font-medium transition-colors duration-200",
               isActive ? "text-white" : "text-console-muted hover:text-console-text",
             )}
           >

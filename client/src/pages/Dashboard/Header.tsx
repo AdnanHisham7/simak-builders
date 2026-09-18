@@ -87,9 +87,14 @@ export default function Header({
         </button>
       </Tooltip>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <OfflineStatusBadge />
-        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="hidden sm:inline-flex"
+        >
           Back to site
         </Button>
         <HeaderStoriesButton />

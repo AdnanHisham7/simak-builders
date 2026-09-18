@@ -116,8 +116,8 @@ export const PurchaseDetail: React.FC = () => {
             <ArrowLeft size={16} /> Back
           </Button>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-console-text sm:text-2xl">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-lg sm:text-2xl font-bold tracking-tight text-console-text">
                 Purchase Order Details
               </h1>
               <Badge variant={isVerified ? "success" : "warning"}>

@@ -1538,7 +1538,7 @@ const SiteDetail: React.FC = () => {
         </div>
       </SectionCard>
 
-      <div id="site-tabs-navigation" className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1 scroll-mt-6">
+      <div id="site-tabs-navigation" className="flex items-center gap-1 rounded-console border border-console-border bg-console-bg p-1 scroll-mt-6 overflow-x-auto no-scrollbar flex-nowrap">
         {TAB_CONFIG.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -1547,7 +1547,7 @@ const SiteDetail: React.FC = () => {
               type="button"
               onClick={() => setSelectedTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                "flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
                 selectedTab === tab.id
                   ? "bg-white text-brand-700 shadow-console"
                   : "text-console-muted hover:bg-white/60",
@@ -2199,7 +2199,7 @@ const SiteDetail: React.FC = () => {
           ) : filteredStocks.length === 0 ? (
             <EmptyState icon={Package} title="No stock items match the search" />
           ) : (
-            <div className="overflow-hidden rounded-console border border-console-border">
+            <div className="overflow-x-auto rounded-console border border-console-border">
               <table className="min-w-full divide-y divide-console-border">
                 <thead className="bg-console-bg">
                   <tr>

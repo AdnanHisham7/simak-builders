@@ -299,7 +299,7 @@ const ClientSiteProgress: React.FC = () => {
             Track construction phases, budget health, and shared documents.
           </p>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label
             htmlFor="progress-site-select"
             className="mb-1 block text-xs font-medium text-console-muted"
@@ -310,7 +310,7 @@ const ClientSiteProgress: React.FC = () => {
             id="progress-site-select"
             value={selectedSiteId}
             onChange={(e) => setSelectedSiteId(e.target.value)}
-            className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="w-full sm:w-auto rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100 min-w-[200px]"
           >
             {sites.map((s) => (
               <option key={s._id} value={s._id}>
@@ -495,7 +495,7 @@ const ClientSiteProgress: React.FC = () => {
                             <div
                               onClick={(e) => e.stopPropagation()}
                               className={cn(
-                                "absolute left-0 top-full mt-1.5 z-30 w-72 sm:w-80 rounded-xl border p-3 shadow-xl text-xs transition-all animate-in fade-in slide-in-from-top-1",
+                                "absolute left-0 sm:left-auto sm:right-0 top-full mt-1.5 z-30 w-72 sm:w-80 max-w-[calc(100vw-2.5rem)] rounded-xl border p-3 shadow-xl text-xs transition-all animate-in fade-in slide-in-from-top-1",
                                 isSigned
                                   ? "border-emerald-200 bg-emerald-50/95 text-emerald-950"
                                   : isPending
@@ -601,7 +601,7 @@ const ClientSiteProgress: React.FC = () => {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                  <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto self-end sm:self-center shrink-0">
                     {showSign && (
                       <Button
                         size="sm"

@@ -288,7 +288,7 @@ const ClientDashboard: React.FC = () => {
           <h1 className="text-xl font-semibold text-console-text">Client Dashboard</h1>
           <p className="mt-0.5 text-sm text-console-muted">Welcome back! Here's your project overview.</p>
         </div>
-        <div>
+        <div className="w-full sm:w-auto">
           <label htmlFor="site-select" className="mb-1 block text-xs font-medium text-console-muted">
             Select site
           </label>
@@ -299,7 +299,7 @@ const ClientDashboard: React.FC = () => {
               const nextSite = sites.find((s) => s._id === e.target.value);
               setSelectedSite(nextSite);
             }}
-            className="rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            className="w-full sm:w-auto min-w-[200px] rounded-lg border border-console-border px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
           >
             {sites.map((s) => (
               <option key={s._id} value={s._id}>
@@ -316,7 +316,7 @@ const ClientDashboard: React.FC = () => {
         <GradientStatCard label="Expenses" value={site?.expenses || 0} prefix="₹" icon={BarChart} />
       </div>
 
-      <div className="relative flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div className="relative flex gap-1 rounded-console border border-console-border bg-console-bg p-1 overflow-x-auto no-scrollbar flex-nowrap">
         {TABS.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -326,7 +326,7 @@ const ClientDashboard: React.FC = () => {
               type="button"
               onClick={() => setActiveTab(tab.id)}
               className={cn(
-                "relative z-10 flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
+                "relative z-10 flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors duration-200",
                 isActive ? "text-brand-700" : "text-console-muted hover:bg-white/60",
               )}
             >
@@ -360,24 +360,24 @@ const ClientDashboard: React.FC = () => {
                 onSendMoneyRequest={handleSendMoneyRequest}
               />
               <TableCard title="Quick Statistics" icon={TrendingUp} section="overview">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="rounded-console bg-console-bg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-700">{purchases.total || 0}</div>
-                    <div className="text-sm text-console-muted">Total purchases</div>
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  <div className="rounded-console bg-console-bg p-3.5 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-brand-700">{purchases.total || 0}</div>
+                    <div className="text-xs sm:text-sm text-console-muted">Total purchases</div>
                   </div>
-                  <div className="rounded-console bg-console-bg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-700">{stocks.total || 0}</div>
-                    <div className="text-sm text-console-muted">Stock items</div>
+                  <div className="rounded-console bg-console-bg p-3.5 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-brand-700">{stocks.total || 0}</div>
+                    <div className="text-xs sm:text-sm text-console-muted">Stock items</div>
                   </div>
-                  <div className="rounded-console bg-console-bg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-700">
+                  <div className="rounded-console bg-console-bg p-3.5 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-brand-700">
                       {miscellaneousExpenses.total || 0}
                     </div>
-                    <div className="text-sm text-console-muted">Miscellaneous expenses</div>
+                    <div className="text-xs sm:text-sm text-console-muted">Misc. expenses</div>
                   </div>
-                  <div className="rounded-console bg-console-bg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-700">{transactions.total || 0}</div>
-                    <div className="text-sm text-console-muted">Transactions</div>
+                  <div className="rounded-console bg-console-bg p-3.5 sm:p-4 text-center">
+                    <div className="text-xl sm:text-2xl font-semibold text-brand-700">{transactions.total || 0}</div>
+                    <div className="text-xs sm:text-sm text-console-muted">Transactions</div>
                   </div>
                 </div>
               </TableCard>
@@ -389,32 +389,55 @@ const ClientDashboard: React.FC = () => {
               {purchases.data?.length === 0 ? (
                 <EmptyState icon={ShoppingCart} title="No purchases found" />
               ) : (
-                <div className="overflow-x-auto rounded-console border border-console-border">
-                  <table className="min-w-full divide-y divide-console-border">
-                    <thead className="bg-console-bg">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total amount</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-console-border bg-white">
-                      {purchases.data?.map((pur: any) => (
-                        <tr key={pur._id}>
-                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                <>
+                  {/* Mobile Card List */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {purchases.data?.map((pur: any) => (
+                      <div
+                        key={pur._id}
+                        className="flex items-center justify-between rounded-xl border border-console-border bg-console-bg p-3.5"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="truncate text-sm font-semibold text-console-text">
                             {pur.vendor?.name || "N/A"}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                          </p>
+                          <p className="mt-0.5 text-xs font-semibold text-success-700">
                             ₹{formatNumber(pur.totalAmount || 0)}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
-                          </td>
+                          </p>
+                        </div>
+                        <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto rounded-console border border-console-border">
+                    <table className="min-w-full divide-y divide-console-border">
+                      <thead className="bg-console-bg">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Vendor</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Total amount</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-console-border bg-white">
+                        {purchases.data?.map((pur: any) => (
+                          <tr key={pur._id}>
+                            <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                              {pur.vendor?.name || "N/A"}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                              ₹{formatNumber(pur.totalAmount || 0)}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <Badge variant={badgeVariant(pur.status)}>{pur.status || "Unknown"}</Badge>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </TableCard>
           )}
@@ -424,26 +447,49 @@ const ClientDashboard: React.FC = () => {
               {stocks.data?.length === 0 ? (
                 <EmptyState icon={PackageIcon} title="No stock items found" />
               ) : (
-                <div className="overflow-x-auto rounded-console border border-console-border">
-                  <table className="min-w-full divide-y divide-console-border">
-                    <thead className="bg-console-bg">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item name</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Unit</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-console-border bg-white">
-                      {stocks.data?.map((stock: any) => (
-                        <tr key={stock._id}>
-                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">{stock.name || "N/A"}</td>
-                          <td className="px-4 py-3.5 text-sm text-info-700">{stock.quantity || 0}</td>
-                          <td className="px-4 py-3.5 text-sm text-console-muted">{stock.unit || "N/A"}</td>
+                <>
+                  {/* Mobile Card List */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {stocks.data?.map((stock: any) => (
+                      <div
+                        key={stock._id}
+                        className="flex items-center justify-between rounded-xl border border-console-border bg-console-bg p-3.5"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="truncate text-sm font-semibold text-console-text">
+                            {stock.name || "N/A"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-console-muted">Unit: {stock.unit || "N/A"}</p>
+                        </div>
+                        <span className="rounded-lg bg-info-50 px-2.5 py-1 text-xs font-bold text-info-700">
+                          {stock.quantity || 0} {stock.unit || ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto rounded-console border border-console-border">
+                    <table className="min-w-full divide-y divide-console-border">
+                      <thead className="bg-console-bg">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item name</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Unit</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-console-border bg-white">
+                        {stocks.data?.map((stock: any) => (
+                          <tr key={stock._id}>
+                            <td className="px-4 py-3.5 text-sm font-medium text-console-text">{stock.name || "N/A"}</td>
+                            <td className="px-4 py-3.5 text-sm text-info-700">{stock.quantity || 0}</td>
+                            <td className="px-4 py-3.5 text-sm text-console-muted">{stock.unit || "N/A"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </TableCard>
           )}
@@ -453,32 +499,57 @@ const ClientDashboard: React.FC = () => {
               {miscellaneousExpenses.data?.length === 0 ? (
                 <EmptyState icon={Construction} title="No miscellaneous expenses found" />
               ) : (
-                <div className="overflow-x-auto rounded-console border border-console-border">
-                  <table className="min-w-full divide-y divide-console-border">
-                    <thead className="bg-console-bg">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-console-border bg-white">
-                      {miscellaneousExpenses.data?.map((expense: any) => (
-                        <tr key={expense._id}>
-                          <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                <>
+                  {/* Mobile Card List */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {miscellaneousExpenses.data?.map((expense: any) => (
+                      <div
+                        key={expense._id}
+                        className="flex items-center justify-between rounded-xl border border-console-border bg-console-bg p-3.5"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="truncate text-sm font-semibold text-console-text">
                             {expense.description || "N/A"}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
-                            ₹{formatNumber(expense.amount || 0)}
-                          </td>
-                          <td className="px-4 py-3.5 text-sm text-console-muted">
+                          </p>
+                          <p className="mt-0.5 text-xs text-console-muted">
                             {expense.date ? formatDate(expense.date) : "N/A"}
-                          </td>
+                          </p>
+                        </div>
+                        <span className="text-sm font-semibold text-success-700">
+                          ₹{formatNumber(expense.amount || 0)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto rounded-console border border-console-border">
+                    <table className="min-w-full divide-y divide-console-border">
+                      <thead className="bg-console-bg">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Description</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-console-border bg-white">
+                        {miscellaneousExpenses.data?.map((expense: any) => (
+                          <tr key={expense._id}>
+                            <td className="px-4 py-3.5 text-sm font-medium text-console-text">
+                              {expense.description || "N/A"}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                              ₹{formatNumber(expense.amount || 0)}
+                            </td>
+                            <td className="px-4 py-3.5 text-sm text-console-muted">
+                              {expense.date ? formatDate(expense.date) : "N/A"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </TableCard>
           )}
@@ -488,32 +559,55 @@ const ClientDashboard: React.FC = () => {
               {transactions.data?.length === 0 ? (
                 <EmptyState icon={DollarSign} title="No transactions found" />
               ) : (
-                <div className="overflow-x-auto rounded-console border border-console-border">
-                  <table className="min-w-full divide-y divide-console-border">
-                    <thead className="bg-console-bg">
-                      <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-console-border bg-white">
-                      {transactions.data?.map((trans: any) => (
-                        <tr key={trans._id}>
-                          <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                <>
+                  {/* Mobile Card List */}
+                  <div className="space-y-2.5 sm:hidden">
+                    {transactions.data?.map((trans: any) => (
+                      <div
+                        key={trans._id}
+                        className="flex items-center justify-between rounded-xl border border-console-border bg-console-bg p-3.5"
+                      >
+                        <div className="min-w-0 flex-1 pr-2">
+                          <p className="text-sm font-semibold text-success-700">
                             ₹{formatNumber(trans.amount || 0)}
-                          </td>
-                          <td className="px-4 py-3.5">
-                            <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
-                          </td>
-                          <td className="px-4 py-3.5 text-sm text-console-muted">
+                          </p>
+                          <p className="mt-0.5 text-xs text-console-muted">
                             {trans.createdAt ? formatDate(trans.createdAt) : "N/A"}
-                          </td>
+                          </p>
+                        </div>
+                        <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table View */}
+                  <div className="hidden sm:block overflow-x-auto rounded-console border border-console-border">
+                    <table className="min-w-full divide-y divide-console-border">
+                      <thead className="bg-console-bg">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Amount</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                          <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Date</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-console-border bg-white">
+                        {transactions.data?.map((trans: any) => (
+                          <tr key={trans._id}>
+                            <td className="px-4 py-3.5 text-sm font-semibold text-success-700">
+                              ₹{formatNumber(trans.amount || 0)}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              <Badge variant={badgeVariant(trans.status)}>{trans.status || "Unknown"}</Badge>
+                            </td>
+                            <td className="px-4 py-3.5 text-sm text-console-muted">
+                              {trans.createdAt ? formatDate(trans.createdAt) : "N/A"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
             </TableCard>
           )}

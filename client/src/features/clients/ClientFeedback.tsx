@@ -182,7 +182,7 @@ const ClientFeedback: React.FC = () => {
               <span className="mb-1 block text-xs font-medium text-console-muted">
                 Rating
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 py-1">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <button
                     key={value}
@@ -191,14 +191,14 @@ const ClientFeedback: React.FC = () => {
                     onMouseEnter={() => setHoverRating(value)}
                     onMouseLeave={() => setHoverRating(0)}
                     aria-label={`Rate ${value} out of 5`}
-                    className="p-0.5"
+                    className="p-1.5 sm:p-1 touch-manipulation rounded focus:outline-none focus:ring-2 focus:ring-brand-400"
                   >
                     <Star
-                      size={24}
+                      size={26}
                       className={
                         value <= (hoverRating || rating)
                           ? "fill-brand-500 text-brand-500"
-                          : "text-console-border"
+                          : "text-console-border hover:text-brand-300"
                       }
                     />
                   </button>

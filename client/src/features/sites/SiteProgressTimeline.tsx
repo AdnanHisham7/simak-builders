@@ -418,10 +418,10 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
       )}
     >
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-console-border p-6 bg-white">
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-console-border p-4 sm:p-6 bg-white">
         <div>
-          <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
-            <Eye size={20} className="text-brand-600" />
+          <h2 className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-base font-semibold text-console-text">
+            <Eye size={20} className="text-brand-600 shrink-0" />
             <span>{title}</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800 border border-brand-100">
               <span>{completedCount}/{totalPhases} Completed</span>
@@ -429,7 +429,7 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
               <span>{progressPercentage}%</span>
             </span>
           </h2>
-          <p className="mt-1 text-sm text-console-muted">
+          <p className="mt-1 text-xs sm:text-sm text-console-muted">
             {subtitle}
           </p>
         </div>
@@ -483,7 +483,7 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
 
       {/* VIEW 1: CONNECTED MILESTONE PIPELINE TRACKS */}
       {viewMode === "timeline" && (
-        <div className="p-6">
+        <div className="p-3.5 sm:p-6">
           {/* Chronological Process Pipeline Tracks (Balanced 2 Columns) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
             {/* Column 1: Phases 1 to Mid */}
@@ -521,10 +521,10 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
 
       {/* VIEW 2: COMPACT GANTT SCHEDULE VIEW */}
       {viewMode === "gantt" && (
-        <div className="p-6">
+        <div className="p-3.5 sm:p-6">
           <div className="overflow-hidden rounded-lg border border-console-border">
             {/* Legend strip */}
-            <div className="flex items-center justify-between border-b border-console-border bg-slate-50 px-4 py-2 text-xs text-console-muted">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-console-border bg-slate-50 px-3 sm:px-4 py-2 text-xs text-console-muted">
               <span className="font-medium text-console-text">
                 Horizon: {formatDate(ganttStartDate.toISOString())} – {formatDate(ganttEndDate.toISOString())}
               </span>

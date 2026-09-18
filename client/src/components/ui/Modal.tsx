@@ -80,7 +80,7 @@ const Modal: React.FC<ModalProps> = ({
       {isOpen && (
         <motion.div
           key="modal-overlay"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-2 sm:p-4 backdrop-blur-sm"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -105,7 +105,7 @@ const Modal: React.FC<ModalProps> = ({
             onMouseDown={(event) => event.stopPropagation()}
           >
             {(title || !disableClose) && (
-              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/50 px-6 py-4">
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/50 px-4 py-3.5 sm:px-6 sm:py-4">
                 <div>
                   {title && (
                     <h2
@@ -136,12 +136,12 @@ const Modal: React.FC<ModalProps> = ({
               </div>
             )}
 
-            <div className="overflow-y-auto px-6 py-5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/60 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80 [&::-webkit-scrollbar-track]:bg-transparent">
+            <div className="overflow-y-auto px-4 py-4 sm:px-6 sm:py-5 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300/60 hover:[&::-webkit-scrollbar-thumb]:bg-slate-400/80 [&::-webkit-scrollbar-track]:bg-transparent">
               {children}
             </div>
 
             {footer && (
-              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/50 px-6 py-4">
+              <div className="flex shrink-0 items-center justify-end gap-3 border-t border-white/50 px-4 py-3.5 sm:px-6 sm:py-4">
                 {footer}
               </div>
             )}
