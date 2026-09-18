@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, ReactNode } from "react";
+import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
@@ -9,6 +10,16 @@ import { getPendingDeactivationCount } from "@/services/userService";
 import { getOpenFeedbackCount } from "@/services/feedbackService";
 import { getPendingExpenseRequestCount } from "@/services/expenseRequestService";
 import { DashboardContext } from "../../context/DashboardContext";
+import { StoryTray } from "../../features/stories/StoryTray";
+
+const DASHBOARD_HOME_ROUTES = new Set([
+  "/admin/dashboard",
+  "/siteManager/dashboard",
+  "/supervisor/dashboard",
+  "/architect/dashboard",
+  "/client/dashboard",
+  "/company/dashboard",
+]);
 
 interface MenuSection {
   title?: string;
@@ -24,6 +35,7 @@ const SIDEBAR_WIDTH_EXPANDED = 256;
 const SIDEBAR_WIDTH_COLLAPSED = 76;
 
 const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
+  const location = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -32,6 +44,10 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
   const [feedbackOpenCount, setFeedbackOpenCount] = useState(0);
   const [expenseRequestPendingCount, setExpenseRequestPendingCount] = useState(0);
   const { userType } = useSelector((state: RootState) => state.auth);
+
+  const isDashboardHome =
+    DASHBOARD_HOME_ROUTES.has(location.pathname) ||
+    location.pathname.endsWith("/dashboard");
 
   const memoizedMenus = useMemo(() => menus, [menus]);
 
@@ -191,7 +207,10 @@ const DashboardLayout = ({ children, menus }: DashboardLayoutProps) => {
             isMobile={isMobile}
             sidebarOpen={sidebarOpen}
           />
-          <main className="no-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">{children}</main>
+          <main className="no-scrollbar flex-1 overflow-y-auto p-4 sm:p-6">
+            {isDashboardHome && <StoryTray className="mb-5" />}
+            {children}
+          </main>
         </div>
       </div>
     </DashboardContext.Provider>

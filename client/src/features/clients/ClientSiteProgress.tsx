@@ -21,6 +21,7 @@ import { getClientDashboard, getClientSites } from "@/services/clientService";
 import SiteProgressTimeline, { TimelinePhase } from "../sites/SiteProgressTimeline";
 import SignDocumentModal from "../sites/SignDocumentModal";
 import RejectDocumentModal from "../sites/RejectDocumentModal";
+import { SiteMediaTab } from "../sites/SiteMediaTab";
 import { Card, StatCard } from "@/components/ui/Card";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
@@ -642,6 +643,14 @@ const ClientSiteProgress: React.FC = () => {
         )}
       </Card>
       </div>
+
+      {selectedSiteId && site && (
+        <SiteMediaTab
+          siteId={selectedSiteId}
+          siteName={site.name}
+          userType="client"
+        />
+      )}
 
       {/* Signature Modal */}
       {selectedDocForSign && (

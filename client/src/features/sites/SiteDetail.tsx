@@ -54,7 +54,9 @@ import {
   BellRing,
   AlertTriangle,
   XCircle,
+  Camera,
 } from "lucide-react";
+import { SiteMediaTab } from "./SiteMediaTab";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
 import SiteBudgetDashboard from "./SiteBudgetDashboard";
@@ -140,6 +142,7 @@ const TAB_CONFIG = [
   { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
   { id: "stocks", label: "Stocks", icon: Package },
   { id: "documents", label: "Documents", icon: FileText },
+  { id: "media", label: "Media & Updates", icon: Camera },
 ] as const;
 
 const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> = ({
@@ -3020,6 +3023,16 @@ const SiteDetail: React.FC = () => {
             </div>
           )}
         </SectionCard>
+        </div>
+      )}
+
+      {selectedTab === "media" && (
+        <div id="site-media-tab-section" className="scroll-mt-6">
+          <SiteMediaTab
+            siteId={site.id}
+            siteName={site.name}
+            userType={userType}
+          />
         </div>
       )}
 

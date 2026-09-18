@@ -29,6 +29,10 @@ const allowedMimeTypes: { [key: string]: string[] } = {
   ifc: ["application/x-step"],
   psd: ["image/vnd.adobe.photoshop", "application/octet-stream"],
   psb: ["image/vnd.adobe.photoshop", "application/octet-stream"],
+  mp4: ["video/mp4"],
+  webm: ["video/webm"],
+  mov: ["video/quicktime"],
+  mkv: ["video/x-matroska"],
 };
 
 const allowedExtensions = Object.keys(allowedMimeTypes);

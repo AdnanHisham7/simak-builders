@@ -9,6 +9,7 @@ import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
 import { OfflineStatusBadge } from "@/components/layout/OfflineStatusBadge";
+import { HeaderStoriesButton } from "@/features/stories/HeaderStoriesButton";
 
 interface Notification {
   _id: string;
@@ -91,6 +92,7 @@ export default function Header({
         <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
           Back to site
         </Button>
+        <HeaderStoriesButton />
         <Tooltip label="Notifications">
           <NotificationBell count={pendingCount} onClick={() => setIsNotificationOpen(true)} />
         </Tooltip>
