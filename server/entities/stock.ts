@@ -7,6 +7,8 @@ export interface Stock {
   category: string;
   site?: Types.ObjectId;
   averagePrice?: number;
+  lowStockThreshold?: number;
+  lastAlertSentAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
 }

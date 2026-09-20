@@ -11,6 +11,8 @@ export interface Stock {
   unit: string;
   category?: string;
   averagePrice?: number;
+  lowStockThreshold?: number;
+  lastAlertSentAt?: string;
   site?: { _id: string; name: string };
 }
 
@@ -184,5 +186,48 @@ export const getStockUsages = async (
   const response = await privateClient.get(`/stocks/usages`, {
     params: { siteId },
   });
+  return response.data;
+};
+
+export interface LowStockAlertItem {
+  id: string;
+  name: string;
+  category: string;
+  quantity: number;
+  unit: string;
+  threshold: number;
+  deficit: number;
+  site: { id: string; name: string };
+  averagePrice: number;
+  urgency: "critical" | "low";
+  lastAlertSentAt?: string;
+}
+
+export interface LowStockAlertsResponse {
+  totalLowStock: number;
+  criticalCount: number;
+  warningCount: number;
+  alerts: LowStockAlertItem[];
+}
+
+export const getLowStockAlerts = async (siteId?: string): Promise<LowStockAlertsResponse> => {
+  const params = siteId ? { siteId } : {};
+  const response = await privateClient.get("/stocks/alerts", { params });
+  return response.data;
+};
+
+export const runLowStockCheck = async () => {
+  const response = await privateClient.post("/stocks/check-low-stock");
+  return response.data;
+};
+
+export const updateStockThreshold = async (stockId: string, threshold: number) => {
+  const response = await privateClient.patch(`/stocks/${stockId}/threshold`, { threshold });
+  invalidateCache(STOCKS_FULL_LIST_CACHE_KEY);
+  return response.data;
+};
+
+export const updateItemThreshold = async (itemId: string, threshold: number) => {
+  const response = await privateClient.patch(`/items/${itemId}/threshold`, { threshold });
   return response.data;
 };

@@ -232,6 +232,7 @@ const login = async (req: Request, res: Response, next: NextFunction) => {
           isAdmin: user.isAdmin,
           role: user.role,
           preferences: user.preferences,
+          profileImage: user.profileImage,
         },
       });
   } catch (error) {
@@ -280,6 +281,7 @@ const googleLogin = async (req: Request, res: Response, next: NextFunction) => {
         email: user.email,
         name: user.name,
         preferences: user.preferences,
+        profileImage: user.profileImage,
       },
     });
   } catch (error) {

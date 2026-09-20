@@ -6,11 +6,12 @@ const NotificationSchema = new Schema(
     type: { type: String, required: true }, // e.g., "stock_transfer", "purchase_verification"
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "approved", "rejected", "read"],
       default: "pending",
     },
     relatedId: { type: Schema.Types.ObjectId, required: true },
     message: { type: String, required: true },
+    metadata: { type: Schema.Types.Mixed },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true }

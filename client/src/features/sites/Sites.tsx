@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import { UserType } from "@/store/slices/authSlice";
@@ -43,6 +43,8 @@ import AddPurchaseModal from "./AddPurchaseModal";
 import EditSiteModal, { EditSiteFormValues } from "./EditSiteModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
 import Modal from "@/components/ui/Modal";
+import { getActiveStories, StoryGroup } from "@/services/storyService";
+import { StoryViewerModal } from "../stories/StoryViewerModal";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Card, StatCard } from "@/components/ui/Card";
@@ -159,7 +161,7 @@ const getActionsForRole = (role: UserType): string[] => {
 
 const Sites: React.FC = () => {
   const { formatDate, formatNumber } = usePreferences();
-  const { userType } = useSelector((state: RootState) => state.auth);
+  const { userType, user } = useSelector((state: RootState) => state.auth);
   const navigate = useNavigate();
   const [pageSites, setPageSites] = useState<MappedSite[]>([]);
   const [total, setTotal] = useState(0);
@@ -191,6 +193,85 @@ const Sites: React.FC = () => {
   const [projectStatuses, setProjectStatuses] = useState<string[]>([
     "All Statuses",
   ]);
+
+  // Active Stories on Sites
+  const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([]);
+  const [siteStoryViewer, setSiteStoryViewer] = useState<{
+    isOpen: boolean;
+    siteGroups: StoryGroup[];
+    siteName: string;
+  }>({
+    isOpen: false,
+    siteGroups: [],
+    siteName: "",
+  });
+
+  const fetchActiveStories = async () => {
+    try {
+      const groups = await getActiveStories();
+      setStoryGroups(groups || []);
+    } catch {
+      // Non-critical background fetch
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveStories();
+  }, []);
+
+  // Map active stories to site IDs
+  const siteStoriesMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { groups: StoryGroup[]; totalStories: number; hasUnseen: boolean }
+    >();
+
+    storyGroups.forEach((group) => {
+      group.stories.forEach((story) => {
+        const siteId =
+          (story.site as any)?._id ||
+          (story.site as any)?.id ||
+          (typeof story.site === "string" ? story.site : null);
+
+        if (siteId) {
+          const sId = String(siteId);
+          if (!map.has(sId)) {
+            map.set(sId, { groups: [], totalStories: 0, hasUnseen: false });
+          }
+          const siteEntry = map.get(sId)!;
+          siteEntry.totalStories += 1;
+          if (!story.hasViewed) {
+            siteEntry.hasUnseen = true;
+          }
+
+          let userGrp = siteEntry.groups.find(
+            (g) => g.user._id === group.user._id
+          );
+          if (!userGrp) {
+            userGrp = {
+              ...group,
+              stories: [],
+            };
+            siteEntry.groups.push(userGrp);
+          }
+          userGrp.stories.push(story);
+        }
+      });
+    });
+
+    return map;
+  }, [storyGroups]);
+
+  const handleOpenSiteStories = (siteId: string, siteName: string) => {
+    const siteData = siteStoriesMap.get(siteId);
+    if (!siteData || siteData.groups.length === 0) return;
+
+    setSiteStoryViewer({
+      isOpen: true,
+      siteGroups: siteData.groups,
+      siteName,
+    });
+  };
 
   const itemsPerPage = 8;
   const pageRequestIdRef = useRef(0);
@@ -527,7 +608,8 @@ const Sites: React.FC = () => {
                       </div>
                     </div>
                   )}
-                  <div className="overflow-x-auto">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
                     <table className="min-w-full divide-y divide-console-border">
                       <thead className="bg-console-bg">
                         <tr>
@@ -559,9 +641,60 @@ const Sites: React.FC = () => {
                             >
                               <td className="px-6 py-4">
                                 <div className="flex items-center">
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-                                    <Building2 size={18} />
-                                  </div>
+                                  {(() => {
+                                    const storyData = siteStoriesMap.get(site.id);
+                                    const hasStories = !!(storyData && storyData.totalStories > 0);
+                                    const hasUnseen = storyData?.hasUnseen || false;
+
+                                    if (hasStories) {
+                                      return (
+                                        <Tooltip
+                                          label={`Watch ${storyData!.totalStories} active ${
+                                            storyData!.totalStories === 1 ? "story" : "stories"
+                                          } for ${site.name}`}
+                                        >
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleOpenSiteStories(site.id, site.name);
+                                            }}
+                                            className="group/story relative shrink-0 transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                                          >
+                                            <div
+                                              className={cn(
+                                                "h-10 w-10 rounded-[9px] p-[2px] transition-all",
+                                                hasUnseen
+                                                  ? "bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-sm shadow-rose-500/20"
+                                                  : "bg-zinc-300 dark:bg-zinc-600"
+                                              )}
+                                            >
+                                              <div className="flex h-full w-full items-center justify-center rounded-[9px] bg-white dark:bg-zinc-900">
+                                                <div className="flex h-full w-full items-center justify-center rounded-[7px] bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300 group-hover/story:bg-brand-100 transition-colors">
+                                                  <Building2 size={18} />
+                                                </div>
+                                              </div>
+                                            </div>
+                                            {/* Active story count badge */}
+                                            <span
+                                              className={cn(
+                                                "absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow ring-2 ring-white dark:ring-zinc-900",
+                                                hasUnseen ? "bg-rose-500" : "bg-zinc-500"
+                                              )}
+                                            >
+                                              {storyData!.totalStories}
+                                            </span>
+                                          </button>
+                                        </Tooltip>
+                                      );
+                                    }
+
+                                    return (
+                                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
+                                        <Building2 size={18} />
+                                      </div>
+                                    );
+                                  })()}
                                   <div className="ml-3">
                                     <div className="text-sm font-semibold text-console-text">
                                       {site.name}
@@ -720,6 +853,187 @@ const Sites: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Mobile Card List View (< md) */}
+                  <div className="md:hidden divide-y divide-console-border bg-white">
+                    {pageSites.map((site) => {
+                      const actions = getActionsForRole(userType);
+                      const storyData = siteStoriesMap.get(site.id);
+                      const hasStories = !!(storyData && storyData.totalStories > 0);
+                      const hasUnseen = storyData?.hasUnseen || false;
+
+                      return (
+                        <div
+                          key={site.id}
+                          className="p-4 space-y-3 cursor-pointer transition-colors hover:bg-brand-50/40 active:bg-brand-50/60"
+                          onClick={() => handleViewSite(site.id)}
+                        >
+                          {/* Header row: Story avatar, name, location, status */}
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-start gap-3 min-w-0">
+                              {hasStories ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenSiteStories(site.id, site.name);
+                                  }}
+                                  className="group/story relative shrink-0 transition-transform hover:scale-105 active:scale-95 focus:outline-none"
+                                >
+                                  <div
+                                    className={cn(
+                                      "h-10 w-10 rounded-[9px] p-[2px] transition-all",
+                                      hasUnseen
+                                        ? "bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-sm shadow-rose-500/20"
+                                        : "bg-zinc-300 dark:bg-zinc-600"
+                                    )}
+                                  >
+                                    <div className="flex h-full w-full items-center justify-center rounded-[9px] bg-white dark:bg-zinc-900">
+                                      <div className="flex h-full w-full items-center justify-center rounded-[7px] bg-brand-50 text-brand-700 dark:bg-brand-950/40 dark:text-brand-300">
+                                        <Building2 size={18} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span
+                                    className={cn(
+                                      "absolute -bottom-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white shadow ring-2 ring-white dark:ring-zinc-900",
+                                      hasUnseen ? "bg-rose-500" : "bg-zinc-500"
+                                    )}
+                                  >
+                                    {storyData!.totalStories}
+                                  </span>
+                                </button>
+                              ) : (
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 dark:bg-brand-950/50 dark:text-brand-300">
+                                  <Building2 size={18} />
+                                </div>
+                              )}
+                              <div className="min-w-0">
+                                <h3 className="font-semibold text-sm text-console-text truncate">{site.name}</h3>
+                                <p className="flex items-center text-xs text-console-muted truncate mt-0.5">
+                                  <MapPin size={11} className="mr-1 shrink-0" />
+                                  <span className="truncate">{site.location}</span>
+                                </p>
+                                <p className="text-xs text-console-muted mt-0.5">
+                                  Client: <span className="text-console-text font-medium">{site.clientName}</span>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="shrink-0">
+                              <Badge variant={getStatusVariant(site.status)}>
+                                {getStatusIcon(site.status)}
+                                {site.status}
+                              </Badge>
+                            </div>
+                          </div>
+
+                          {/* Financial progress bar */}
+                          <div className="rounded-lg bg-console-bg p-2.5 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-console-muted">Budget: <strong className="text-console-text">₹{formatNumber(site.budget)}</strong></span>
+                              <span className="text-console-muted">Spent: <strong className="text-console-text">₹{formatNumber(site.expenses)}</strong></span>
+                            </div>
+                            <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-zinc-700">
+                              <div
+                                className="h-1.5 rounded-full bg-brand-600"
+                                style={{
+                                  width: `${Math.min(site.budget > 0 ? (site.expenses / site.budget) * 100 : 0, 100)}%`,
+                                }}
+                              />
+                            </div>
+                          </div>
+
+                          {/* Team & Construction Progress row */}
+                          <div className="flex items-center justify-between text-xs text-console-muted">
+                            <div className="flex items-center gap-3">
+                              <span className="flex items-center gap-1">
+                                <Users size={12} />
+                                {site.siteManagerCount + site.architectCount} team
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Calendar size={12} />
+                                {formatDate(site.createdAt)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-console-text">{site.completedPhases}/{site.totalPhases} phases</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTimelineSite(site);
+                                }}
+                                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 transition-colors"
+                              >
+                                <BarChart3 size={12} />
+                                <span>Timeline</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Actions footer */}
+                          <div
+                            className="flex flex-wrap items-center justify-end gap-1.5 pt-2 border-t border-console-border"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleViewSite(site.id)}
+                              className="text-xs py-1 px-2.5 h-8"
+                            >
+                              <Eye size={14} className="mr-1" />
+                              View
+                            </Button>
+                            {actions.includes("edit") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEditSite(site)}
+                                className="text-xs py-1 px-2.5 h-8"
+                              >
+                                <Pencil size={13} className="mr-1" />
+                                Edit
+                              </Button>
+                            )}
+                            {actions.includes("addPurchase") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAddPurchase(site.id)}
+                                className="text-xs py-1 px-2.5 h-8 border-warning-200 text-warning-700 hover:bg-warning-50"
+                              >
+                                <ShoppingCart size={13} className="mr-1" />
+                                Purchase
+                              </Button>
+                            )}
+                            {actions.includes("uploadDocuments") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUploadDocuments(site.id)}
+                                className="text-xs py-1 px-2.5 h-8 border-info-200 text-info-700 hover:bg-info-50"
+                              >
+                                <Upload size={13} className="mr-1" />
+                                Upload
+                              </Button>
+                            )}
+                            {actions.includes("viewProgress") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleViewProgress(site.id)}
+                                className="text-xs py-1 px-2.5 h-8 border-info-200 text-info-700 hover:bg-info-50"
+                              >
+                                <TrendingUp size={13} className="mr-1" />
+                                Progress
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-center justify-between gap-4 rounded-console bg-console-bg px-4 py-3 sm:flex-row">
@@ -731,12 +1045,12 @@ const Sites: React.FC = () => {
                     </span>{" "}
                     of <span className="font-semibold text-console-text">{total}</span> sites
                   </p>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar max-w-full py-1 px-0.5">
                     <button
                       type="button"
                       onClick={() => paginate(currentPage - 1)}
                       disabled={currentPage === 1 || tableLoading}
-                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+                      className="rounded-lg p-2 text-console-muted transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-40 shrink-0"
                     >
                       <ChevronLeft size={18} />
                     </button>
@@ -838,6 +1152,26 @@ const Sites: React.FC = () => {
             userType={userType}
           />
         </Modal>
+      )}
+
+      {siteStoryViewer.isOpen && (
+        <StoryViewerModal
+          isOpen={siteStoryViewer.isOpen}
+          onClose={() => {
+            setSiteStoryViewer((prev) => ({
+              ...prev,
+              isOpen: false,
+              siteGroups: [],
+            }));
+            fetchActiveStories();
+          }}
+          groups={siteStoryViewer.siteGroups}
+          currentUserId={String(
+            (user as any)?._id || (user as any)?.id || ""
+          )}
+          currentUserRole={userType || ""}
+          onStoriesUpdated={fetchActiveStories}
+        />
       )}
     </div>
   );

@@ -27,6 +27,13 @@ interface AddPurchaseModalProps {
   siteId: string | null;
   onClose: () => void;
   isAdmin?: boolean;
+  initialItem?: {
+    name?: string;
+    unit?: string;
+    category?: string;
+    quantity?: string | number;
+    price?: string | number;
+  };
 }
 
 interface PurchaseItem {
@@ -47,7 +54,12 @@ const fieldClass = (hasError?: boolean) =>
       : "border-console-border bg-white focus:border-brand-500 focus:ring-brand-100",
   );
 
-const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({ siteId, isAdmin = false, onClose }) => {
+const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
+  siteId,
+  isAdmin = false,
+  onClose,
+  initialItem,
+}) => {
   const { formatDecimal } = usePreferences();
   const [currentStep, setCurrentStep] = useState(1);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -56,10 +68,32 @@ const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({ siteId, isAdmin = f
   const [newVendorName, setNewVendorName] = useState("");
   const [newVendorEmail, setNewVendorEmail] = useState("");
   const [newVendorPhone, setNewVendorPhone] = useState("");
-  const [items, setItems] = useState<PurchaseItem[]>([
-    { name: "", unit: "", category: "", quantity: "", price: "", totalAmount: "" },
-  ]);
-  const [totalAmount, setTotalAmount] = useState(0);
+  const [items, setItems] = useState<PurchaseItem[]>(() => {
+    if (initialItem && initialItem.name) {
+      const qty = initialItem.quantity ? String(initialItem.quantity) : "";
+      const prc = initialItem.price ? String(initialItem.price) : "";
+      const total = qty && prc ? String(Number(qty) * Number(prc)) : "";
+      return [
+        {
+          name: initialItem.name,
+          unit: initialItem.unit || "",
+          category: initialItem.category || "",
+          quantity: qty,
+          price: prc,
+          totalAmount: total,
+        },
+      ];
+    }
+    return [
+      { name: "", unit: "", category: "", quantity: "", price: "", totalAmount: "" },
+    ];
+  });
+  const [totalAmount, setTotalAmount] = useState<number>(() => {
+    if (initialItem && initialItem.quantity && initialItem.price) {
+      return Number(initialItem.quantity) * Number(initialItem.price);
+    }
+    return 0;
+  });
   const [transportationFee, setTransportationFee] = useState<string>("");
   const [notes, setNotes] = useState<string>("");
   const [billFile, setBillFile] = useState<File | null>(null);

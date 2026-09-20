@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
 import {
@@ -48,9 +48,22 @@ import {
   Search,
   Briefcase,
   ExternalLink,
+  PenTool,
+  History,
+  Sliders,
+  BellRing,
+  AlertTriangle,
+  XCircle,
+  Camera,
 } from "lucide-react";
+import { SiteMediaTab } from "./SiteMediaTab";
 import ConvertToPortfolioModal from "./ConvertToPortfolioModal";
 import SiteProgressTimeline from "./SiteProgressTimeline";
+import SiteBudgetDashboard from "./SiteBudgetDashboard";
+import SignDocumentModal from "./SignDocumentModal";
+import DocumentVersionsModal from "./DocumentVersionsModal";
+import RejectDocumentModal from "./RejectDocumentModal";
+import EditThresholdModal from "../stocks/EditThresholdModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import { usePreferences } from "@/hooks/usePreferences";
@@ -121,6 +134,7 @@ interface ExtendedSite extends Omit<Site, "transactions"> {
 
 const TAB_CONFIG = [
   { id: "overview", label: "Overview", icon: Eye },
+  { id: "budget", label: "Budget & Burn Rate", icon: TrendingUp },
   { id: "team", label: "Team", icon: Users },
   { id: "contractors", label: "Contractors", icon: Users },
   { id: "attendance", label: "Attendance", icon: Calendar },
@@ -128,6 +142,7 @@ const TAB_CONFIG = [
   { id: "miscellaneous", label: "Miscellaneous", icon: Wrench },
   { id: "stocks", label: "Stocks", icon: Package },
   { id: "documents", label: "Documents", icon: FileText },
+  { id: "media", label: "Media & Updates", icon: Camera },
 ] as const;
 
 const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> = ({
@@ -149,6 +164,12 @@ const SiteDetail: React.FC = () => {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [miscellaneousExpenses, setMiscellaneousExpenses] = useState<any[]>([]);
   const [stocks, setStocks] = useState<Stock[]>([]);
+  const [editingStockThreshold, setEditingStockThreshold] = useState<{
+    id: string;
+    name: string;
+    unit: string;
+    currentThreshold?: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddPurchaseModalOpen, setIsAddPurchaseModalOpen] = useState(false);
@@ -157,6 +178,13 @@ const SiteDetail: React.FC = () => {
   const [isLogUsageModalOpen, setIsLogUsageModalOpen] = useState(false);
   const [isRequestTransferModalOpen, setIsRequestTransferModalOpen] =
     useState(false);
+  const [reorderInitialItem, setReorderInitialItem] = useState<{
+    name?: string;
+    unit?: string;
+    category?: string;
+    quantity?: string | number;
+    price?: string | number;
+  } | null>(null);
   const [attendanceData, setAttendanceData] = useState<
     { date: string; count: number; level: number }[]
   >([]);
@@ -165,9 +193,112 @@ const SiteDetail: React.FC = () => {
   const [selectedDayAttendance, setSelectedDayAttendance] = useState<
     any[] | null
   >(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
+  const hasTriggeredSiteDetailHighlightRef = useRef(false);
   const [selectedTab, setSelectedTab] = useState<
     (typeof TAB_CONFIG)[number]["id"]
-  >("overview");
+  >(() => {
+    const tabParam = new URLSearchParams(window.location.search).get("tab");
+    if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
+      return tabParam as (typeof TAB_CONFIG)[number]["id"];
+    }
+    return "overview";
+  });
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
+      setSelectedTab(tabParam as (typeof TAB_CONFIG)[number]["id"]);
+    }
+  }, [searchParams]);
+
+  // Contextual smooth scroll-down and 2-second highlight when arriving via notification or action button
+  useEffect(() => {
+    if (loading || !site) return;
+    const highlightParam = searchParams.get("highlight");
+    const tabParam = searchParams.get("tab");
+
+    if (!highlightParam && tabParam !== "documents" && tabParam !== "phases" && tabParam !== "stocks" && tabParam !== "budget") {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      let targetEl: HTMLElement | null = null;
+      let matchedId: string | null = null;
+
+      if (highlightParam && highlightParam !== "documents" && highlightParam !== "phases" && highlightParam !== "stocks" && highlightParam !== "budget") {
+        targetEl = document.getElementById(`highlight-${highlightParam}`);
+        if (targetEl) matchedId = highlightParam;
+      }
+
+      if (!targetEl) {
+        if (tabParam === "budget" || highlightParam === "budget") {
+          targetEl = document.getElementById("site-budget-tab-section");
+        } else if (tabParam === "documents" || highlightParam === "documents") {
+          targetEl = document.getElementById("site-documents-tab-section");
+        } else if (tabParam === "stocks" || highlightParam === "stocks") {
+          targetEl = document.getElementById("site-stocks-tab-section");
+        } else if (tabParam === "overview" || highlightParam === "phases") {
+          targetEl = document.getElementById("site-overview-tab-section");
+        }
+      }
+
+      if (targetEl) {
+        hasTriggeredSiteDetailHighlightRef.current = true;
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        if (matchedId) {
+          setHighlightedItemId(matchedId);
+          const clearTimer = setTimeout(() => setHighlightedItemId(null), 2000);
+          return () => clearTimeout(clearTimer);
+        }
+
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("highlight");
+        setSearchParams(nextParams, { replace: true });
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [loading, site, searchParams, selectedTab]);
+
+  const handleQuickReorder = (stockItem: any) => {
+    const thresh = stockItem.lowStockThreshold ?? 10;
+    const suggestedQty = Math.max(thresh * 2 - (stockItem.quantity || 0), 10);
+    setReorderInitialItem({
+      name: stockItem.name,
+      unit: stockItem.unit,
+      category: stockItem.category || "",
+      quantity: suggestedQty,
+      price: stockItem.averagePrice || "",
+    });
+    setIsAddPurchaseModalOpen(true);
+  };
+
+  useEffect(() => {
+    if (loading || !site) return;
+    const actionParam = searchParams.get("action");
+    if (actionParam === "reorder") {
+      const stockName = searchParams.get("stockName");
+      const matchedStock = stocks.find(
+        (s) => s.name.toLowerCase() === (stockName || "").toLowerCase(),
+      );
+      if (matchedStock) {
+        handleQuickReorder(matchedStock);
+      } else if (stockName) {
+        setReorderInitialItem({ name: stockName });
+        setIsAddPurchaseModalOpen(true);
+      } else {
+        setIsAddPurchaseModalOpen(true);
+      }
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("action");
+      nextParams.delete("stockName");
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [loading, site, stocks, searchParams]);
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
     useState(false);
@@ -217,6 +348,22 @@ const SiteDetail: React.FC = () => {
   const [miscSearchQuery, setMiscSearchQuery] = useState("");
   const [stockSearchQuery, setStockSearchQuery] = useState("");
   const [documentSearchQuery, setDocumentSearchQuery] = useState("");
+  const [documentCategoryTab, setDocumentCategoryTab] = useState<"site" | "client">("site");
+  const [documentStatusFilter, setDocumentStatusFilter] = useState<
+    "all" | "pending_signature" | "signed" | "draft" | "rejected"
+  >("all");
+  const [documentModalInitialTab, setDocumentModalInitialTab] = useState<
+    "history" | "new_version" | "request_sign"
+  >("history");
+  const [activeStatusPopoverId, setActiveStatusPopoverId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = () => setActiveStatusPopoverId(null);
+    if (activeStatusPopoverId) {
+      window.addEventListener("click", handleOutsideClick);
+      return () => window.removeEventListener("click", handleOutsideClick);
+    }
+  }, [activeStatusPopoverId]);
 
   const [editingMiscId, setEditingMiscId] = useState<string | null>(null);
   const [editMiscName, setEditMiscName] = useState("");
@@ -237,6 +384,10 @@ const SiteDetail: React.FC = () => {
   const [verifyingMiscIds, setVerifyingMiscIds] = useState<Set<string>>(
     new Set(),
   );
+
+  const [selectedDocForVersions, setSelectedDocForVersions] = useState<any | null>(null);
+  const [selectedDocForSign, setSelectedDocForSign] = useState<any | null>(null);
+  const [selectedDocForReject, setSelectedDocForReject] = useState<any | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -529,6 +680,15 @@ const SiteDetail: React.FC = () => {
     userType === "admin" ||
     (userType === "siteManager" &&
       site?.siteManagers.some((m) => m.id === user?.id));
+  const canUploadDocuments =
+    userType === "admin" ||
+    (userType === "siteManager" &&
+      site?.siteManagers.some((m) => m.id === user?.id)) ||
+    (userType === "architect" &&
+      site?.architects.some((a) => a.id === user?.id)) ||
+    (userType === "supervisor" &&
+      site?.supervisors.some((s) => s.id === user?.id)) ||
+    userType === "client";
 
   const handleVerify = async (purchaseId: string) => {
     if (verifyingPurchaseIds.has(purchaseId)) return;
@@ -1030,7 +1190,6 @@ const SiteDetail: React.FC = () => {
     userType === "admin" || userType === "siteManager" || userType === "supervisor";
   const canManageStocks = userType === "siteManager" || userType === "admin";
   const canAddMiscellaneous = canAddPurchase;
-  const canUploadDocuments = userType === "admin" || userType === "siteManager";
 
   const filteredPurchases = useMemo(() => {
     const query = purchaseSearchQuery.trim().toLowerCase();
@@ -1089,19 +1248,52 @@ const SiteDetail: React.FC = () => {
     );
   }, [stocks, stockSearchQuery]);
 
-  const filteredClientDocuments = useMemo(() => {
-    const allClientDocs = site?.documents.filter((doc) => doc.category === "client") || [];
-    const query = documentSearchQuery.trim().toLowerCase();
-    if (!query) return allClientDocs;
-    return allClientDocs.filter((doc) => doc.name.toLowerCase().includes(query));
-  }, [site, documentSearchQuery]);
+  const allDocuments = useMemo(() => site?.documents || [], [site]);
 
-  const filteredSiteDocuments = useMemo(() => {
-    const allSiteDocs = site?.documents.filter((doc) => doc.category === "site") || [];
+  const siteDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.category === "site").length,
+    [allDocuments],
+  );
+  const clientDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.category === "client").length,
+    [allDocuments],
+  );
+  const pendingDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.status === "pending_signature").length,
+    [allDocuments],
+  );
+  const signedDocumentsCount = useMemo(
+    () => allDocuments.filter((doc) => doc.status === "signed").length,
+    [allDocuments],
+  );
+
+  const filteredDocuments = useMemo(() => {
     const query = documentSearchQuery.trim().toLowerCase();
-    if (!query) return allSiteDocs;
-    return allSiteDocs.filter((doc) => doc.name.toLowerCase().includes(query));
-  }, [site, documentSearchQuery]);
+    return allDocuments.filter((doc) => {
+      // Category classification filter
+      if (doc.category !== documentCategoryTab) {
+        return false;
+      }
+      // Status filter
+      if (documentStatusFilter !== "all" && doc.status !== documentStatusFilter) {
+        return false;
+      }
+      // Search query
+      if (query) {
+        const matchName = (doc.name || "").toLowerCase().includes(query);
+        const matchUploader =
+          typeof doc.uploadedBy === "object" && doc.uploadedBy?.name
+            ? doc.uploadedBy.name.toLowerCase().includes(query)
+            : false;
+        const matchPhase = (doc.phaseName || "").toLowerCase().includes(query);
+        const matchNotes = (doc.notes || "").toLowerCase().includes(query);
+        if (!matchName && !matchUploader && !matchPhase && !matchNotes) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [allDocuments, documentCategoryTab, documentStatusFilter, documentSearchQuery]);
 
   if (loading) {
     return <PageLoader label="Loading site details" />;
@@ -1270,10 +1462,27 @@ const SiteDetail: React.FC = () => {
           icon={TrendingUp}
           helperText={
             site.budget > 0
-              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized`
+              ? `${budgetUtilizationPercentage.toFixed(1)}% of received funds utilized • Click to view transactions`
               : "No funds received yet"
           }
           onClick={() => setIsTransactionsModalOpen(true)}
+          action={{
+            label: "Burn rate",
+            onClick: () => {
+              setSelectedTab("budget");
+              setTimeout(() => {
+                const budgetSection = document.getElementById("site-budget-tab-section");
+                if (budgetSection) {
+                  budgetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                } else {
+                  const nav = document.getElementById("site-tabs-navigation");
+                  if (nav) {
+                    nav.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }
+                }
+              }, 80);
+            },
+          }}
         />
 
         <div className="rounded-glass border border-console-border bg-white p-5">
@@ -1329,7 +1538,7 @@ const SiteDetail: React.FC = () => {
         </div>
       </SectionCard>
 
-      <div className="flex flex-wrap gap-1 rounded-console border border-console-border bg-console-bg p-1">
+      <div id="site-tabs-navigation" className="flex items-center gap-1 rounded-console border border-console-border bg-console-bg p-1 scroll-mt-6 overflow-x-auto no-scrollbar flex-nowrap">
         {TAB_CONFIG.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -1338,7 +1547,7 @@ const SiteDetail: React.FC = () => {
               type="button"
               onClick={() => setSelectedTab(tab.id)}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+                "flex shrink-0 whitespace-nowrap items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
                 selectedTab === tab.id
                   ? "bg-white text-brand-700 shadow-console"
                   : "text-console-muted hover:bg-white/60",
@@ -1352,14 +1561,25 @@ const SiteDetail: React.FC = () => {
       </div>
 
       {selectedTab === "overview" && (
-        <SiteProgressTimeline
-          phases={site.phases}
-          siteCreatedAt={site.createdAt}
-          siteName={site.name}
-          userType={userType}
-          onUpdateStatus={handlePhaseStatusChange}
-          onResetPhases={() => setResetPhasesConfirmOpen(true)}
-        />
+        <div id="site-overview-tab-section" className="scroll-mt-6">
+          <SiteProgressTimeline
+            phases={site.phases}
+            siteCreatedAt={site.createdAt}
+            siteName={site.name}
+            userType={userType}
+            onUpdateStatus={handlePhaseStatusChange}
+            onResetPhases={() => setResetPhasesConfirmOpen(true)}
+          />
+        </div>
+      )}
+
+      {selectedTab === "budget" && (
+        <div id="site-budget-tab-section" className="scroll-mt-6">
+          <SiteBudgetDashboard
+            siteId={site.id}
+            siteBudget={site.budget}
+          />
+        </div>
       )}
 
       {selectedTab === "team" && (
@@ -1889,7 +2109,8 @@ const SiteDetail: React.FC = () => {
       )}
 
       {selectedTab === "stocks" && (
-        <SectionCard>
+        <div id="site-stocks-tab-section" className="scroll-mt-6">
+          <SectionCard>
           <div className="mb-5 flex items-center justify-between">
             <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
               <Package size={20} className="text-brand-600" />
@@ -1927,33 +2148,149 @@ const SiteDetail: React.FC = () => {
             </div>
           )}
 
+          {(() => {
+            const lowStocks = stocks.filter(
+              (s) => s.quantity <= (s.lowStockThreshold ?? 10),
+            );
+            const outStocks = lowStocks.filter((s) => s.quantity <= 0);
+            if (lowStocks.length === 0) return null;
+            return (
+              <div className="mb-5 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50/90 p-3.5 text-xs text-amber-900">
+                <BellRing size={18} className="mt-0.5 shrink-0 text-amber-600 animate-pulse" />
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <strong className="font-semibold text-amber-950">Site Low Stock Alert</strong>
+                    <Badge variant={outStocks.length > 0 ? "error" : "warning"}>
+                      {lowStocks.length} item{lowStocks.length !== 1 ? "s" : ""} below threshold
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 text-amber-800">
+                    {outStocks.length > 0 && (
+                      <span className="mr-2 font-semibold text-rose-700">
+                        • {outStocks.length} completely depleted
+                      </span>
+                    )}
+                    Reorder supplies soon to prevent construction downtime. Automated cron checks verify stock levels daily.
+                  </p>
+                  {canAddPurchase && lowStocks.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleQuickReorder(lowStocks[0])}
+                        className="text-xs py-1 px-3 bg-amber-800 hover:bg-amber-900 text-white border-none shadow-xs"
+                      >
+                        <ShoppingCart size={13} />
+                        <span>Reorder {lowStocks[0].name} (Add Purchase)</span>
+                      </Button>
+                      {lowStocks.length > 1 && (
+                        <span className="text-[11px] text-amber-800 font-medium">
+                          + {lowStocks.length - 1} more low item{lowStocks.length - 1 !== 1 ? "s" : ""}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
           {stocks.length === 0 ? (
             <EmptyState icon={Package} title="No stock recorded for this site" />
           ) : filteredStocks.length === 0 ? (
             <EmptyState icon={Package} title="No stock items match the search" />
           ) : (
-            <div className="overflow-hidden rounded-console border border-console-border">
+            <div className="overflow-x-auto rounded-console border border-console-border">
               <table className="min-w-full divide-y divide-console-border">
                 <thead className="bg-console-bg">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Item</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Quantity</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Reorder Min</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-console-muted">Status</th>
+                    {(canManageStocks || canAddPurchase) && (
+                      <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-console-muted">Actions</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-console-border bg-white">
-                  {filteredStocks.map((stock: any) => (
-                    <tr key={stock._id}>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">{stock.name}</td>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        {stock.quantity} {stock.unit}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredStocks.map((stock: any) => {
+                    const thresh = stock.lowStockThreshold ?? 10;
+                    const isOut = stock.quantity <= 0;
+                    const isLow = stock.quantity <= thresh;
+                    const isItemHighlighted = highlightedItemId === stock._id;
+                    return (
+                      <tr
+                        key={stock._id}
+                        id={`highlight-${stock._id}`}
+                        className={cn(
+                          "transition-all duration-700",
+                          isItemHighlighted
+                            ? "bg-amber-100/90 font-semibold ring-2 ring-amber-400"
+                            : "hover:bg-console-bg",
+                        )}
+                      >
+                        <td className="whitespace-nowrap px-4 py-3.5 text-sm font-medium text-console-text">
+                          {stock.name}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
+                          <span className="font-semibold">{stock.quantity}</span> {stock.unit}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-muted">
+                          <span className="font-medium text-console-text">{thresh}</span> {stock.unit}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3.5">
+                          <Badge variant={isOut ? "error" : isLow ? "warning" : "success"}>
+                            {isOut ? "Out of stock" : isLow ? `Low stock (≤${thresh})` : "In stock"}
+                          </Badge>
+                        </td>
+                        {(canManageStocks || canAddPurchase) && (
+                          <td className="whitespace-nowrap px-4 py-3.5 text-right">
+                            <div className="inline-flex items-center gap-2">
+                              {canAddPurchase && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickReorder(stock)}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors shadow-2xs",
+                                    isLow
+                                      ? "bg-amber-600 text-white hover:bg-amber-700"
+                                      : "border border-console-border bg-white text-console-text hover:bg-console-bg"
+                                  )}
+                                  title="Submit purchase to replenish stock"
+                                >
+                                  <ShoppingCart size={12} />
+                                  <span>Reorder</span>
+                                </button>
+                              )}
+                              {canManageStocks && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditingStockThreshold({
+                                      id: stock._id,
+                                      name: stock.name,
+                                      unit: stock.unit,
+                                      currentThreshold: thresh,
+                                    })
+                                  }
+                                  className="inline-flex items-center gap-1 rounded-md border border-console-border bg-white px-2.5 py-1 text-xs font-medium text-console-text hover:bg-console-bg"
+                                  title="Set reorder threshold minimum"
+                                >
+                                  <Sliders size={12} /> Set min
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
         </SectionCard>
+        </div>
       )}
 
       {selectedTab === "miscellaneous" && (
@@ -2164,115 +2501,551 @@ const SiteDetail: React.FC = () => {
       )}
 
       {selectedTab === "documents" && (
-        <SectionCard>
+        <div id="site-documents-tab-section" className="scroll-mt-6">
+          <SectionCard>
+          {/* Header & Quick Actions */}
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="flex items-center gap-2.5 text-base font-semibold text-console-text">
+                <FileText size={20} className="text-brand-600" />
+                <span>Documents &amp; Contracts</span>
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                  {allDocuments.length}
+                </span>
+                {pendingDocumentsCount > 0 && (
+                  <span className="flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                    <Clock size={11} className="text-amber-600" />
+                    {pendingDocumentsCount} awaiting sign-off
+                  </span>
+                )}
+              </h2>
+              <p className="mt-1 text-sm text-console-muted">
+                Track blueprints, engineering documents, client contracts, and version revisions
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {allDocuments.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={downloadSiteDocumentsZip}
+                  title="Download all documents as ZIP"
+                >
+                  <Download size={14} /> Download ZIP
+                </Button>
+              )}
+
+              {canUploadDocuments && (
+                <label className={cn(
+                  "cursor-pointer inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-colors",
+                  documentCategoryTab === "client"
+                    ? "bg-indigo-600 hover:bg-indigo-700"
+                    : "bg-brand-700 hover:bg-brand-800",
+                )}>
+                  <input
+                    type="file"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        handleUpload(site.id, e.target.files[0], documentCategoryTab);
+                      }
+                    }}
+                  />
+                  <Upload size={14} />
+                  <span>
+                    {documentCategoryTab === "client" ? "Upload Client Document" : "Upload Site Document"}
+                  </span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Classification Navigation Tabs */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              {[
+                { id: "site" as const, label: "Site Documentation", count: siteDocumentsCount },
+                { id: "client" as const, label: "Client Documentation", count: clientDocumentsCount },
+              ].map((tab) => {
+                const isActive = documentCategoryTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setDocumentCategoryTab(tab.id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-all",
+                      isActive
+                        ? "bg-white text-brand-700 font-semibold shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 font-medium",
+                    )}
+                  >
+                    <span>{tab.label}</span>
+                    <span
+                      className={cn(
+                        "rounded-full px-1.5 py-0.5 text-[10px] font-bold",
+                        isActive ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-600",
+                      )}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Quick Status Filter Pills */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { id: "all" as const, label: "All" },
+                { id: "pending_signature" as const, label: "Pending Sign-off", count: pendingDocumentsCount },
+                { id: "signed" as const, label: "Signed", count: signedDocumentsCount },
+                { id: "draft" as const, label: "Draft" },
+                { id: "rejected" as const, label: "Rejected" },
+              ].map((pill) => {
+                const isActive = documentStatusFilter === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    type="button"
+                    onClick={() => setDocumentStatusFilter(pill.id)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1 text-xs transition-colors",
+                      isActive
+                        ? "bg-brand-700 text-white font-medium shadow-xs"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200/80 font-normal",
+                    )}
+                  >
+                    {pill.label}
+                    {pill.count !== undefined && pill.count > 0 && (
+                      <span
+                        className={cn(
+                          "ml-1 rounded-full px-1 text-[10px] font-bold",
+                          isActive ? "bg-brand-800 text-white" : "bg-slate-200 text-slate-700",
+                        )}
+                      >
+                        {pill.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Search Input Bar */}
           <div className="mb-5">
             <div className="relative max-w-sm">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted" size={15} />
               <input
                 type="text"
-                placeholder="Search documents..."
+                placeholder="Search by name, uploader, phase, notes..."
                 value={documentSearchQuery}
                 onChange={(e) => setDocumentSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-4 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                className="w-full rounded-lg border border-console-border py-2.5 pl-10 pr-8 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
               />
+              {documentSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setDocumentSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-console-muted hover:text-console-text"
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
             {documentSearchQuery.trim() && (
               <p className="mt-2 text-sm text-console-muted">
-                Found {filteredClientDocuments.length + filteredSiteDocuments.length} matching documents.
+                Found {filteredDocuments.length} matching {filteredDocuments.length === 1 ? "document" : "documents"}.
               </p>
             )}
           </div>
 
-          <div className="space-y-6">
-            {[
-              {
-                title: "Client Documentation",
-                docs: filteredClientDocuments,
-                totalCount: clientDocuments.length,
-                category: "client" as const,
-              },
-              {
-                title: "Site Documentation",
-                docs: filteredSiteDocuments,
-                totalCount: siteDocuments.length,
-                category: "site" as const,
-              },
-            ].map((group) => (
-              <div key={group.category}>
-                <div className="flex items-center justify-between">
-                  <h4 className="flex items-center text-sm font-medium text-console-text">
-                    <FileText size={15} className="mr-2" />
-                    {group.title} ({group.totalCount})
-                  </h4>
-                  {canUploadDocuments && (
-                    <label className="relative cursor-pointer">
-                      <input
-                        type="file"
-                        className="hidden"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleUpload(site.id, e.target.files[0], group.category);
-                          }
-                        }}
-                      />
-                      <div className="flex items-center gap-2 rounded-lg bg-brand-700 px-3 py-2 text-sm text-white transition-colors hover:bg-brand-800">
-                        <Upload size={15} />
-                        <span>Upload {group.category === "client" ? "client" : "site"} document</span>
+          {/* Document Cards List */}
+          {allDocuments.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 p-8 text-center bg-slate-50/40">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700 mb-3">
+                <FileText size={24} />
+              </div>
+              <h4 className="text-sm font-semibold text-slate-800">No documents uploaded yet</h4>
+              <p className="mt-1 text-xs text-slate-500 max-w-md mx-auto">
+                Keep site blueprints, contractor agreements, and milestone approval documents organized with version history.
+              </p>
+            </div>
+          ) : filteredDocuments.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 p-6 text-center bg-slate-50/30">
+              <p className="text-xs text-slate-600 font-medium">No documents match the selected filters or search.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setDocumentSearchQuery("");
+                  setDocumentCategoryTab("site");
+                  setDocumentStatusFilter("all");
+                }}
+                className="mt-2 text-xs font-semibold text-brand-700 hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredDocuments.map((doc: any) => {
+                const isSigned = doc.status === "signed";
+                const isPending = doc.status === "pending_signature";
+                const isRejected = doc.status === "rejected";
+
+                const currentUserId = user?.id || (user as any)?._id;
+                const docUploaderId =
+                  doc.uploadedBy?.id || (typeof doc.uploadedBy === "string" ? doc.uploadedBy : undefined);
+                const isUploader = Boolean(
+                  currentUserId && docUploaderId && String(currentUserId) === String(docUploaderId),
+                );
+
+                // Check if current user is the requested signer
+                const isRequestedSigner = Boolean(
+                  doc.signRequests?.some((sr: any) => {
+                    const targetUserId =
+                      typeof sr.requestedTo === "object"
+                        ? sr.requestedTo?._id || sr.requestedTo?.id
+                        : sr.requestedTo;
+                    if (currentUserId && targetUserId && String(currentUserId) === String(targetUserId)) {
+                      return true;
+                    }
+                    const targetRole = sr.requestedRole || sr.role;
+                    if (targetRole) {
+                      const normalizedTarget = targetRole.toLowerCase();
+                      const normalizedUserRole = (userType || (user as any)?.role || "").toLowerCase();
+                      return (
+                        normalizedTarget === normalizedUserRole ||
+                        (normalizedTarget === "client" && normalizedUserRole === "client") ||
+                        (normalizedTarget === "sitemanager" && normalizedUserRole === "sitemanager") ||
+                        (normalizedTarget === "architect" && normalizedUserRole === "architect") ||
+                        (normalizedTarget === "admin" && normalizedUserRole === "admin")
+                      );
+                    }
+                    return false;
+                  }) ||
+                    (doc.status === "pending_signature" &&
+                      doc.category === "client" &&
+                      (userType === "client" || (user as any)?.role === "client")),
+                );
+
+                const showSignButton = !isSigned && (isUploader || isRequestedSigner);
+                const showRejectButton =
+                  !isSigned &&
+                  !isUploader &&
+                  (isRequestedSigner || userType === "admin" || userType === "siteManager");
+
+                const firstReq = doc.signRequests?.[0];
+                const reqRole =
+                  firstReq?.requestedRole ||
+                  firstReq?.role ||
+                  (doc.category === "client" ? "Client" : "Required Signer");
+                const reqPerson =
+                  typeof firstReq?.requestedTo === "object" && firstReq?.requestedTo?.name
+                    ? ` (${firstReq.requestedTo.name})`
+                    : "";
+                const reqMsg = firstReq?.message;
+
+                const ext = (doc.name || "").split(".").pop()?.toUpperCase() || "DOC";
+
+                const isItemHighlighted =
+                  highlightedItemId === doc.id ||
+                  highlightedItemId === doc._id;
+
+                return (
+                  <div
+                    key={doc.id || doc._id}
+                    id={`highlight-${doc._id || doc.id}`}
+                    className={cn(
+                      "flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 rounded-xl border p-3.5 shadow-xs transition-all duration-700",
+                      isItemHighlighted
+                        ? "ring-4 ring-brand-500/60 border-brand-400 bg-brand-50/80 shadow-2xl scale-[1.015]"
+                        : "border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/50",
+                    )}
+                  >
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {/* File Icon Badge */}
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 border border-slate-200 font-mono text-[10px] font-bold">
+                        {ext.slice(0, 4)}
                       </div>
-                    </label>
-                  )}
-                </div>
-                {group.totalCount === 0 ? (
-                  <p className="mt-2 text-sm text-console-muted">No documents uploaded yet</p>
-                ) : group.docs.length === 0 ? (
-                  <p className="mt-2 text-sm text-console-muted">No documents match the search</p>
-                ) : (
-                  <div className="mt-2 max-h-48 space-y-2 overflow-y-auto">
-                    {group.docs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between rounded-lg bg-console-bg p-3 transition-colors hover:bg-slate-100"
-                      >
-                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                          <FileText size={15} className="shrink-0 text-console-muted" />
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-medium text-console-text">{doc.name}</p>
-                            <div className="flex items-center gap-2 text-xs text-console-muted">
-                              <span>{(doc.size / 1024).toFixed(1)} KB</span>
-                              <span>•</span>
-                              <User size={11} />
-                              <span>{doc.uploadedBy.name}</span>
-                              <span>•</span>
-                              <Calendar size={11} />
-                              <span>{formatDate(doc.uploadDate)}</span>
-                            </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-semibold text-slate-900" title={doc.name}>
+                            {doc.name}
+                          </p>
+
+                          {/* Version Badge Button -> Opens history modal */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDocumentModalInitialTab("history");
+                              setSelectedDocForVersions(doc);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-md bg-slate-100 hover:bg-slate-200/80 px-2 py-0.5 text-[11px] font-mono font-semibold text-slate-700 transition-colors cursor-pointer"
+                            title="Click to view revision history"
+                          >
+                            <History size={11} className="text-slate-500" />
+                            v{doc.version || 1}
+                            {doc.versions && doc.versions.length > 0 && (
+                              <span className="text-[10px] text-slate-500 font-normal">
+                                ({doc.versions.length + 1} revs)
+                              </span>
+                            )}
+                          </button>
+
+                          {/* Clickable Status Badge with Floating Popover */}
+                          <div className="relative inline-block">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveStatusPopoverId(
+                                  activeStatusPopoverId === (doc.id || doc._id)
+                                    ? null
+                                    : doc.id || doc._id
+                                );
+                              }}
+                              title="Click to view sign-off details"
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-semibold transition-all cursor-pointer hover:shadow-xs focus:outline-none focus:ring-2 focus:ring-offset-1",
+                                isSigned
+                                  ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200/80 focus:ring-emerald-400"
+                                  : isPending
+                                  ? "bg-amber-100 text-amber-900 hover:bg-amber-200/80 focus:ring-amber-400"
+                                  : isRejected
+                                  ? "bg-rose-100 text-rose-900 hover:bg-rose-200/80 focus:ring-rose-400"
+                                  : "bg-slate-100 text-slate-700 hover:bg-slate-200/80 focus:ring-slate-400",
+                                activeStatusPopoverId === (doc.id || doc._id) && "ring-2 ring-offset-1"
+                              )}
+                            >
+                              {isSigned ? (
+                                <>
+                                  <CheckCircle2 size={11} className="text-emerald-600" /> Signed
+                                </>
+                              ) : isPending ? (
+                                <>
+                                  <Clock size={11} className="text-amber-600" /> Pending Sign-off
+                                </>
+                              ) : isRejected ? (
+                                <>
+                                  <XCircle size={11} className="text-rose-600" /> Rejected
+                                </>
+                              ) : (
+                                "Draft"
+                              )}
+                            </button>
+
+                            {/* Floating Popover on Click */}
+                            {activeStatusPopoverId === (doc.id || doc._id) && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className={cn(
+                                  "absolute left-0 top-full mt-1.5 z-30 w-72 sm:w-80 rounded-xl border p-3 shadow-xl text-xs transition-all",
+                                  isSigned
+                                    ? "border-emerald-200 bg-emerald-50/95 text-emerald-950"
+                                    : isPending
+                                    ? "border-amber-200 bg-amber-50/95 text-amber-950"
+                                    : isRejected
+                                    ? "border-rose-200 bg-rose-50/95 text-rose-950"
+                                    : "border-slate-200 bg-white text-slate-800"
+                                )}
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-1.5 pb-1 border-b border-black/5 font-semibold">
+                                  <span className="flex items-center gap-1.5">
+                                    {isSigned && <CheckCircle2 size={13} className="text-emerald-600" />}
+                                    {isPending && <Clock size={13} className="text-amber-600" />}
+                                    {isRejected && <XCircle size={13} className="text-rose-600" />}
+                                    {isSigned
+                                      ? "Signature Details"
+                                      : isPending
+                                      ? "Sign-off Request"
+                                      : isRejected
+                                      ? "Rejection Details"
+                                      : "Document Status"}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveStatusPopoverId(null)}
+                                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+
+                                {isSigned && doc.signature && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      Signed by <strong>{doc.signature.signerName}</strong> ({doc.signature.signerRole})
+                                    </p>
+                                    <p className="text-[11px] opacity-80">
+                                      Date: {formatDate(doc.signature.signedAt)}
+                                    </p>
+                                    {doc.signature.comments && (
+                                      <p className="mt-1 rounded bg-emerald-100/60 p-1.5 text-[11px] italic">
+                                        "{doc.signature.comments}"
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {isPending && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      <strong>Required Signer:</strong>{" "}
+                                      <span className="capitalize">{reqRole}</span>
+                                      {reqPerson}
+                                    </p>
+                                    {reqMsg ? (
+                                      <p className="mt-1 rounded bg-amber-100/60 p-1.5 text-[11px] italic">
+                                        "{reqMsg}"
+                                      </p>
+                                    ) : (
+                                      <p className="text-[11px] opacity-80">
+                                        Awaiting formal sign-off approval from the designated signer.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
+
+                                {isRejected && (
+                                  <div className="space-y-1">
+                                    <p>
+                                      <strong>Rejection reason:</strong>{" "}
+                                      {doc.rejectionReason || "No reason provided."}
+                                    </p>
+                                  </div>
+                                )}
+
+                                {!isSigned && !isPending && !isRejected && (
+                                  <p className="text-[11px] opacity-80">
+                                    This document is currently saved as a draft. Click "Sign / Request" to submit for approval.
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <a
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded p-1.5 hover:bg-slate-200"
-                        >
-                          <Download size={15} className="text-console-muted" />
-                        </a>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>{(doc.size / 1024).toFixed(1)} KB</span>
+                          <span>•</span>
+                          <User size={11} className="text-slate-400" />
+                          <span>
+                            Uploaded by: <strong>{doc.uploadedBy?.name || "Member"}</strong>
+                          </span>
+                          <span>•</span>
+                          <Calendar size={11} className="text-slate-400" />
+                          <span>{formatDate(doc.uploadDate)}</span>
+                          {doc.phaseName && (
+                            <>
+                              <span>•</span>
+                              <span className="rounded bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-700">
+                                Phase: {doc.phaseName}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    ))}
+                    </div>
+
+                    {/* Actions Toolbar */}
+                    <div className="flex flex-wrap items-center gap-1.5 self-end sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDocumentModalInitialTab("history");
+                          setSelectedDocForVersions(doc);
+                        }}
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        title="View revision history"
+                      >
+                        <History size={13} className="text-slate-500" />
+                        <span>History</span>
+                      </button>
+
+                      {canUploadDocuments && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocumentModalInitialTab("new_version");
+                            setSelectedDocForVersions(doc);
+                          }}
+                          className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                          title="Upload revised version of this document"
+                        >
+                          <Upload size={13} className="text-slate-500" />
+                          <span>New Version</span>
+                        </button>
+                      )}
+
+                      {showSignButton && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocForSign(doc)}
+                          className="flex items-center gap-1 rounded-lg bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-800 transition-colors"
+                          title="Sign Document"
+                        >
+                          <PenTool size={13} />
+                          <span>Sign</span>
+                        </button>
+                      )}
+
+                      {showRejectButton && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedDocForReject(doc)}
+                          className="flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-100 transition-colors"
+                          title="Reject Document"
+                        >
+                          <XCircle size={13} />
+                          <span>Reject</span>
+                        </button>
+                      )}
+
+                      <a
+                        href={doc.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                        title="View / Download file"
+                      >
+                        <Download size={13} className="text-slate-500" />
+                        <span>View</span>
+                      </a>
+                    </div>
                   </div>
-                )}
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </SectionCard>
+        </div>
+      )}
+
+      {selectedTab === "media" && (
+        <div id="site-media-tab-section" className="scroll-mt-6">
+          <SiteMediaTab
+            siteId={site.id}
+            siteName={site.name}
+            userType={userType}
+          />
+        </div>
       )}
 
       {isAddPurchaseModalOpen && (
         <AddPurchaseModal
           siteId={siteId!}
           isAdmin={userType === "admin"}
+          initialItem={reorderInitialItem || undefined}
           onClose={() => {
             setIsAddPurchaseModalOpen(false);
+            setReorderInitialItem(null);
             if (selectedTab === "purchases") fetchPurchases();
+            fetchStocks();
           }}
         />
       )}
@@ -2373,6 +3146,87 @@ const SiteDetail: React.FC = () => {
           onClose={() => setIsClientPaymentsModalOpen(false)}
           onPaymentChanged={() => {
             getSiteDetails(siteId!).then((updated) => setSite(updated as ExtendedSite));
+          }}
+        />
+      )}
+
+      {selectedDocForVersions && (
+        <DocumentVersionsModal
+          isOpen={Boolean(selectedDocForVersions)}
+          onClose={() => setSelectedDocForVersions(null)}
+          siteId={site.id}
+          document={selectedDocForVersions}
+          sitePhases={site.phases}
+          canUploadVersion={canUploadDocuments}
+          initialTab={documentModalInitialTab}
+          canSign={Boolean(
+            !selectedDocForVersions.signature &&
+            (
+              (user?.id && selectedDocForVersions.uploadedBy?.id && String(user.id) === String(selectedDocForVersions.uploadedBy.id)) ||
+              selectedDocForVersions.signRequests?.some((sr: any) => {
+                const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                if (user?.id && targetUserId && String(user.id) === String(targetUserId)) return true;
+                const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                const userRole = (userType || "").toLowerCase();
+                return targetRole === userRole;
+              }) ||
+              (selectedDocForVersions.status === "pending_signature" && selectedDocForVersions.category === "client" && userType === "client")
+            )
+          )}
+          canReject={Boolean(
+            !selectedDocForVersions.signature &&
+            !(user?.id && selectedDocForVersions.uploadedBy?.id && String(user.id) === String(selectedDocForVersions.uploadedBy.id)) &&
+            (
+              userType === "admin" ||
+              userType === "siteManager" ||
+              selectedDocForVersions.signRequests?.some((sr: any) => {
+                const targetUserId = typeof sr.requestedTo === "object" ? (sr.requestedTo?._id || sr.requestedTo?.id) : sr.requestedTo;
+                if (user?.id && targetUserId && String(user.id) === String(targetUserId)) return true;
+                const targetRole = (sr.requestedRole || sr.role || "").toLowerCase();
+                const userRole = (userType || "").toLowerCase();
+                return targetRole === userRole;
+              }) ||
+              (selectedDocForVersions.status === "pending_signature" && selectedDocForVersions.category === "client" && userType === "client")
+            )
+          )}
+          onDocumentUpdated={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
+          }}
+          onOpenSignModal={(doc) => {
+            setSelectedDocForSign(doc);
+          }}
+          onOpenRejectModal={(doc) => {
+            setSelectedDocForReject(doc);
+          }}
+        />
+      )}
+
+      {selectedDocForSign && (
+        <SignDocumentModal
+          isOpen={Boolean(selectedDocForSign)}
+          onClose={() => setSelectedDocForSign(null)}
+          siteId={site.id}
+          document={selectedDocForSign}
+          defaultSignerName={user?.name}
+          defaultSignerRole={userType || "client"}
+          onSigned={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
+          }}
+        />
+      )}
+
+      {selectedDocForReject && (
+        <RejectDocumentModal
+          isOpen={Boolean(selectedDocForReject)}
+          onClose={() => setSelectedDocForReject(null)}
+          siteId={site.id}
+          documentId={selectedDocForReject.id || selectedDocForReject._id}
+          documentName={selectedDocForReject.name}
+          onSuccess={async () => {
+            const updated = await getSiteDetails(siteId!);
+            setSite(updated as ExtendedSite);
           }}
         />
       )}
@@ -2494,6 +3348,23 @@ const SiteDetail: React.FC = () => {
         confirmText="Reset phases"
         isLoading={resettingPhases}
       />
+
+      {editingStockThreshold && (
+        <EditThresholdModal
+          isOpen={!!editingStockThreshold}
+          onClose={() => setEditingStockThreshold(null)}
+          stock={editingStockThreshold}
+          onSuccess={(newThreshold) => {
+            setStocks((prev) =>
+              prev.map((s) =>
+                s._id === editingStockThreshold.id
+                  ? { ...s, lowStockThreshold: newThreshold }
+                  : s,
+              ),
+            );
+          }}
+        />
+      )}
     </div>
   );
 };

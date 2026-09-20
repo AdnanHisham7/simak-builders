@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import compression from "compression";
@@ -25,6 +26,7 @@ import itemRoutes from "@routes/itemRoutes";
 import feedbackRoutes from "@routes/feedbackRoutes";
 import expenseRequestRoutes from "@routes/expenseRequestRoutes";
 import syncRoutes from "@routes/syncRoutes";
+import storyRoutes from "@routes/storyRoutes";
 import { env } from "./config/env";
 import morgan from "morgan";
 
@@ -40,6 +42,7 @@ app.use(
 );
 app.use(compression());
 app.use(express.json());
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use(cookieParser());
 if (process.env.NODE_ENV !== "production") {
   app.use(morgan("dev"));
@@ -48,6 +51,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const allowedOrigins = [
+  "http://localhost:5173",
   "https://simakbuilders.com",
   "https://www.simakbuilders.com",
 ];
@@ -94,7 +98,6 @@ app.use("/api", generalApiLimiter);
 // app.use("/api/enquiries", publicFormLimiter);
 // app.use("/api/feedback", publicFormLimiter);
 
-
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
@@ -116,6 +119,7 @@ app.use("/api/items", itemRoutes);
 app.use("/api/feedback", feedbackRoutes);
 app.use("/api/expense-requests", expenseRequestRoutes);
 app.use("/api/sync", syncRoutes);
+app.use("/api/stories", storyRoutes);
 
 // Lightweight Health Check Endpoint for Connectivity Verification
 app.get("/api/health", (_req, res) => {

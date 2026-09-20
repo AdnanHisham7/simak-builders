@@ -466,7 +466,7 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             onClick={fetchData}
             loading={loading}
@@ -785,7 +785,7 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
             />
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             onClick={fetchData}
             loading={loading}

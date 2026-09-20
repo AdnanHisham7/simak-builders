@@ -6,5 +6,6 @@ const router = Router();
 
 router.get("/", authMiddleware, notificationController.getNotifications);
 router.put("/:notificationId/status", authMiddleware, notificationController.updateNotificationStatus);
+router.patch("/:notificationId/status", authMiddleware, notificationController.updateNotificationStatus);
 
 export default router;

@@ -9,6 +9,7 @@ import NotificationPanel from "@/components/layout/NotificationPanel";
 import { privateClient } from "@/api";
 import { toast } from "sonner";
 import { OfflineStatusBadge } from "@/components/layout/OfflineStatusBadge";
+import { HeaderStoriesButton } from "@/features/stories/HeaderStoriesButton";
 
 interface Notification {
   _id: string;
@@ -86,11 +87,17 @@ export default function Header({
         </button>
       </Tooltip>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3">
         <OfflineStatusBadge />
-        <Button variant="ghost" size="sm" onClick={() => navigate("/")}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate("/")}
+          className="hidden sm:inline-flex"
+        >
           Back to site
         </Button>
+        <HeaderStoriesButton />
         <Tooltip label="Notifications">
           <NotificationBell count={pendingCount} onClick={() => setIsNotificationOpen(true)} />
         </Tooltip>

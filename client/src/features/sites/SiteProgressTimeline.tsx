@@ -7,6 +7,7 @@ import {
   BarChart3,
   RotateCcw,
   Check,
+  Eye,
 } from "lucide-react";
 import { usePreferences } from "@/hooks/usePreferences";
 import Badge from "@/components/ui/Badge";
@@ -35,6 +36,8 @@ interface SiteProgressTimelineProps {
   readOnly?: boolean;
   className?: string;
   defaultView?: "timeline" | "gantt";
+  title?: string;
+  subtitle?: string;
 }
 
 type ViewMode = "timeline" | "gantt";
@@ -62,6 +65,8 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
   readOnly = false,
   className,
   defaultView = "timeline",
+  title = "Project overview",
+  subtitle = "Track construction milestones, timeline progress, and schedule phases",
 }) => {
   const { formatDate } = usePreferences();
   const [viewMode, setViewMode] = useState<ViewMode>(defaultView);
@@ -413,28 +418,32 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
       )}
     >
       {/* Top Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-console-border px-5 py-3.5 bg-slate-50/50">
-        <div className="flex items-center gap-3">
-          <h3 className="text-sm font-semibold text-console-text">
-            Construction Timeline &amp; Schedule
-          </h3>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800 border border-brand-100">
-            <span>{completedCount}/{totalPhases} Completed</span>
-            <span className="text-brand-500">•</span>
-            <span>{progressPercentage}%</span>
-          </span>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-console-border p-4 sm:p-6 bg-white">
+        <div>
+          <h2 className="flex flex-wrap items-center gap-2 sm:gap-2.5 text-base font-semibold text-console-text">
+            <Eye size={20} className="text-brand-600 shrink-0" />
+            <span>{title}</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-800 border border-brand-100">
+              <span>{completedCount}/{totalPhases} Completed</span>
+              <span className="text-brand-500">•</span>
+              <span>{progressPercentage}%</span>
+            </span>
+          </h2>
+          <p className="mt-1 text-xs sm:text-sm text-console-muted">
+            {subtitle}
+          </p>
         </div>
 
         {/* View Mode Toggle */}
         <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg border border-console-border bg-white p-0.5 shadow-2xs">
+          <div className="inline-flex rounded-lg border border-console-border bg-console-bg p-0.5 shadow-2xs">
             <button
               type="button"
               onClick={() => setViewMode("timeline")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 viewMode === "timeline"
-                  ? "bg-brand-50 text-brand-800 font-semibold"
+                  ? "bg-white text-brand-700 font-semibold shadow-xs"
                   : "text-console-muted hover:text-console-text",
               )}
             >
@@ -446,9 +455,9 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
               type="button"
               onClick={() => setViewMode("gantt")}
               className={cn(
-                "flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
                 viewMode === "gantt"
-                  ? "bg-brand-50 text-brand-800 font-semibold"
+                  ? "bg-white text-brand-700 font-semibold shadow-xs"
                   : "text-console-muted hover:text-console-text",
               )}
             >
@@ -458,21 +467,23 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
           </div>
 
           {!readOnly && userType === "admin" && onResetPhases && (
-            <button
-              type="button"
+            <Button
+              size="sm"
+              variant="secondary"
               onClick={onResetPhases}
-              className="text-xs text-danger-600 hover:text-danger-700 font-medium px-2 py-1 transition-colors"
-              title="Reset all phases"
+              className="text-xs text-danger-600 hover:text-danger-700 hover:bg-danger-50 hover:border-danger-200"
+              title="Reset all phases to default"
             >
-              Reset
-            </button>
+              <RotateCcw size={13} />
+              <span>Reset</span>
+            </Button>
           )}
         </div>
       </div>
 
       {/* VIEW 1: CONNECTED MILESTONE PIPELINE TRACKS */}
       {viewMode === "timeline" && (
-        <div className="p-4 sm:p-5">
+        <div className="p-3.5 sm:p-6">
           {/* Chronological Process Pipeline Tracks (Balanced 2 Columns) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
             {/* Column 1: Phases 1 to Mid */}
@@ -510,10 +521,10 @@ export const SiteProgressTimeline: React.FC<SiteProgressTimelineProps> = ({
 
       {/* VIEW 2: COMPACT GANTT SCHEDULE VIEW */}
       {viewMode === "gantt" && (
-        <div className="p-4">
+        <div className="p-3.5 sm:p-6">
           <div className="overflow-hidden rounded-lg border border-console-border">
             {/* Legend strip */}
-            <div className="flex items-center justify-between border-b border-console-border bg-slate-50 px-4 py-2 text-xs text-console-muted">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-console-border bg-slate-50 px-3 sm:px-4 py-2 text-xs text-console-muted">
               <span className="font-medium text-console-text">
                 Horizon: {formatDate(ganttStartDate.toISOString())} – {formatDate(ganttEndDate.toISOString())}
               </span>

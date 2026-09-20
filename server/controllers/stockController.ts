@@ -12,6 +12,7 @@ import { NotificationModel } from "@models/Notification";
 import { Types } from "mongoose";
 import { resolveItem } from "@utils/itemMaster";
 import { computeWeightedAveragePrice } from "@utils/stockPricing";
+import { checkLowStockAcrossSites } from "../services/stockAlertCron";
 import {
   cacheGet,
   cacheSet,
@@ -483,6 +484,119 @@ const getStockUsages = async (
   }
 };
 
+const getLowStockAlerts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { siteId } = req.query;
+    const filter: any = {
+      $expr: {
+        $lte: ["$quantity", { $ifNull: ["$lowStockThreshold", 10] }],
+      },
+    };
+
+    if (siteId) {
+      filter.site = siteId;
+    } else if (req.user?.role === UserRole.SiteManager) {
+      const user = await UserModel.findById(req.user.userId).lean();
+      if (user && Array.isArray((user as any).assignedSites)) {
+        filter.site = { $in: (user as any).assignedSites };
+      }
+    }
+
+    const stocks = await StockModel.find(filter)
+      .populate("site", "name")
+      .sort({ quantity: 1 })
+      .lean();
+
+    let criticalCount = 0;
+    let warningCount = 0;
+
+    const alerts = stocks.map((stock: any) => {
+      const threshold = stock.lowStockThreshold ?? 10;
+      const deficit = Math.max(0, threshold - stock.quantity);
+      const isCritical = stock.quantity <= 0;
+      if (isCritical) criticalCount += 1;
+      else warningCount += 1;
+
+      return {
+        id: stock._id,
+        name: stock.name,
+        category: stock.category,
+        quantity: stock.quantity,
+        unit: stock.unit,
+        threshold,
+        deficit,
+        site: {
+          id: (stock.site as any)?._id || stock.site,
+          name: (stock.site as any)?.name || "General Inventory",
+        },
+        averagePrice: stock.averagePrice || 0,
+        urgency: isCritical ? "critical" : "low",
+        lastAlertSentAt: stock.lastAlertSentAt,
+      };
+    });
+
+    res.status(HttpStatus.OK).json({
+      totalLowStock: alerts.length,
+      criticalCount,
+      warningCount,
+      alerts,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const runLowStockCheck = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const result = await checkLowStockAcrossSites(true);
+    res.status(HttpStatus.OK).json({
+      message: "Low stock check completed",
+      result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateStockThreshold = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { stockId } = req.params;
+    const { threshold } = req.body;
+
+    const stock = await StockModel.findByIdAndUpdate(
+      stockId,
+      { lowStockThreshold: Math.max(0, Number(threshold) || 0) },
+      { new: true }
+    );
+
+    if (!stock) {
+      res.status(HttpStatus.NOT_FOUND).json({ message: "Stock item not found" });
+      return;
+    }
+
+    await bumpCacheVersion(STOCKS_CACHE_NAMESPACE);
+
+    res.status(HttpStatus.OK).json({
+      message: "Stock threshold updated successfully",
+      stock,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getStocks,
   getStocksBySite,
@@ -493,4 +607,7 @@ export default {
   approveStockTransfer,
   rejectStockTransfer,
   logStockUsage,
+  getLowStockAlerts,
+  runLowStockCheck,
+  updateStockThreshold,
 };

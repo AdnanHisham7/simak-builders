@@ -2,8 +2,40 @@ import { privateClient } from "@/api";
 import { withCache, invalidateCache } from "@/helpers/requestCache";
 import { offlineDB } from "@/offline/db";
 
+export interface DocumentVersion {
+  version: number;
+  name: string;
+  size: number;
+  type: string;
+  url: string;
+  public_id?: string;
+  uploadDate: string;
+  uploadedBy?: { id?: string; name?: string; email?: string } | any;
+  notes?: string;
+}
+
+export interface DocumentSignature {
+  signedBy?: { id?: string; name?: string; email?: string } | any;
+  signerName: string;
+  signerRole: string;
+  signatureDataUrl?: string;
+  signedAt: string;
+  comments?: string;
+}
+
+export interface DocumentSignRequest {
+  requestedTo?: { id?: string; _id?: string; name?: string; email?: string } | any;
+  requestedRole: string;
+  role?: string;
+  requestedBy?: { id?: string; _id?: string; name?: string } | any;
+  requestedAt: string;
+  status: "pending" | "signed" | "rejected";
+  message?: string;
+}
+
 export interface Document {
   id: string;
+  _id?: string;
   name: string;
   size: number;
   type: string;
@@ -11,6 +43,15 @@ export interface Document {
   url: string;
   uploadedBy: { id: string; name: string };
   category: "client" | "site";
+  version?: number;
+  versions?: DocumentVersion[];
+  notes?: string;
+  status?: "draft" | "pending_signature" | "signed" | "rejected";
+  phaseId?: string;
+  phaseName?: string;
+  signature?: DocumentSignature;
+  signRequests?: DocumentSignRequest[];
+  rejectionReason?: string;
 }
 
 export interface Transaction {
@@ -244,17 +285,37 @@ const mapSiteDetailsData = (
         : undefined,
     })) || [],
   documents: site?.documents?.map((doc: any) => ({
-    id: doc?._id.toString(),
+    id: doc?._id?.toString() || doc?.id,
     name: doc?.name,
     size: doc?.size,
     type: doc?.type,
     uploadDate: doc?.uploadDate,
     url: doc?.url,
-    uploadedBy: {
-      id: doc?.uploadedBy._id.toString(),
-      name: doc?.uploadedBy.name,
-    },
+    uploadedBy: doc?.uploadedBy
+      ? {
+          id: doc.uploadedBy._id ? doc.uploadedBy._id.toString() : doc.uploadedBy.toString(),
+          name: doc.uploadedBy.name || "Member",
+        }
+      : undefined,
     category: doc?.category,
+    version: doc?.version || 1,
+    versions: doc?.versions || [],
+    status: doc?.status || "draft",
+    phaseId: doc?.phaseId,
+    phaseName: doc?.phaseName,
+    notes: doc?.notes,
+    signature: doc?.signature,
+    signRequests:
+      doc?.signRequests?.map((sr: any) => ({
+        requestedTo: sr.requestedTo,
+        requestedRole: sr.requestedRole || sr.role || "client",
+        role: sr.requestedRole || sr.role || "client",
+        requestedBy: sr.requestedBy,
+        requestedAt: sr.requestedAt,
+        status: sr.status || "pending",
+        message: sr.message,
+      })) || [],
+    rejectionReason: doc?.rejectionReason,
   })),
   budget: site?.budget || 0,
   expenses: site?.expenses || 0,
@@ -501,5 +562,124 @@ export const updateSupervisionPercentage = async (
     { supervisionPercentage }
   );
   invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export interface SiteBudgetAnalysis {
+  siteId: string;
+  siteName: string;
+  totalBudget: number;
+  totalSpent: number;
+  remainingBudget: number;
+  budgetUtilization: number;
+  averageMonthlyBurnRate: number;
+  estimatedMonthsRemaining: number;
+  healthStatus: "on_track" | "warning" | "exceeded";
+  activeMonths: number;
+  breakdown: {
+    purchases: number;
+    purchasesPaid: number;
+    purchasesPending: number;
+    miscellaneous: number;
+    contractor: number;
+    attendance: number;
+    unaccounted: number;
+  };
+  categoryBreakdown: Array<{
+    name: string;
+    value: number;
+    color: string;
+  }>;
+  monthlyTrends: Array<{
+    key: string;
+    month: string;
+    purchases: number;
+    contractor: number;
+    miscellaneous: number;
+    attendance: number;
+    other: number;
+    monthlySpend: number;
+    cumulativeSpend: number;
+    plannedSpend: number;
+  }>;
+  topCostDrivers: Array<{
+    name: string;
+    quantity: number;
+    unit: string;
+    totalAmount: number;
+  }>;
+}
+
+export const getSiteBudgetAnalysis = async (siteId: string): Promise<SiteBudgetAnalysis> => {
+  const response = await privateClient.get(`/sites/${siteId}/budget-analysis`);
+  return response.data;
+};
+
+export const uploadDocumentVersion = async (
+  siteId: string,
+  documentId: string,
+  formData: FormData
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/version`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const requestDocumentSignature = async (
+  siteId: string,
+  documentId: string,
+  data: { requestedToUserId?: string; role?: string; message?: string; phaseId?: string }
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/request-signature`,
+    data
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const signDocument = async (
+  siteId: string,
+  documentId: string,
+  data: {
+    signerName: string;
+    signerRole?: string;
+    signatureDataUrl: string;
+    comments?: string;
+    completePhase?: boolean;
+  }
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/sign`,
+    data
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const rejectDocumentSignature = async (
+  siteId: string,
+  documentId: string,
+  reason: string
+) => {
+  const response = await privateClient.post(
+    `/sites/${siteId}/documents/${documentId}/reject`,
+    { reason }
+  );
+  invalidateCache(SITES_CACHE_PREFIX);
+  return response.data;
+};
+
+export const getDocumentVersions = async (
+  siteId: string,
+  documentId: string
+) => {
+  const response = await privateClient.get(
+    `/sites/${siteId}/documents/${documentId}/versions`
+  );
   return response.data;
 };
