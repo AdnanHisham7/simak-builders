@@ -11,7 +11,6 @@ import { getCurrentUser, updateOwnProfile } from "@/services/userService";
 const ROLE_LABELS: Record<string, string> = {
   admin: "Company Admin",
   siteManager: "Site Manager",
-  supervisor: "Supervisor",
   architect: "Architect",
   client: "Client",
   employee: "Employee",

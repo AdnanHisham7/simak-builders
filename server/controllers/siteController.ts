@@ -132,7 +132,6 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
       phases,
       siteManagerIds,
       architectIds,
-      supervisorIds,
     } = req.body;
 
     if (!siteId || typeof siteId !== "string") {
@@ -220,20 +219,10 @@ const updateSite = async (req: Request, res: Response, next: NextFunction) => {
     const currentArchitects = (
       await UserModel.find({ role: "architect", assignedSites: siteId })
     ).map((u) => u._id.toString());
-    const currentSupervisors = (
-      await UserModel.find({ role: "supervisor", assignedSites: siteId })
-    ).map((u) => u._id.toString());
-
     if (siteManagerIds)
       await updateAssignedSites(siteManagerIds, "siteManager", currentManagers);
     if (architectIds)
       await updateAssignedSites(architectIds, "architect", currentArchitects);
-    if (supervisorIds)
-      await updateAssignedSites(
-        supervisorIds,
-        "supervisor",
-        currentSupervisors,
-      );
 
     await site.save();
     await bumpCacheVersion(SITES_CACHE_NAMESPACE);
@@ -323,11 +312,10 @@ const getSiteDetails = async (
       .populate("documents.signRequests.requestedBy", "name role")
       .lean();
     if (!site) throw new ApiError("Site not found", HttpStatus.NOT_FOUND);
-    const [siteManagers, architects, supervisors, client] = await Promise.all(
+    const [siteManagers, architects, client] = await Promise.all(
       [
         UserModel.find({ role: "siteManager", assignedSites: siteId }).lean(),
         UserModel.find({ role: "architect", assignedSites: siteId }).lean(),
-        UserModel.find({ role: "supervisor", assignedSites: siteId }).lean(),
         UserModel.findById(site.client).lean(),
       ],
     );
@@ -336,7 +324,7 @@ const getSiteDetails = async (
       site,
       siteManagers,
       architects,
-      supervisors,
+      supervisors: [],
       client,
       transactions: site.transactions,
     });
@@ -350,7 +338,6 @@ const getSiteStats = async (req: Request, res: Response, next: NextFunction) => 
     const user = req.authUser;
     const isRestrictedRole =
       user?.role === "siteManager" ||
-      user?.role === "supervisor" ||
       user?.role === "architect";
 
     const matchStage: Record<string, any> = {};
@@ -464,7 +451,6 @@ const getSites = async (req: Request, res: Response, next: NextFunction) => {
     const version = await getCacheVersion(SITES_CACHE_NAMESPACE);
     const isRestrictedRole =
       user?.role === "siteManager" ||
-      user?.role === "supervisor" ||
       user?.role === "architect";
     const paginationSuffix = isPaginated
       ? `:page:${page}:limit:${limit}:search:${search}:status:${status}`
@@ -1090,8 +1076,8 @@ const getSiteBudgetAnalysis = async (
     }
 
     const [purchases, miscExpenses, contractorTransactions] = await Promise.all([
-      PurchaseModel.find({ site: siteId, deletedAt: null }).lean(),
-      MiscellaneousExpenseModel.find({ site: siteId, deletedAt: null }).lean(),
+      PurchaseModel.find({ site: siteId, status: "verified", deletedAt: null }).lean(),
+      MiscellaneousExpenseModel.find({ site: siteId, status: "verified", deletedAt: null }).lean(),
       ContractorTransactionModel.find({ site: siteId }).populate("contractor", "name").lean(),
     ]);
 

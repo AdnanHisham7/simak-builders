@@ -148,7 +148,6 @@ const getActionsForRole = (role: UserType): string[] => {
     case "admin":
       return ["view", "addPurchase", "edit"];
     case "siteManager":
-    case "supervisor":
       return ["view", "addPurchase"];
     case "architect":
       return ["view", "uploadDocuments"];

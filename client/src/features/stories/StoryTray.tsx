@@ -36,6 +36,7 @@ export const StoryTray: React.FC<StoryTrayProps> = ({ className = "" }) => {
 
   const currentUserId = (currentUser as any)?._id || (currentUser as any)?.id || "";
   const currentUserRole = useSelector((state: RootState) => state.auth.userType) || "";
+  const isClient = currentUserRole === "client" || (currentUser as any)?.role === "client";
 
   // Session-scoped seen story tracking for instant border disappearance and reordering during active session
   const [sessionSeenStoryIds, setSessionSeenStoryIds] = useState<Set<string>>(new Set());
@@ -259,64 +260,66 @@ export const StoryTray: React.FC<StoryTrayProps> = ({ className = "" }) => {
         onScroll={checkScroll}
         className="flex items-center gap-4 overflow-x-auto no-scrollbar scroll-smooth px-1 py-1"
       >
-        {/* Item 1: Your Story / Add Story */}
-        <div className="flex flex-col items-center gap-1.5 shrink-0 select-none">
-          <div className="relative">
-            {currentUserGroup ? (
-              // User already has stories - clicking avatar opens them, clicking plus adds more
-              <button
-                type="button"
-                onClick={() => handleOpenGroup(currentUserGroup)}
-                className={`relative flex h-16 w-16 items-center justify-center rounded-full p-[2.5px] transition-transform active:scale-95 ${
-                  currentUserHasUnseen
-                    ? "bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-md shadow-rose-500/20 animate-gradient-x"
-                    : "border-2 border-zinc-300 dark:border-zinc-700"
-                }`}
-              >
-                <div className="h-full w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden border-2 border-white dark:border-zinc-900 flex items-center justify-center text-sm font-bold text-zinc-800 dark:text-zinc-100 uppercase">
-                  {currentUserImage ? (
-                    <img src={currentUserImage} alt="You" className="h-full w-full object-cover" />
-                  ) : (
-                    <span>{currentUser?.name?.charAt(0) || "Y"}</span>
-                  )}
-                </div>
-              </button>
-            ) : (
-              // User has no active stories yet - clicking opens create modal
-              <button
-                type="button"
-                onClick={() => setIsCreateOpen(true)}
-                className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-brand-500 dark:hover:border-brand-500 bg-zinc-50 dark:bg-zinc-800/60 p-[2px] transition-transform active:scale-95 group"
-              >
-                <div className="h-full w-full rounded-full bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-brand-500 transition-colors overflow-hidden">
-                  {currentUserImage ? (
-                    <img src={currentUserImage} alt="You" className="h-full w-full object-cover rounded-full" />
-                  ) : (
-                    <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
-                      {currentUser?.name?.charAt(0) || "Y"}
-                    </span>
-                  )}
-                </div>
-              </button>
-            )}
+        {/* Item 1: Your Story / Add Story (Only for non-clients: admin, siteManager, architect) */}
+        {!isClient && (
+          <div className="flex flex-col items-center gap-1.5 shrink-0 select-none">
+            <div className="relative">
+              {currentUserGroup ? (
+                // User already has stories - clicking avatar opens them, clicking plus adds more
+                <button
+                  type="button"
+                  onClick={() => handleOpenGroup(currentUserGroup)}
+                  className={`relative flex h-16 w-16 items-center justify-center rounded-full p-[2.5px] transition-transform active:scale-95 ${
+                    currentUserHasUnseen
+                      ? "bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-md shadow-rose-500/20 animate-gradient-x"
+                      : "border-2 border-zinc-300 dark:border-zinc-700"
+                  }`}
+                >
+                  <div className="h-full w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden border-2 border-white dark:border-zinc-900 flex items-center justify-center text-sm font-bold text-zinc-800 dark:text-zinc-100 uppercase">
+                    {currentUserImage ? (
+                      <img src={currentUserImage} alt="You" className="h-full w-full object-cover" />
+                    ) : (
+                      <span>{currentUser?.name?.charAt(0) || "Y"}</span>
+                    )}
+                  </div>
+                </button>
+              ) : (
+                // User has no active stories yet - clicking opens create modal
+                <button
+                  type="button"
+                  onClick={() => setIsCreateOpen(true)}
+                  className="flex h-16 w-16 items-center justify-center rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-brand-500 dark:hover:border-brand-500 bg-zinc-50 dark:bg-zinc-800/60 p-[2px] transition-transform active:scale-95 group"
+                >
+                  <div className="h-full w-full rounded-full bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-400 group-hover:text-brand-500 transition-colors overflow-hidden">
+                    {currentUserImage ? (
+                      <img src={currentUserImage} alt="You" className="h-full w-full object-cover rounded-full" />
+                    ) : (
+                      <span className="text-sm font-bold text-zinc-700 dark:text-zinc-200">
+                        {currentUser?.name?.charAt(0) || "Y"}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              )}
 
-            {/* Plus Badge */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsCreateOpen(true);
-              }}
-              title="Add New Story"
-              className="absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white shadow-sm border-2 border-white dark:border-zinc-900 hover:bg-brand-600 active:scale-90 transition-transform"
-            >
-              <Plus className="h-3.5 w-3.5 stroke-[3]" />
-            </button>
+              {/* Plus Badge */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsCreateOpen(true);
+                }}
+                title="Add New Story"
+                className="absolute bottom-0 right-0 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-white shadow-sm border-2 border-white dark:border-zinc-900 hover:bg-brand-600 active:scale-90 transition-transform"
+              >
+                <Plus className="h-3.5 w-3.5 stroke-[3]" />
+              </button>
+            </div>
+            <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 max-w-[68px] truncate">
+              {currentUserGroup ? "Your Story" : "Add Story"}
+            </span>
           </div>
-          <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300 max-w-[68px] truncate">
-            {currentUserGroup ? "Your Story" : "Add Story"}
-          </span>
-        </div>
+        )}
 
         {/* Item 2: Saved & Archive Button */}
         <div className="flex flex-col items-center gap-1.5 shrink-0 select-none">
@@ -387,13 +390,15 @@ export const StoryTray: React.FC<StoryTrayProps> = ({ className = "" }) => {
       </div>
 
       {/* Modals */}
-      <CreateStoryModal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onStoryCreated={() => {
-          fetchStories();
-        }}
-      />
+      {!isClient && (
+        <CreateStoryModal
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          onStoryCreated={() => {
+            fetchStories();
+          }}
+        />
+      )}
 
       <WatchLaterModal
         isOpen={isWatchLaterOpen}

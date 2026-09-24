@@ -13,7 +13,6 @@ export const LANDING_PAGE_OPTIONS_BY_ROLE: Record<string, LandingPageOption[]> =
     { value: "employees", label: "Employees" },
     { value: "clients", label: "Clients" },
     { value: "site-managers", label: "Site Managers" },
-    { value: "supervisors", label: "Supervisors" },
     { value: "architects", label: "Architects" },
     { value: "contractors", label: "Contractors" },
     { value: "vendors", label: "Vendors" },
@@ -30,7 +29,6 @@ export const LANDING_PAGE_OPTIONS_BY_ROLE: Record<string, LandingPageOption[]> =
   ],
   architect: [{ value: "dashboard", label: "Dashboard" }],
   client: [{ value: "dashboard", label: "Dashboard" }],
-  supervisor: [{ value: "dashboard", label: "Dashboard" }],
 };
 
 export const DEFAULT_LANDING_PAGE_BY_ROLE: Record<string, string> = {
@@ -38,13 +36,8 @@ export const DEFAULT_LANDING_PAGE_BY_ROLE: Record<string, string> = {
   siteManager: "dashboard",
   architect: "dashboard",
   client: "dashboard",
-  supervisor: "dashboard",
 };
 
-// Only these roles currently have a working dashboard route group registered
-// in App.tsx. Supervisor is intentionally excluded here even though it has a
-// settings/preferences entry above — there is no routed "/supervisor/*"
-// dashboard yet, so redirecting there would land on the 404 page.
 const ROUTABLE_ROLES = ["admin", "siteManager", "architect", "client"];
 
 export const getLandingPagePath = (

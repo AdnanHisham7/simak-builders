@@ -1,27 +1,23 @@
 import express from "express";
 import reportController from "../controllers/reportController";
-import { authMiddleware } from "@middleware/authMiddleware";
+import { authMiddleware, requireRoles } from "@middleware/authMiddleware";
 
 const router = express.Router();
 
 // Stocks
-router.get("/stock-transactions", reportController.getStockTransactions);
-// router.get("/stock-transactions-aggregate", reportController.getStockTransactionsAggregate);
-router.get("/stock-inventory", reportController.getStockInventory);
-// router.get("/stock-inventory-aggregate", reportController.getStockInventoryAggregate);
-router.get("/vendors", reportController.getVendorsReport);
-// router.get("/vendors-aggregate", reportController.getVendorsAggregate);
-router.get("/clients", reportController.getClientsReport);
-// router.get("/clients-aggregate", reportController.getClientsAggregate);
-router.get("/vendor-purchases", reportController.getVendorPurchases);
-router.get("/expense-report", authMiddleware, reportController.getExpenseReport);
-router.get("/client-report", authMiddleware, reportController.getClientReport);
+router.get("/stock-transactions", authMiddleware, requireRoles("admin", "siteManager"), reportController.getStockTransactions);
+router.get("/stock-inventory", authMiddleware, requireRoles("admin", "siteManager"), reportController.getStockInventory);
+router.get("/vendors", authMiddleware, requireRoles("admin", "siteManager"), reportController.getVendorsReport);
+router.get("/clients", authMiddleware, requireRoles("admin"), reportController.getClientsReport);
+router.get("/vendor-purchases", authMiddleware, requireRoles("admin", "siteManager"), reportController.getVendorPurchases);
+router.get("/expense-report", authMiddleware, requireRoles("admin", "siteManager"), reportController.getExpenseReport);
+router.get("/client-report", authMiddleware, requireRoles("admin", "siteManager", "client"), reportController.getClientReport);
 
 // Comprehensive Analytical Reports
-router.get("/annual-financial", authMiddleware, reportController.getAnnualFinancialReport);
-router.get("/salary", authMiddleware, reportController.getSalaryPayrollReport);
-router.get("/vendors-comprehensive", authMiddleware, reportController.getComprehensiveVendorsReport);
-router.get("/contractors-comprehensive", authMiddleware, reportController.getComprehensiveContractorsReport);
-router.get("/capital-lenders", authMiddleware, reportController.getCapitalLendersReport);
+router.get("/annual-financial", authMiddleware, requireRoles("admin", "siteManager"), reportController.getAnnualFinancialReport);
+router.get("/salary", authMiddleware, requireRoles("admin", "siteManager"), reportController.getSalaryPayrollReport);
+router.get("/vendors-comprehensive", authMiddleware, requireRoles("admin", "siteManager"), reportController.getComprehensiveVendorsReport);
+router.get("/contractors-comprehensive", authMiddleware, requireRoles("admin", "siteManager"), reportController.getComprehensiveContractorsReport);
+router.get("/capital-lenders", authMiddleware, requireRoles("admin", "siteManager"), reportController.getCapitalLendersReport);
 
 export default router;

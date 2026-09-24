@@ -49,7 +49,6 @@ export interface Architect {
   name: string;
   email: string;
   password?: string;
-  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   sites: Site[];
@@ -79,7 +78,7 @@ const Architects: React.FC = () => {
     setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleCopyPassword = (architect: Architect) => {
-    const pwd = architect.plainPassword || (architect.password && !architect.password.startsWith("$2") ? architect.password : "");
+    const pwd = architect.password && !architect.password.startsWith("$2") ? architect.password : "";
     if (pwd) {
       navigator.clipboard
         .writeText(pwd)
@@ -120,8 +119,7 @@ const Architects: React.FC = () => {
             name: user.name,
             sites: user.assignedSites || [],
             email: user.email,
-            password: user.plainPassword || user.password || "",
-            plainPassword: user.plainPassword,
+            password: user.password || "",
             isBlocked: user.isBlocked,
             isDeleted: user.isDeleted || false,
             profileImage: user.profileImage,
@@ -206,7 +204,7 @@ const Architects: React.FC = () => {
             .then(() => toast.success(`Password for ${architect.name} copied to clipboard: ${newPassword}`, { duration: 6000 }))
             .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
           setArchitects((prev) =>
-            prev.map((a) => (a.id === architect.id ? { ...a, password: newPassword, plainPassword: newPassword } : a)),
+            prev.map((a) => (a.id === architect.id ? { ...a, password: newPassword } : a)),
           );
         } catch (err: any) {
           toast.error(err?.response?.data?.message || "Failed to regenerate password.");
@@ -506,10 +504,10 @@ const Architects: React.FC = () => {
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
                             <KeyRound size={12} className="text-console-muted shrink-0" />
-                            {architect.plainPassword || (architect.password && !architect.password.startsWith("$2")) ? (
+                            {architect.password && !architect.password.startsWith("$2") ? (
                               <>
                                 <span className="font-mono text-console-text">
-                                  {showPassword[architect.id] ? (architect.plainPassword || architect.password) : "••••••••"}
+                                  {showPassword[architect.id] ? architect.password : "••••••••"}
                                 </span>
                                 <button
                                   type="button"
@@ -519,7 +517,7 @@ const Architects: React.FC = () => {
                                 >
                                   {showPassword[architect.id] ? <EyeOff size={12} /> : <Eye size={12} />}
                                 </button>
-                                <CopyButton value={architect.plainPassword || architect.password || ""} label="Password" />
+                                <CopyButton value={architect.password || ""} label="Password" />
                               </>
                             ) : (
                               <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>
@@ -731,8 +729,7 @@ const Architects: React.FC = () => {
                 name: user.name,
                 sites: user.assignedSites || [],
                 email: user.email,
-                password: user.plainPassword || user.password || "",
-                plainPassword: user.plainPassword,
+                password: user.password || "",
                 isBlocked: user.isBlocked,
               })),
             );

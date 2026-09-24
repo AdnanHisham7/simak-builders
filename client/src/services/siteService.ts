@@ -128,13 +128,7 @@ const mapSiteData = (site: any) => ({
       email: a?.email,
       role: a?.role,
     })) || [],
-  supervisors:
-    site?.supervisors?.map((s: any) => ({
-      id: s?._id.toString(),
-      name: s?.name,
-      email: s?.email,
-      role: s?.role,
-    })) || [],
+  supervisors: [],
   client: site?.client
     ? {
         id: site?.client?._id.toString(),
@@ -158,18 +152,26 @@ const mapSiteData = (site: any) => ({
   expenses: site?.expenses || 0,
   supervisionPercentage: site?.supervisionPercentage || 0,
   documents: site?.documents?.map((doc: any) => ({
-    id: doc?._id.toString(),
+    id: doc?._id?.toString() || doc?.id,
     name: doc?.name,
     size: doc?.size,
     type: doc?.type,
     uploadDate: doc?.uploadDate,
     url: doc?.url,
-    uploadedBy: {
-      id: doc?.uploadedBy._id.toString(),
-      name: doc?.uploadedBy.name,
-    },
+    uploadedBy: doc?.uploadedBy
+      ? {
+          id: doc.uploadedBy._id
+            ? doc.uploadedBy._id.toString()
+            : doc.uploadedBy.id
+            ? doc.uploadedBy.id.toString()
+            : typeof doc.uploadedBy === "string"
+            ? doc.uploadedBy
+            : "",
+          name: doc.uploadedBy.name || "Member",
+        }
+      : { id: "", name: "Member" },
     category: doc?.category,
-  })),
+  })) || [],
   transactions:
     site?.transactions?.map((t: any) => ({
       id: t?._id.toString(),
@@ -245,13 +247,7 @@ const mapSiteDetailsData = (
       email: a?.email,
       role: a?.role,
     })) || [],
-  supervisors:
-    supervisors?.map((s: any) => ({
-      id: s?._id.toString(),
-      name: s?.name,
-      email: s?.email,
-      role: s?.role,
-    })) || [],
+  supervisors: [],
   client: {
     id: client?._id?.toString(),
     name: client?.name,

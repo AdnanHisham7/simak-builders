@@ -38,12 +38,6 @@ router.put('/manager/:id/assign-sites', authMiddleware, userController.assignSit
 router.delete('/managers/:id', authMiddleware, userController.deleteStaffMember);
 router.patch('/managers/:id/restore', authMiddleware, userController.restoreStaffMember);
 
-// Supervisors
-router.post('/supervisors', authMiddleware, userController.createSupervisor);
-router.put('/supervisors/:id', authMiddleware, userController.updateSupervisor);
-router.put("/supervisor/:id/assign-sites", authMiddleware, userController.assignSitesToSupervisor);
-router.delete('/supervisors/:id', authMiddleware, userController.deleteStaffMember);
-router.patch('/supervisors/:id/restore', authMiddleware, userController.restoreStaffMember);
 
 // Architects
 router.post('/architects', authMiddleware, userController.createArchitect);

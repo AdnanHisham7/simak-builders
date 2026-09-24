@@ -38,7 +38,7 @@ interface Contractor {
 interface SiteContractorsManagerProps {
   siteId: string;
   siteName?: string;
-  userType: "admin" | "siteManager" | "architect" | "supervisor";
+  userType: "admin" | "siteManager" | "architect";
 }
 
 const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({

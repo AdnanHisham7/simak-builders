@@ -23,7 +23,6 @@ export interface IUser {
 export enum UserRole {
   CompanyAdmin = "admin",
   SiteManager = "siteManager",
-  Supervisor = "supervisor",
   Architect = "architect",
   Client = "client",
   Employee = "employee",

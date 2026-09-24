@@ -63,6 +63,32 @@ export const authMiddleware = async (
   }
 };
 
+export const requireRoles = (...allowedRoles: (UserRole | string)[]) => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new ApiError(Messages.TOKEN_MISSING, HttpStatus.UNAUTHORIZED));
+      return;
+    }
+
+    const userRole = req.user.role;
+    const hasRole = allowedRoles.some(
+      (role) => role === userRole || String(role).toLowerCase() === String(userRole).toLowerCase()
+    );
+
+    if (!hasRole) {
+      next(
+        new ApiError(
+          "Access forbidden: you do not have permission to perform this action",
+          HttpStatus.FORBIDDEN
+        )
+      );
+      return;
+    }
+
+    next();
+  };
+};
+
 export const optionalAuthMiddleware = async (
   req: Request,
   _res: Response,

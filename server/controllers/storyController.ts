@@ -35,6 +35,15 @@ const createStory = async (
 ) => {
   try {
     const userId = req.user?.userId;
+    const userRole = req.user?.role;
+
+    if (userRole === "client") {
+      throw new ApiError("Clients are not permitted to upload stories", HttpStatus.FORBIDDEN);
+    }
+    if (!["admin", "siteManager", "architect"].includes(userRole as string)) {
+      throw new ApiError("Insufficient permissions to upload story", HttpStatus.FORBIDDEN);
+    }
+
     if (!req.file) {
       throw new ApiError("No media file uploaded", HttpStatus.BAD_REQUEST);
     }
@@ -66,6 +75,13 @@ const createStory = async (
         if (foundSite) {
           resolvedSiteId = foundSite._id;
         }
+      }
+    }
+
+    if (userRole !== "admin" && resolvedSiteId) {
+      const userAssigned = req.authUser?.assignedSites?.map((s: any) => s.toString()) || [];
+      if (!userAssigned.includes(resolvedSiteId.toString())) {
+        throw new ApiError("You can only upload stories to your assigned sites", HttpStatus.FORBIDDEN);
       }
     }
 
@@ -112,12 +128,32 @@ const getActiveStories = async (
 ) => {
   try {
     const currentUserId = req.user?.userId ? String(req.user.userId) : "";
-    const isAdmin = req.user?.role === "admin";
+    const userRole = req.user?.role;
+    const isAdmin = userRole === "admin";
+
+    const filter: Record<string, any> = {
+      expiresAt: { $gt: new Date() },
+    };
+
+    if (!isAdmin) {
+      const userAssigned = req.authUser?.assignedSites?.map((s: any) => s.toString()) || [];
+      if (userRole === "client") {
+        const clientSites = await SiteModel.find({
+          $or: [{ client: currentUserId }, { _id: { $in: userAssigned } }],
+        }).select("_id");
+        const allowedSiteIds = clientSites.map((s) => s._id);
+        filter.site = { $in: allowedSiteIds };
+      } else {
+        // siteManager or architect: their own stories or assigned sites
+        filter.$or = [
+          { user: currentUserId },
+          { site: { $in: userAssigned } },
+        ];
+      }
+    }
 
     // Active stories not expired yet
-    const stories = await StoryModel.find({
-      expiresAt: { $gt: new Date() },
-    })
+    const stories = await StoryModel.find(filter)
       .sort({ createdAt: 1 })
       .populate("user", "name role profileImage")
       .populate("site", "name")
@@ -220,6 +256,24 @@ const getSiteMedia = async (
   try {
     const { siteId } = req.params;
     const currentUserId = req.user?.userId ? String(req.user.userId) : "";
+    const userRole = req.user?.role;
+
+    if (userRole !== "admin") {
+      const userAssigned = req.authUser?.assignedSites?.map((s: any) => s.toString()) || [];
+      const hasAccess =
+        userAssigned.includes(siteId) ||
+        (await SiteModel.exists({
+          _id: siteId,
+          $or: [
+            { client: currentUserId },
+            { siteManagers: currentUserId },
+            { architects: currentUserId },
+          ],
+        }));
+      if (!hasAccess) {
+        throw new ApiError("You do not have access to media for this site", HttpStatus.FORBIDDEN);
+      }
+    }
 
     const allMedia = await StoryModel.find({ site: siteId })
       .sort({ createdAt: -1 })

@@ -54,7 +54,6 @@ interface SiteManager {
   name: string;
   email: string;
   password?: string;
-  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   sites: Site[];
@@ -87,7 +86,7 @@ const SiteManagers: React.FC = () => {
     setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleCopyPassword = (manager: SiteManager) => {
-    const pwd = manager.plainPassword || (manager.password && !manager.password.startsWith("$2") ? manager.password : "");
+    const pwd = manager.password && !manager.password.startsWith("$2") ? manager.password : "";
     if (pwd) {
       navigator.clipboard
         .writeText(pwd)
@@ -128,8 +127,7 @@ const SiteManagers: React.FC = () => {
             name: user.name,
             sites: user.assignedSites || [],
             email: user.email,
-            password: user.plainPassword || user.password || "",
-            plainPassword: user.plainPassword,
+            password: user.password || "",
             isBlocked: user.isBlocked,
             isDeleted: user.isDeleted || false,
             siteExpensesBalance: user.siteExpensesBalance || 0,
@@ -215,7 +213,7 @@ const SiteManagers: React.FC = () => {
             .then(() => toast.success(`Password for ${manager.name} copied to clipboard: ${newPassword}`, { duration: 6000 }))
             .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
           setSiteManagers((prev) =>
-            prev.map((a) => (a.id === manager.id ? { ...a, password: newPassword, plainPassword: newPassword } : a)),
+            prev.map((a) => (a.id === manager.id ? { ...a, password: newPassword } : a)),
           );
         } catch (err: any) {
           toast.error(err?.response?.data?.message || "Failed to regenerate password.");
@@ -557,10 +555,10 @@ const SiteManagers: React.FC = () => {
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
                             <KeyRound size={12} className="text-console-muted shrink-0" />
-                            {manager.plainPassword || (manager.password && !manager.password.startsWith("$2")) ? (
+                            {manager.password && !manager.password.startsWith("$2") ? (
                               <>
                                 <span className="font-mono text-console-text">
-                                  {showPassword[manager.id] ? (manager.plainPassword || manager.password) : "••••••••"}
+                                  {showPassword[manager.id] ? manager.password : "••••••••"}
                                 </span>
                                 <button
                                   type="button"
@@ -570,7 +568,7 @@ const SiteManagers: React.FC = () => {
                                 >
                                   {showPassword[manager.id] ? <EyeOff size={12} /> : <Eye size={12} />}
                                 </button>
-                                <CopyButton value={manager.plainPassword || manager.password || ""} label="Password" />
+                                <CopyButton value={manager.password || ""} label="Password" />
                               </>
                             ) : (
                               <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>
@@ -799,8 +797,7 @@ const SiteManagers: React.FC = () => {
                 name: user.name,
                 sites: user.assignedSites || [],
                 email: user.email,
-                password: user.plainPassword || user.password || "",
-                plainPassword: user.plainPassword,
+                password: user.password || "",
                 isBlocked: user.isBlocked,
                 siteExpensesBalance: user.siteExpensesBalance || 0,
               })),

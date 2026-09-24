@@ -6,7 +6,6 @@ const UserSchema = new Schema<User>(
     name: { type: String, required: false },
     email: { type: String, unique: true, required: true },
     password: { type: String, required: true },
-    plainPassword: { type: String },
     profileImage: { type: String },
     phone: { type: String, trim: true },
     role: { type: String, enum: Object.values(UserRole), required: true },

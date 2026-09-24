@@ -3,7 +3,6 @@ import { Types } from "mongoose";
 export enum UserRole {
   CompanyAdmin = "admin",
   SiteManager = "siteManager",
-  Supervisor = "supervisor",
   Architect = "architect",
   Client = "client",
   Employee = "employee",
@@ -14,7 +13,6 @@ export interface User {
   name: string;
   email: string;
   password: string;
-  plainPassword?: string;
   profileImage?: string;
   phone?: string;
   role: UserRole;
@@ -27,11 +25,11 @@ export interface User {
   twoFactorSecret?: string;
   isKYCCompleted?: boolean; // For Client
   kycDocuments?: { type: string; url: string }[]; // For Client
-  isBlocked?: boolean; // For SiteManager, Supervisor
+  isBlocked?: boolean; // For SiteManager, Architect, Client
   isDeleted?: boolean;
   deletedAt?: Date;
   isAdmin?: boolean;
-  enabledFunctionalities?: string[]; // For SiteManager, Supervisor customization
+  enabledFunctionalities?: string[]; // For SiteManager, Architect customization
   googleId?: string;
   salaryAssignments: {
     _id?: Types.ObjectId;

@@ -312,7 +312,7 @@ const SiteDetail: React.FC = () => {
   const [isMarkAttendanceModalOpen, setIsMarkAttendanceModalOpen] =
     useState(false);
   const [currentRole, setCurrentRole] = useState<
-    "siteManager" | "architect" | "supervisor" | null
+    "siteManager" | "architect" | null
   >(null);
   const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
   const [isCompleteModalOpen, setIsCompleteModalOpen] = useState(false);
@@ -695,8 +695,6 @@ const SiteDetail: React.FC = () => {
       site?.siteManagers.some((m) => m.id === user?.id)) ||
     (userType === "architect" &&
       site?.architects.some((a) => a.id === user?.id)) ||
-    (userType === "supervisor" &&
-      site?.supervisors.some((s) => s.id === user?.id)) ||
     userType === "client";
 
   const handleVerify = async (purchaseId: string) => {
@@ -944,7 +942,7 @@ const SiteDetail: React.FC = () => {
     }
   };
 
-  const openAddModal = (role: "siteManager" | "architect" | "supervisor") => {
+  const openAddModal = (role: "siteManager" | "architect") => {
     setCurrentRole(role);
     setIsModalOpen(true);
   };
@@ -1024,7 +1022,7 @@ const SiteDetail: React.FC = () => {
 
   const handleAddTeamMember = async (
     teamUser: any,
-    role: "siteManager" | "architect" | "supervisor",
+    role: "siteManager" | "architect",
   ) => {
     try {
       let updatedIds: string[];
@@ -1032,12 +1030,9 @@ const SiteDetail: React.FC = () => {
       if (role === "siteManager") {
         updatedIds = [...site!.siteManagers.map((m) => m.id), teamUser.id];
         field = "siteManagerIds";
-      } else if (role === "architect") {
+      } else {
         updatedIds = [...site!.architects.map((a) => a.id), teamUser.id];
         field = "architectIds";
-      } else {
-        updatedIds = [...site!.supervisors.map((s) => s.id), teamUser.id];
-        field = "supervisorIds";
       }
       await updateSite(site!.id, { [field]: updatedIds });
       const updatedSite = await getSiteDetails(site!.id);
@@ -1051,24 +1046,15 @@ const SiteDetail: React.FC = () => {
 
   const handleRemoveTeamMember = async (
     memberId: string,
-    role: "siteManager" | "architect" | "supervisor",
+    role: "siteManager" | "architect",
   ) => {
     if (userType !== "admin") return;
-    const field =
-      role === "siteManager"
-        ? "siteManagers"
-        : role === "architect"
-          ? "architects"
-          : "supervisors";
+    const field = role === "siteManager" ? "siteManagers" : "architects";
     const updatedMembers = (site as any)[field].filter(
       (member: any) => member.id !== memberId,
     );
     const updateField =
-      role === "siteManager"
-        ? "siteManagerIds"
-        : role === "architect"
-          ? "architectIds"
-          : "supervisorIds";
+      role === "siteManager" ? "siteManagerIds" : "architectIds";
     try {
       await updateSite(site!.id, {
         [updateField]: updatedMembers.map((m: any) => m.id),
@@ -1196,7 +1182,7 @@ const SiteDetail: React.FC = () => {
   };
 
   const canAddPurchase =
-    userType === "admin" || userType === "siteManager" || userType === "supervisor";
+    userType === "admin" || userType === "siteManager";
   const canManageStocks = userType === "siteManager" || userType === "admin";
   const canAddMiscellaneous = canAddPurchase;
 
@@ -1336,7 +1322,7 @@ const SiteDetail: React.FC = () => {
   const siteDocuments = site.documents.filter((doc) => doc.category === "site");
   const budgetUtilizationPercentage =
     site.budget > 0 ? ((site.expenses || 0) / site.budget) * 100 : 0;
-  const teamSize = site.siteManagers.length + site.architects.length + site.supervisors.length;
+  const teamSize = site.siteManagers.length + site.architects.length;
 
   return (
     <div className="space-y-6">
@@ -1538,8 +1524,7 @@ const SiteDetail: React.FC = () => {
             </div>
           </div>
           <p className="mt-2 text-xs text-console-muted">
-            {site.siteManagers.length} managers • {site.architects.length} architects •{" "}
-            {site.supervisors.length} supervisors
+            {site.siteManagers.length} managers • {site.architects.length} architects
           </p>
         </div>
       </div>
@@ -1608,7 +1593,6 @@ const SiteDetail: React.FC = () => {
           {[
             { role: "siteManager" as const, title: "Site Managers", members: site.siteManagers, icon: Users, tone: "info" },
             { role: "architect" as const, title: "Architects", members: site.architects, icon: Building, tone: "brand" },
-            { role: "supervisor" as const, title: "Supervisors", members: site.supervisors, icon: Users, tone: "success" },
           ].map((group) => (
             <SectionCard key={group.role}>
               <div className="mb-5 flex items-center justify-between">
@@ -3098,9 +3082,7 @@ const SiteDetail: React.FC = () => {
           excludedIds={
             currentRole === "siteManager"
               ? site.siteManagers.map((m) => m.id)
-              : currentRole === "architect"
-                ? site.architects.map((a) => a.id)
-                : site.supervisors.map((s) => s.id)
+              : site.architects.map((a) => a.id)
           }
           onSelect={(selectedUser: any) => handleAddTeamMember(selectedUser, currentRole)}
           onClose={() => setIsModalOpen(false)}

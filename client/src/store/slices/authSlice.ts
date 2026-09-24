@@ -5,7 +5,6 @@ export type UserType =
   | "client"
   | "admin"
   | "siteManager"
-  | "supervisor"
   | "architect"
   | null;
 
