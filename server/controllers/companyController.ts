@@ -129,35 +129,51 @@ const getDashboardData = async (
       status: "pending",
     }).populate("client", "name email");
 
-    const sites = await SiteModel.find().select("name phases");
+    const sites = await SiteModel.find({ deletedAt: null })
+      .select("name phases status")
+      .lean();
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const sitePerformance = await Promise.all(
       sites.map(async (site) => {
-        const completedPhases = site.phases.filter(
-          (phase) => phase.status === "completed",
+        const phases = Array.isArray(site.phases) ? site.phases : [];
+        const completedPhases = phases.filter(
+          (phase: any) => phase && phase.status === "completed",
         ).length;
-        const totalPhases = site.phases.length;
+        const totalPhases = phases.length;
         const efficiency =
           totalPhases > 0 ? (completedPhases / totalPhases) * 100 : 0;
 
-        const attendances = await AttendanceModel.find({
+        let attendances = await AttendanceModel.find({
           site: site._id,
           date: { $gte: thirtyDaysAgo },
-        });
+          deletedAt: null,
+        }).lean();
+
+        // Fallback to all-time recent attendance for the site if no attendance in the last 30 days
+        if (attendances.length === 0) {
+          attendances = await AttendanceModel.find({
+            site: site._id,
+            deletedAt: null,
+          })
+            .sort({ date: -1 })
+            .limit(100)
+            .lean();
+        }
 
         const totalAttendance = attendances.reduce(
-          (sum, att) => sum + att.status,
+          (sum: number, att: any) =>
+            sum + (typeof att.status === "number" ? att.status : Number(att.status) || 0),
           0,
         );
         const averageAttendance =
           attendances.length > 0 ? totalAttendance / attendances.length : 0;
-        const utilization = averageAttendance * 100;
+        const utilization = Math.min(100, Math.max(0, averageAttendance * 100));
 
         return {
-          name: site.name,
-          efficiency: Math.round(efficiency),
-          utilization: Math.round(utilization),
+          name: site.name || "Site",
+          efficiency: Math.round(efficiency) || 0,
+          utilization: Math.round(utilization) || 0,
         };
       }),
     );

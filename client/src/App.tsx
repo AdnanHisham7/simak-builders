@@ -35,7 +35,6 @@ const Employees = lazy(() => import("./features/employees/Employees.tsx"));
 const Contractors = lazy(() => import("./features/contractors/Contractors.tsx"));
 const Vendors = lazy(() => import("./features/vendors/Vendors.tsx"));
 const SiteManagers = lazy(() => import("./features/team/SiteManagers.tsx"));
-const Supervisors = lazy(() => import("./features/team/Supervisors.tsx"));
 const Architects = lazy(() => import("./features/team/Architects.tsx"));
 const Sites = lazy(() => import("./features/sites/Sites.tsx"));
 const Stocks = lazy(() => import("./features/stocks/Stocks.tsx"));
@@ -118,7 +117,6 @@ const App: React.FC = () => {
               <Route path="salary" element={<Salary />} />
               <Route path="clients" element={<Clients />} />
               <Route path="site-managers" element={<SiteManagers />} />
-              <Route path="supervisors" element={<Supervisors />} />
               <Route path="architects" element={<Architects />} />
               <Route path="sites" element={<Sites />} />
               <Route path="sites/:siteId" element={<SiteDetail />} />

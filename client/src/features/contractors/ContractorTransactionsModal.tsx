@@ -141,7 +141,7 @@ const ContractorTransactionsModal: React.FC<ContractorTransactionsModalProps> = 
                           <td className="px-6 py-4 whitespace-nowrap">${formatDecimal(tx.amount)}</td>
                           <td className="px-6 py-4">{tx.description || "N/A"}</td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            {formatDate(tx.date)}
+                            {formatDate(tx.date || tx.createdAt)}
                           </td>
                         </tr>
                       ))}

@@ -219,6 +219,9 @@ const verifyPurchase = async (
 ) => {
   try {
     const { purchaseId } = req.params;
+    if (req.user?.role !== "admin") {
+      throw new ApiError("Unauthorized: Only admins can verify purchases", HttpStatus.FORBIDDEN);
+    }
 
     // Atomically flip status pending -> verified in a single findOneAndUpdate
     // so two near-simultaneous verify requests can't both observe "pending"

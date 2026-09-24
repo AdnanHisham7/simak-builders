@@ -3,7 +3,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { RootState } from "../store/store";
 import DashboardLayout from "@/pages/Dashboard/DashboardLayout";
-import { adminMenus, siteManagerMenus, supervisorMenus, architectMenus, clientMenus } from "@/constants/menu";
+import { adminMenus, siteManagerMenus, architectMenus, clientMenus } from "@/constants/menu";
 import { useMemo } from "react";
 
 interface RoleLayoutRouteProps {
@@ -29,8 +29,6 @@ const RoleLayoutRoute: React.FC<RoleLayoutRouteProps> = ({
         return adminMenus;
       case "siteManager":
         return siteManagerMenus;
-      case "supervisor":
-        return supervisorMenus;
       case "architect":
         return architectMenus;
       case "client":

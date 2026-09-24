@@ -15,7 +15,6 @@ import { StoryTray } from "../../features/stories/StoryTray";
 const DASHBOARD_HOME_ROUTES = new Set([
   "/admin/dashboard",
   "/siteManager/dashboard",
-  "/supervisor/dashboard",
   "/architect/dashboard",
   "/client/dashboard",
   "/company/dashboard",

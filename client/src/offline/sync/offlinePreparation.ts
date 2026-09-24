@@ -132,7 +132,6 @@ class OfflinePreparationManager {
       () => import("@/features/company/CompanyPage"),
       () => import("@/features/clients/Clients"),
       () => import("@/features/team/SiteManagers"),
-      () => import("@/features/team/Supervisors"),
       () => import("@/features/team/Architects"),
       () => import("@/pages/siteManager/SiteManagerDashboard"),
       () => import("@/features/team/ArchitectDashboard"),

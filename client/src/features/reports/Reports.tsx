@@ -46,6 +46,7 @@ import SalaryReportView from "./components/SalaryReportView";
 import VendorReportView from "./components/VendorReportView";
 import ContractorReportView from "./components/ContractorReportView";
 import CapitalLenderReportView from "./components/CapitalLenderReportView";
+import SearchableSiteSelect from "./components/SearchableSiteSelect";
 
 interface ReportSite {
   _id: string;
@@ -409,18 +410,12 @@ const ExpenseReport = ({ sites }: { sites: ReportSite[] }) => {
           Report filters
         </h3>
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <select
+          <SearchableSiteSelect
+            sites={sites}
             value={filters.siteId}
-            onChange={(e) => handleSiteChange(e.target.value)}
-            className="w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-          >
-            <option value="">Select site</option>
-            {sites.map((site) => (
-              <option key={site._id} value={site._id}>
-                {site.name}
-              </option>
-            ))}
-          </select>
+            onChange={handleSiteChange}
+            placeholder="Select site"
+          />
           <div className="relative">
             <Receipt
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"
@@ -723,18 +718,12 @@ const ClientSiteReport = ({ sites }: { sites: ReportSite[] }) => {
           Report filters
         </h3>
         <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <select
+          <SearchableSiteSelect
+            sites={sites}
             value={filters.siteId}
-            onChange={(e) => handleSiteChange(e.target.value)}
-            className="w-full rounded-lg border border-console-border bg-white px-3.5 py-2.5 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-          >
-            <option value="">Select site</option>
-            {sites.map((site) => (
-              <option key={site._id} value={site._id}>
-                {site.name}
-              </option>
-            ))}
-          </select>
+            onChange={handleSiteChange}
+            placeholder="Select site"
+          />
           <div className="relative">
             <Wallet
               className="absolute left-3.5 top-1/2 -translate-y-1/2 text-console-muted"

@@ -94,8 +94,6 @@ const getUsersByRole = async (
           id: site._id,
           name: site.name,
         })) || [],
-      password: user.plainPassword || (user.password?.startsWith("$2") ? "" : user.password),
-      plainPassword: user.plainPassword || undefined,
       siteExpensesBalance: user.siteExpensesBalance,
     }));
 
@@ -150,7 +148,6 @@ const regeneratePassword = async (
     const newPassword = Math.random().toString(36).slice(-8); // Generate random password
     const hashedPassword = await bcrypt.hash(newPassword, 10); // Hash with bcrypt
     user.password = hashedPassword; // Store hashed password
-    user.plainPassword = newPassword; // Store plain password for admin copying
     await user.save();
 
     await cacheDel(`users:role:${user.role}:active`);
@@ -214,7 +211,6 @@ const createSiteManager = async (
       name,
       email,
       password: hashedPassword,
-      plainPassword: password,
       role,
       assignedSites: assignedSites || [],
       isEmailVerified: true,
@@ -243,8 +239,6 @@ const createSiteManager = async (
         id: user._id,
         name,
         email,
-        password,
-        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSites,
       },
@@ -288,106 +282,7 @@ const updateSiteManager = async (
   }
 };
 
-const createSupervisor = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { name, email, role, assignedSites } = req.body;
-    if (role !== "supervisor") {
-      throw new ApiError("Invalid role", HttpStatus.BAD_REQUEST);
-    }
-    const existingUser = await UserModel.findOne({ email });
-    if (existingUser) {
-      throw new ApiError("Email already in use", HttpStatus.BAD_REQUEST);
-    }
-    if (assignedSites?.length) {
-      const existingSites = await SiteModel.countDocuments({
-        _id: { $in: assignedSites },
-      });
-      if (existingSites !== assignedSites.length) {
-        throw new ApiError(
-          "One or more assigned sites do not exist",
-          HttpStatus.BAD_REQUEST
-        );
-      }
-    }
-    const password = Math.random().toString(36).slice(-8);
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new UserModel({
-      name,
-      email,
-      password: hashedPassword,
-      plainPassword: password,
-      role,
-      assignedSites: assignedSites || [],
-      isEmailVerified: true,
-    });
-    await user.save();
-    if (assignedSites?.length) {
-      await SiteModel.updateMany(
-        { _id: { $in: assignedSites } },
-        { $push: { siteManagers: user._id } } // Assuming supervisors are added to siteManagers for simplicity
-      );
-    }
 
-    await cacheDel(`users:role:${role}:active`);
-    await cacheDel(`users:role:${role}:withDeleted`);
-
-    try {
-      await sendInitialPasswordEmail(email, password);
-    } catch (emailErr: any) {
-      console.warn("Failed to send initial password email:", emailErr?.message || emailErr);
-    }
-
-    res.status(HttpStatus.CREATED).json({
-      message: "Supervisor created successfully",
-      user: {
-        id: user._id,
-        name,
-        email,
-        password,
-        plainPassword: password,
-        isBlocked: user.isBlocked,
-        assignedSites,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-const updateSupervisor = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { id } = req.params;
-    const { name, email, isBlocked } = req.body;
-    const user = await UserModel.findById(id);
-    if (!user || user.role !== "supervisor") {
-      throw new ApiError("Supervisor not found", HttpStatus.NOT_FOUND);
-    }
-    if (email && email !== user.email) {
-      const emailExists = await UserModel.findOne({ email });
-      if (emailExists) {
-        throw new ApiError("Email already in use", HttpStatus.BAD_REQUEST);
-      }
-    }
-    if (name) user.name = name;
-    if (email) user.email = email;
-    if (typeof isBlocked !== "undefined") user.isBlocked = isBlocked;
-    await user.save();
-    res.status(HttpStatus.OK).json({
-      message: "Supervisor updated successfully",
-      updatedFields: Object.keys(req.body).filter((key) => key !== "id"),
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
 // Append to userController.ts
 const createArchitect = async (
@@ -410,7 +305,6 @@ const createArchitect = async (
       name,
       email,
       password: hashedPassword,
-      plainPassword: password,
       role: "architect",
       assignedSites: assignedSites || [],
       isEmailVerified: true,
@@ -439,8 +333,6 @@ const createArchitect = async (
         id: user._id,
         name,
         email,
-        password,
-        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSites,
       },
@@ -509,7 +401,6 @@ const createClient = async (
       name,
       email,
       password: hashedPassword,
-      plainPassword: password,
       role: "client",
       assignedSites: [], // Empty array for clients
       isEmailVerified: true,
@@ -531,8 +422,6 @@ const createClient = async (
         id: user._id.toString(),
         name,
         email,
-        password,
-        plainPassword: password,
         isBlocked: user.isBlocked,
         assignedSite: null,
       },
@@ -654,7 +543,6 @@ const restoreClient = async (
 const DELETABLE_STAFF_ROLES = [
   UserRole.Architect,
   UserRole.SiteManager,
-  UserRole.Supervisor,
   UserRole.Employee,
 ];
 
@@ -739,10 +627,9 @@ const createUser = async (req: Request, res: Response, next: NextFunction) => {
       name,
       email,
       password: hashedPassword,
-      plainPassword: tempPassword,
       role,
       assignedSites:
-        !assignedSites || role === "companyAdmin" || role === "supervisor"
+        !assignedSites || role === "companyAdmin"
           ? []
           : assignedSites,
       isEmailVerified: true,
@@ -778,7 +665,7 @@ const updateUser = async (req: Request, res: Response, next: NextFunction) => {
 
     const previousSites = user.assignedSites.map((id) => id.toString());
     if (name) user.name = name;
-    if (assignedSites && !["companyAdmin", "supervisor"].includes(user.role)) {
+    if (assignedSites && user.role !== UserRole.CompanyAdmin) {
       user.assignedSites = assignedSites;
       if (user.role === "client") {
         const removedSites = previousSites.filter(
@@ -805,38 +692,7 @@ const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   }
 };
 
-const assignSitesToSupervisor = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { id } = req.params;
-    const { siteIds } = req.body;
-    const user = await UserModel.findById(id);
-    if (!user || user.role !== "supervisor") {
-      throw new ApiError("Supervisor not found", HttpStatus.NOT_FOUND);
-    }
-    if (siteIds?.length) {
-      const existingSites = await SiteModel.countDocuments({
-        _id: { $in: siteIds },
-      });
-      if (existingSites !== siteIds.length) {
-        throw new ApiError(
-          "One or more sites do not exist",
-          HttpStatus.BAD_REQUEST
-        );
-      }
-    }
-    user.assignedSites = siteIds || [];
-    await user.save();
-    res
-      .status(HttpStatus.OK)
-      .json({ message: "Sites assigned successfully", assignedSites: siteIds });
-  } catch (error) {
-    next(error);
-  }
-};
+
 
 const assignSitesToManager = async (
   req: Request,
@@ -1035,7 +891,7 @@ const listSalaries = async (
   next: NextFunction
 ) => {
   try {
-    const allowedRoles = ["siteManager", "supervisor", "architect"];
+    const allowedRoles = ["siteManager", "architect"];
     const users = await UserModel.find(
       { role: { $in: allowedRoles } },
       "name email role salaryAssignments totalSalary fixedSalary profileImage" // Added fixedSalary
@@ -1586,12 +1442,9 @@ export default {
   getUserById,
   toggleStatus,
   regeneratePassword,
-  assignSitesToSupervisor,
   createSiteManager,
   updateSiteManager,
   assignSitesToManager,
-  createSupervisor,
-  updateSupervisor,
   createArchitect,
   updateArchitect,
   createClient,

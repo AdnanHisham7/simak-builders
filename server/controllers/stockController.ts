@@ -156,6 +156,9 @@ const approveStockTransfer = async (
   try {
     const { transferId } = req.params;
     const user = req.user;
+    if (user?.role !== "admin") {
+      throw new ApiError("Unauthorized: Only admins can approve stock transfers", HttpStatus.FORBIDDEN);
+    }
 
     const transfer = await StockTransferModel.findById(transferId).populate(
       "stock"
@@ -267,6 +270,9 @@ const rejectStockTransfer = async (
   try {
     const { transferId } = req.params;
     const user = req.user;
+    if (user?.role !== "admin") {
+      throw new ApiError("Unauthorized: Only admins can reject stock transfers", HttpStatus.FORBIDDEN);
+    }
 
     const transfer: any = await StockTransferModel.findById(transferId)
       .populate("fromSite")

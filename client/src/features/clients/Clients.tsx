@@ -49,7 +49,6 @@ interface Client {
   name: string;
   email: string;
   password?: string;
-  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   assignedSites: Site[];
@@ -83,7 +82,7 @@ const Clients: React.FC = () => {
     setShowPassword((prev) => ({ ...prev, [id]: !prev[id] }));
 
   const handleCopyPassword = (client: Client) => {
-    const pwd = client.plainPassword || (client.password && !client.password.startsWith("$2") ? client.password : "");
+    const pwd = client.password && !client.password.startsWith("$2") ? client.password : "";
     if (pwd) {
       navigator.clipboard
         .writeText(pwd)
@@ -211,7 +210,7 @@ const Clients: React.FC = () => {
             .catch(() => toast.success(`Password regenerated: ${newPassword}`, { duration: 6000 }));
           setClients((prev) =>
             prev.map((c) =>
-              c.id === client.id ? { ...c, password: newPassword, plainPassword: newPassword } : c
+              c.id === client.id ? { ...c, password: newPassword } : c
             )
           );
         } catch (err: any) {
@@ -518,10 +517,10 @@ const Clients: React.FC = () => {
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 text-xs text-console-muted">
                             <KeyRound size={12} className="text-console-muted shrink-0" />
-                            {client.plainPassword || (client.password && !client.password.startsWith("$2")) ? (
+                            {client.password && !client.password.startsWith("$2") ? (
                               <>
                                 <span className="font-mono text-console-text">
-                                  {showPassword[client.id] ? (client.plainPassword || client.password) : "••••••••"}
+                                  {showPassword[client.id] ? client.password : "••••••••"}
                                 </span>
                                 <button
                                   type="button"
@@ -531,7 +530,7 @@ const Clients: React.FC = () => {
                                 >
                                   {showPassword[client.id] ? <EyeOff size={12} /> : <Eye size={12} />}
                                 </button>
-                                <CopyButton value={client.plainPassword || client.password || ""} label="Password" />
+                                <CopyButton value={client.password || ""} label="Password" />
                               </>
                             ) : (
                               <span className="italic text-slate-400">•••••••• (regenerate to copy)</span>

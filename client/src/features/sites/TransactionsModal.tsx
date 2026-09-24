@@ -7,9 +7,12 @@ import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
 import EmptyState from "@/components/ui/EmptyState";
 import { usePreferences } from "@/hooks/usePreferences";
+import { formatDate as formatDateUtil } from "@/utils/formatters";
 import { cn } from "@/lib/cn";
 
 interface Transaction {
+  _id?: string;
+  id?: string;
   date: string;
   amount: number;
   type:
@@ -47,13 +50,53 @@ const TransactionsModal: React.FC<TransactionsModalProps> = ({
   const navigate = useNavigate();
   const { userType } = useSelector((state: RootState) => state.auth);
   const basePath = userType === "siteManager" ? "siteManager" : "admin";
-  const { formatDate, formatNumber } = usePreferences();
+  const { formatDate, formatNumber, timezone } = usePreferences();
 
   const sortedTransactions = useMemo(() => {
-    return [...(transactions || [])].sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-    );
-  }, [transactions]);
+    return (transactions || [])
+      .map((tx, originalIndex) => ({ tx, originalIndex }))
+      .sort((a, b) => {
+        const timeA = new Date(a.tx.date).getTime();
+        const timeB = new Date(b.tx.date).getTime();
+
+        if (isNaN(timeA) && isNaN(timeB)) return b.originalIndex - a.originalIndex;
+        if (isNaN(timeA)) return 1;
+        if (isNaN(timeB)) return -1;
+
+        // Group by calendar date (formatted as YYYY-MM-DD in user's timezone)
+        const dateKeyA = formatDateUtil(a.tx.date, "YYYY-MM-DD", timezone);
+        const dateKeyB = formatDateUtil(b.tx.date, "YYYY-MM-DD", timezone);
+
+        if (dateKeyA !== dateKeyB) {
+          // Different calendar days: later date comes first (e.g. "2026-09-24" before "2026-07-28")
+          return dateKeyB.localeCompare(dateKeyA);
+        }
+
+        // On the same calendar day:
+        // 1. If both have MongoDB _id, newer ObjectId was created later
+        const idA = a.tx._id || a.tx.id;
+        const idB = b.tx._id || b.tx.id;
+        if (idA && idB && idA !== idB) {
+          return String(idB).localeCompare(String(idA));
+        }
+
+        // 2. If both have distinct non-zero time components, sort by time
+        const hasTimeA =
+          a.tx.date &&
+          new Date(a.tx.date).toISOString().slice(11, 19) !== "00:00:00";
+        const hasTimeB =
+          b.tx.date &&
+          new Date(b.tx.date).toISOString().slice(11, 19) !== "00:00:00";
+
+        if (hasTimeA && hasTimeB && timeA !== timeB) {
+          return timeB - timeA;
+        }
+
+        // 3. Fallback to array insertion order: later element comes first
+        return b.originalIndex - a.originalIndex;
+      })
+      .map((item) => item.tx);
+  }, [transactions, timezone]);
 
   const handleNavigate = (url: string) => {
     onClose();

@@ -38,12 +38,14 @@ interface Contractor {
 interface SiteContractorsManagerProps {
   siteId: string;
   siteName?: string;
-  userType: "admin" | "siteManager" | "architect" | "supervisor";
+  userType: "admin" | "siteManager" | "architect";
+  onSiteUpdated?: () => void;
 }
 
 const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
   siteId,
   userType,
+  onSiteUpdated,
 }) => {
   const { formatNumber, formatDate } = usePreferences();
   const [allContractors, setAllContractors] = useState<Contractor[]>([]);
@@ -151,7 +153,8 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
         const txs = await getContractorTransactions(selectedContractor.id, siteId);
         setTransactions(txs);
         await fetchAllContractors();
-        toast.success("Transaction deleted");
+        onSiteUpdated?.();
+        toast.success("Transaction deleted and reversed from site expenses");
       }
     } catch (err) {
       toast.error("Failed to delete transaction");
@@ -162,6 +165,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
     try {
       await assignSiteToContractor(contractorId, siteId);
       await fetchAllContractors();
+      onSiteUpdated?.();
       setIsAssignExistingModalOpen(false);
       toast.success("Contractor assigned to this site");
     } catch (err) {
@@ -173,9 +177,17 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
     if (!removeTarget) return;
     setIsRemoving(true);
     try {
-      await unassignSiteFromContractor(removeTarget.id, siteId);
+      const res = await unassignSiteFromContractor(removeTarget.id, siteId);
       await fetchAllContractors();
-      toast.success("Contractor removed from this site");
+      const reversedAmt = res?.reversedAmount;
+      if (reversedAmt && reversedAmt > 0) {
+        toast.success(
+          `Contractor removed from this site and ₹${formatNumber(reversedAmt)} reversed from site expenses`,
+        );
+      } else {
+        toast.success("Contractor removed from this site");
+      }
+      onSiteUpdated?.();
       setRemoveTarget(null);
     } catch (err) {
       toast.error("Failed to remove contractor from site");
@@ -188,6 +200,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
     try {
       await addTransaction(data);
       await fetchAllContractors();
+      onSiteUpdated?.();
       setIsAddTransactionModalOpen(false);
     } catch (err) {
       toast.error("Transaction failed");
@@ -525,7 +538,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
               </thead>
               <tbody className="divide-y divide-console-border bg-white">
                 {[...transactions]
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime())
                   .map((tx) => (
                     <tr key={tx.id}>
                       <td className="px-4 py-3 text-sm capitalize text-console-text">{tx.type}</td>
@@ -535,7 +548,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.category || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">
-                        {formatDate(tx.date)}
+                        {formatDate(tx.date || tx.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Tooltip label="Delete transaction">
@@ -589,7 +602,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
         onClose={() => setRemoveTarget(null)}
         onConfirm={handleRemoveFromSite}
         title="Remove contractor"
-        message={`Remove ${removeTarget?.name} from this site?`}
+        message={`Remove ${removeTarget?.name} from this site? Any transactions assigned to this site will be reversed and deducted from the site's expenses.`}
         variant="warning"
         confirmText="Remove"
         isLoading={isRemoving}

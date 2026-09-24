@@ -11,7 +11,6 @@ export interface User {
   role: string;
   assignedSites: Site[];
   password?: string;
-  plainPassword?: string;
   isBlocked: boolean;
   isDeleted?: boolean;
   siteExpensesBalance: number;
@@ -67,8 +66,7 @@ export const getUsersByRole = async (
         })) || [],
       isBlocked: user.isBlocked,
       isDeleted: user.isDeleted || false,
-      password: user.plainPassword || user.password,
-      plainPassword: user.plainPassword,
+      password: user.password,
       siteExpensesBalance: user.siteExpensesBalance,
       profileImage: user.profileImage,
     }));
@@ -155,50 +153,6 @@ export const assignSitesToClients = async (
   invalidateCache("users-by-role:");
 };
 
-export const createSupervisor = async (userData: {
-  name: string;
-  email: string;
-}) => {
-  const response = await privateClient.post("/users/supervisors", {
-    ...userData,
-    role: "supervisor",
-  });
-  invalidateCache("users-by-role:");
-  return {
-    id: response.data._id,
-    ...response.data,
-  };
-};
-
-export const updateSupervisor = async (
-  userId: string,
-  updateData: { name?: string; email?: string }
-) => {
-  const response = await privateClient.put(
-    `/users/supervisors/${userId}`,
-    updateData
-  );
-  invalidateCache("users-by-role:");
-  return {
-    id: response.data._id,
-    ...response.data,
-    assignedSites:
-      response.data.assignedSites?.map((site: any) => ({
-        id: site._id,
-        name: site.name,
-      })) || [],
-  };
-};
-
-export const assignSitesToSupervisor = async (
-  userId: string,
-  siteIds: string[]
-) => {
-  await privateClient.put(`/users/supervisor/${userId}/assign-sites`, {
-    siteIds,
-  });
-  invalidateCache("users-by-role:");
-};
 
 // Updated userService.ts (append these functions)
 export const createArchitect = async (userData: {
@@ -341,7 +295,7 @@ export const restoreClient = async (userId: string): Promise<void> => {
   invalidateCache("users-by-role:");
 };
 
-export type StaffRolePathPrefix = "architects" | "managers" | "supervisors";
+export type StaffRolePathPrefix = "architects" | "managers";
 
 export const deleteStaffMember = async (
   rolePathPrefix: StaffRolePathPrefix,

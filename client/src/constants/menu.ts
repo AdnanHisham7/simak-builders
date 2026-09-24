@@ -28,7 +28,6 @@ export const adminMenus = [
       { name: "Employees", icon: Users, path: "/admin/employees" },
       { name: "Clients", icon: Users, path: "/admin/clients" },
       { name: "Site Managers", icon: Users, path: "/admin/site-managers" },
-      { name: "Supervisors", icon: Users, path: "/admin/supervisors" },
       { name: "Architects", icon: Users, path: "/admin/architects" },
       { name: "Contractors", icon: Briefcase, path: "/admin/contractors" },
       { name: "Vendors", icon: Truck, path: "/admin/vendors" },
@@ -76,20 +75,6 @@ export const siteManagerMenus = [
       { name: "Sites", icon: CheckSquare, path: "/siteManager/sites" },
       { name: "Reports", icon: BarChart3, path: "/siteManager/reports" },
       { name: "Settings", icon: Settings, path: "/siteManager/settings" },
-    ],
-  },
-];
-
-export const supervisorMenus = [
-  {
-    title: "Main",
-    items: [
-      { name: "Dashboard", icon: Grid, path: "/supervisor/dashboard" },
-      { name: "Sites", icon: Building, path: "/supervisor/sites" },
-      { name: "Attendance", icon: CheckSquare, path: "/supervisor/attendance" },
-      { name: "Purchases", icon: DollarSign, path: "/supervisor/purchases" },
-      { name: "Contractors", icon: Briefcase, path: "/supervisor/contractors" },
-      { name: "Reports", icon: BarChart3, path: "/supervisor/reports" },
     ],
   },
 ];

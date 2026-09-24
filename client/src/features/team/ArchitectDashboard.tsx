@@ -125,11 +125,11 @@ const ArchitectDashboard: React.FC = () => {
   }
 
   const myDocuments = sites
-    .flatMap((site) => site.documents)
-    .filter((doc) => doc.uploadedBy.id === currentUser._id)
+    .flatMap((site) => site.documents || [])
+    .filter((doc) => (doc?.uploadedBy?.id || "") === (currentUser._id || currentUser.id))
     .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
 
-  const totalDocuments = sites.reduce((total, site) => total + site.documents.length, 0);
+  const totalDocuments = sites.reduce((total, site) => total + (site.documents?.length || 0), 0);
   const verifiedSalary =
     currentUser.salaryAssignments
       ?.filter((s) => s.isVerified)
@@ -375,7 +375,7 @@ const ArchitectDashboard: React.FC = () => {
                           <div className="mt-0.5 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-console-muted">
                             <span>{(doc.size / 1024).toFixed(1)} KB</span>
                             <span>
-                              Site: {sites.find((s) => s.documents.some((d) => d.id === doc.id))?.name}
+                              Site: {sites.find((s) => s.documents?.some((d) => d.id === doc.id))?.name}
                             </span>
                             <span>Uploaded {formatDate(doc.uploadDate)}</span>
                           </div>

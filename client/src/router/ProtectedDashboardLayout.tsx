@@ -7,7 +7,6 @@ import {
   architectMenus,
   clientMenus,
   siteManagerMenus,
-  supervisorMenus,
 } from "@/constants/menu";
 import { store } from "@/store/store";
 import { clearUser } from "@/store/slices/authSlice";
@@ -18,7 +17,6 @@ interface ProtectedDashboardLayoutProps {
     | "client"
     | "admin"
     | "siteManager"
-    | "supervisor"
     | "architect"
     | null
   )[];
@@ -59,8 +57,6 @@ const ProtectedDashboardLayout: React.FC<ProtectedDashboardLayoutProps> = ({
       ? adminMenus
       : userType === "siteManager"
       ? siteManagerMenus
-      : userType === "supervisor"
-      ? supervisorMenus
       : userType === "architect"
       ? architectMenus
       : clientMenus;

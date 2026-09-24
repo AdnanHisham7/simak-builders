@@ -12,6 +12,7 @@ export const HeaderStoriesButton: React.FC = () => {
   const currentUser = useSelector((state: RootState) => state.auth.user);
   const currentUserId = (currentUser as any)?._id || (currentUser as any)?.id || "";
   const currentUserRole = useSelector((state: RootState) => state.auth.userType) || "";
+  const isClient = currentUserRole === "client" || (currentUser as any)?.role === "client";
 
   const [storyGroups, setStoryGroups] = useState<StoryGroup[]>([]);
   const [sessionSeenStoryIds, setSessionSeenStoryIds] = useState<Set<string>>(new Set());
@@ -113,8 +114,10 @@ export const HeaderStoriesButton: React.FC = () => {
 
   const handleClick = () => {
     if (totalActiveStories === 0) {
-      // If no active stories exist, allow posting a new story directly
-      setIsCreateOpen(true);
+      // If no active stories exist, non-clients can post a new story directly
+      if (!isClient) {
+        setIsCreateOpen(true);
+      }
       return;
     }
 
@@ -129,7 +132,17 @@ export const HeaderStoriesButton: React.FC = () => {
 
   return (
     <>
-      <Tooltip label={hasUnseenStories ? "New stories available" : totalActiveStories > 0 ? "Watch stories" : "Share a story"}>
+      <Tooltip
+        label={
+          hasUnseenStories
+            ? "New stories available"
+            : totalActiveStories > 0
+            ? "Watch stories"
+            : isClient
+            ? "No active stories"
+            : "Share a story"
+        }
+      >
         <button
           type="button"
           onClick={handleClick}
@@ -151,7 +164,7 @@ export const HeaderStoriesButton: React.FC = () => {
             <div className="flex h-full w-full items-center justify-center rounded-full bg-white dark:bg-zinc-900">
               {hasUnseenStories ? (
                 <Sparkles size={10} className="text-rose-500 fill-rose-500" />
-              ) : totalActiveStories > 0 ? (
+              ) : totalActiveStories > 0 || isClient ? (
                 <Film size={10} className="text-zinc-600 dark:text-zinc-400" />
               ) : (
                 <Plus size={10} className="text-zinc-500 dark:text-zinc-400" />
@@ -190,12 +203,14 @@ export const HeaderStoriesButton: React.FC = () => {
         />
       )}
 
-      {/* Create Story Modal if launched from header */}
-      <CreateStoryModal
-        isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onStoryCreated={fetchStories}
-      />
+      {/* Create Story Modal if launched from header (non-clients only) */}
+      {!isClient && (
+        <CreateStoryModal
+          isOpen={isCreateOpen}
+          onClose={() => setIsCreateOpen(false)}
+          onStoryCreated={fetchStories}
+        />
+      )}
     </>
   );
 };
