@@ -196,6 +196,11 @@ const SiteDetail: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [highlightedItemId, setHighlightedItemId] = useState<string | null>(null);
   const hasTriggeredSiteDetailHighlightRef = useRef(false);
+  const [showBudgetBurnRate, setShowBudgetBurnRate] = useState<boolean>(() => {
+    const tabParam = new URLSearchParams(window.location.search).get("tab");
+    const highlightParam = new URLSearchParams(window.location.search).get("highlight");
+    return tabParam === "budget" || highlightParam === "budget";
+  });
   const [selectedTab, setSelectedTab] = useState<
     (typeof TAB_CONFIG)[number]["id"]
   >(() => {
@@ -208,6 +213,10 @@ const SiteDetail: React.FC = () => {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
+    const highlightParam = searchParams.get("highlight");
+    if (tabParam === "budget" || highlightParam === "budget") {
+      setShowBudgetBurnRate(true);
+    }
     if (tabParam && TAB_CONFIG.some((t) => t.id === tabParam)) {
       setSelectedTab(tabParam as (typeof TAB_CONFIG)[number]["id"]);
     }
@@ -1468,19 +1477,31 @@ const SiteDetail: React.FC = () => {
           onClick={() => setIsTransactionsModalOpen(true)}
           action={{
             label: "Burn rate",
+            isToggle: true,
+            active: showBudgetBurnRate,
             onClick: () => {
-              setSelectedTab("budget");
-              setTimeout(() => {
-                const budgetSection = document.getElementById("site-budget-tab-section");
-                if (budgetSection) {
-                  budgetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+              setShowBudgetBurnRate((prev) => {
+                const next = !prev;
+                if (next) {
+                  setSelectedTab("budget");
+                  setTimeout(() => {
+                    const budgetSection = document.getElementById("site-budget-tab-section");
+                    if (budgetSection) {
+                      budgetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+                    } else {
+                      const nav = document.getElementById("site-tabs-navigation");
+                      if (nav) {
+                        nav.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }
+                    }
+                  }, 80);
                 } else {
-                  const nav = document.getElementById("site-tabs-navigation");
-                  if (nav) {
-                    nav.scrollIntoView({ behavior: "smooth", block: "start" });
+                  if (selectedTab === "budget") {
+                    setSelectedTab("overview");
                   }
                 }
-              }, 80);
+                return next;
+              });
             },
           }}
         />
@@ -1539,7 +1560,7 @@ const SiteDetail: React.FC = () => {
       </SectionCard>
 
       <div id="site-tabs-navigation" className="flex items-center gap-1 rounded-console border border-console-border bg-console-bg p-1 scroll-mt-6 overflow-x-auto no-scrollbar flex-nowrap">
-        {TAB_CONFIG.map((tab) => {
+        {TAB_CONFIG.filter((tab) => tab.id !== "budget" || showBudgetBurnRate).map((tab) => {
           const Icon = tab.icon;
           return (
             <button
@@ -1573,7 +1594,7 @@ const SiteDetail: React.FC = () => {
         </div>
       )}
 
-      {selectedTab === "budget" && (
+      {selectedTab === "budget" && showBudgetBurnRate && (
         <div id="site-budget-tab-section" className="scroll-mt-6">
           <SiteBudgetDashboard
             siteId={site.id}
