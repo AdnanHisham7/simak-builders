@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -400,25 +400,26 @@ const SiteDetail: React.FC = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchSite = async () => {
-      try {
-        const siteData = await getSiteDetails(siteId!);
-        setSite(siteData as ExtendedSite);
+  const fetchSite = useCallback(async () => {
+    try {
+      const siteData = await getSiteDetails(siteId!);
+      setSite(siteData as ExtendedSite);
 
-        const stocksData = await getStocksBySite(siteId!);
-        setStocks(stocksData);
-        const sitesData = await getSites();
-        setSites(sitesData);
-        setLoading(false);
-      } catch (err) {
-        console.error("Error fetching site details:", err);
-        setError("Failed to fetch site details.");
-        setLoading(false);
-      }
-    };
-    fetchSite();
+      const stocksData = await getStocksBySite(siteId!);
+      setStocks(stocksData);
+      const sitesData = await getSites();
+      setSites(sitesData);
+      setLoading(false);
+    } catch (err) {
+      console.error("Error fetching site details:", err);
+      setError("Failed to fetch site details.");
+      setLoading(false);
+    }
   }, [siteId]);
+
+  useEffect(() => {
+    fetchSite();
+  }, [fetchSite]);
 
   useEffect(() => {
     if (userType !== "admin" || !siteId) return;
@@ -1645,7 +1646,12 @@ const SiteDetail: React.FC = () => {
       )}
 
       {selectedTab === "contractors" && (
-        <SiteContractorsManager siteId={siteId!} siteName={site.name} userType={userType as any} />
+        <SiteContractorsManager
+          siteId={siteId!}
+          siteName={site.name}
+          userType={userType as any}
+          onSiteUpdated={fetchSite}
+        />
       )}
 
       {selectedTab === "attendance" && (
