@@ -145,8 +145,8 @@ export const ContractorReportView: React.FC<ContractorReportViewProps> = ({ site
       XLSX.utils.book_append_sheet(workbook, wsSummary, "Contractor Balances");
 
       // Sheet 2: Transactions
-      const txRows = data.transactions.map((t) => ({
-        Date: formatDate(t.date),
+      const txRows = data.transactions.map((t: any) => ({
+        Date: formatDate(t.date || t.createdAt),
         Contractor: t.contractorName,
         Site: t.siteName,
         Type: t.type.toUpperCase(),
@@ -703,7 +703,7 @@ export const ContractorReportView: React.FC<ContractorReportViewProps> = ({ site
                       filteredTransactions.map((tx) => (
                         <tr key={tx.id} className="hover:bg-gray-50">
                           <td className="py-3 px-4 whitespace-nowrap text-gray-500">
-                            {formatDate(tx.date)}
+                            {formatDate((tx as any).date || (tx as any).createdAt)}
                           </td>
                           <td className="py-3 px-4 font-medium text-gray-900">
                             {tx.contractorName}

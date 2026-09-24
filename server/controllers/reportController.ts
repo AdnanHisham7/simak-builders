@@ -644,7 +644,10 @@ export const getAnnualFinancialReport = async (
       clientQuery.transactionDate = dateFilter;
       purchaseQuery.date = dateFilter;
       miscQuery.date = dateFilter;
-      contractorQuery.date = dateFilter;
+      contractorQuery.$or = [
+        { date: dateFilter },
+        { date: { $in: [null, undefined] }, createdAt: dateFilter },
+      ];
       attendanceQuery.date = dateFilter;
     }
 
@@ -700,8 +703,8 @@ export const getAnnualFinancialReport = async (
       current.expense = roundToCents(current.expense + amt);
     });
 
-    contractorTxns.forEach((c) => {
-      const m = new Date(c.date).getMonth();
+    contractorTxns.forEach((c: any) => {
+      const m = new Date(c.date || c.createdAt || Date.now()).getMonth();
       const current = monthlyMap.get(m)!;
       const amt = Number(c.amount) || 0;
       current.contractors = roundToCents(current.contractors + amt);
@@ -1111,14 +1114,17 @@ export const getComprehensiveContractorsReport = async (
       txQuery.type = type;
     }
     if (dateFilter) {
-      txQuery.date = dateFilter;
+      txQuery.$or = [
+        { date: dateFilter },
+        { date: { $in: [null, undefined] }, createdAt: dateFilter },
+      ];
     }
 
     const [transactions, contractorsList] = await Promise.all([
       ContractorTransactionModel.find(txQuery)
         .populate("contractor", "name phone category totalContractAmount")
         .populate("site", "name")
-        .sort({ date: -1 }),
+        .sort({ date: -1, createdAt: -1 }),
       ContractorModel.find(contractorFilter).populate("siteAssignments.site", "name"),
     ]);
 
@@ -1168,9 +1174,9 @@ export const getComprehensiveContractorsReport = async (
       });
     });
 
-    transactions.forEach((tx) => {
+    transactions.forEach((tx: any) => {
       const amt = Number(tx.amount) || 0;
-      const m = new Date(tx.date).getMonth();
+      const m = new Date(tx.date || tx.createdAt || Date.now()).getMonth();
       const monthData = monthlyMap.get(m)!;
 
       if (tx.type === "advance") {
@@ -1235,9 +1241,9 @@ export const getComprehensiveContractorsReport = async (
       (a, b) => b.contractAmount - a.contractAmount
     );
 
-    const txList = transactions.map((t) => ({
+    const txList = transactions.map((t: any) => ({
       id: t._id,
-      date: t.date,
+      date: t.date || t.createdAt,
       contractorName: (t.contractor as any)?.name || "Unknown",
       siteName: (t.site as any)?.name || "General",
       type: t.type,

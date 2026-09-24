@@ -310,7 +310,7 @@ const addTransaction = async (
   next: NextFunction,
 ) => {
   try {
-    const { contractorId, siteId, type, amount, description, category } =
+    const { contractorId, siteId, type, amount, description, category, date } =
       req.body;
     const userId = req.user?.userId;
     const userRole = req.user?.role;
@@ -345,6 +345,15 @@ const addTransaction = async (
       throw new ApiError("Invalid amount", HttpStatus.BAD_REQUEST);
     }
 
+    // Parse date with fallback
+    let transactionDate: Date;
+    if (date) {
+      const parsed = new Date(date);
+      transactionDate = isNaN(parsed.getTime()) ? new Date() : parsed;
+    } else {
+      transactionDate = new Date();
+    }
+
     // Create transaction record
     const transaction = new ContractorTransactionModel({
       contractor: contractorId,
@@ -353,6 +362,7 @@ const addTransaction = async (
       amount: numAmount,
       description: description || "",
       category: category || "",
+      date: transactionDate,
       addedBy: userId,
     });
     await transaction.save();
@@ -369,7 +379,7 @@ const addTransaction = async (
     // 1. Update site expenses
     site.expenses += numAmount;
     site.transactions.push({
-      date: new Date(),
+      date: transactionDate,
       amount: numAmount,
       type: "contractor_payment",
       description: `${type} to contractor ${contractor.name} for ${category || "uncategorized"}`,
@@ -388,7 +398,7 @@ const addTransaction = async (
         );
       company.totalAmount -= numAmount;
       company.transactions.push({
-        date: new Date(),
+        date: transactionDate,
         amount: -numAmount,
         type: "expenditure",
         description: `Contractor payment (${type}) at site ${site.name} - ${contractor.name}`,
@@ -404,7 +414,7 @@ const addTransaction = async (
         );
       siteManager.siteExpensesBalance -= numAmount;
       siteManager.siteExpensesTransactions.push({
-        date: new Date(),
+        date: transactionDate,
         amount: -numAmount,
         type: "expenditure",
         description: `Contractor payment (${type}) at site ${site.name} - ${contractor.name}`,
@@ -418,7 +428,10 @@ const addTransaction = async (
 
     res.status(HttpStatus.CREATED).json({
       message: "Transaction added successfully",
-      transaction,
+      transaction: {
+        ...transaction.toObject(),
+        date: transaction.date || (transaction as any).createdAt || transactionDate,
+      },
       updatedContractor: populatedContractor,
     });
   } catch (error) {
@@ -445,8 +458,18 @@ const getContractorTransactions = async (
       site: siteId,
     })
       .populate("site", "name")
-      .populate("addedBy", "name");
-    res.status(HttpStatus.OK).json(transactions);
+      .populate("addedBy", "name")
+      .sort({ date: -1, createdAt: -1 });
+
+    const safeTransactions = transactions.map((t) => {
+      const doc = t.toObject ? t.toObject() : t;
+      return {
+        ...doc,
+        date: doc.date || doc.createdAt || new Date(),
+      };
+    });
+
+    res.status(HttpStatus.OK).json(safeTransactions);
   } catch (error) {
     next(error);
   }

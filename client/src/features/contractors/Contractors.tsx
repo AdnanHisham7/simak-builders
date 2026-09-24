@@ -745,7 +745,7 @@ const Contractors: React.FC = () => {
                               </td>
                               <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "N/A"}</td>
                               <td className="px-4 py-3 text-sm text-console-muted">
-                                {formatDate(tx.date)}
+                                {formatDate(tx.date || tx.createdAt)}
                               </td>
                               <td className="px-4 py-3 text-right">
                                 <Tooltip label="Delete transaction">

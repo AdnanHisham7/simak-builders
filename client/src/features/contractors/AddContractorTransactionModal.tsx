@@ -34,6 +34,7 @@ const AddContractorTransactionModal: React.FC<
     type: "",
     amount: 0,
     description: "",
+    date: new Date().toISOString().split("T")[0],
   });
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -82,6 +83,7 @@ const AddContractorTransactionModal: React.FC<
       type: "",
       amount: 0,
       description: "",
+      date: new Date().toISOString().split("T")[0],
     });
     setCategory("");
     setCustomCategory("");
@@ -90,9 +92,8 @@ const AddContractorTransactionModal: React.FC<
   }, [isOpen, defaultSiteId]);
 
   const handleAdd = async () => {
-    if (isSubmitting) return;
-    if (!transaction.siteId || !transaction.type || !transaction.amount) {
-      setError("Please fill all required fields: site, type, and amount.");
+    if (!transaction.siteId || !transaction.type || !transaction.amount || !transaction.date) {
+      setError("Please fill all required fields: site, type, amount, and date.");
       return;
     }
     if (Number(transaction.amount) <= 0) {
@@ -108,9 +109,16 @@ const AddContractorTransactionModal: React.FC<
         amount: Number(transaction.amount),
         description: transaction.description,
         category: showCustomCategory ? customCategory : category,
+        date: transaction.date,
       };
       await onAddTransaction(data);
-      setTransaction({ siteId: defaultSiteId || "", type: "", amount: 0, description: "" });
+      setTransaction({
+        siteId: defaultSiteId || "",
+        type: "",
+        amount: 0,
+        description: "",
+        date: new Date().toISOString().split("T")[0],
+      });
       setCategory("");
       setCustomCategory("");
       setShowCustomCategory(false);
@@ -182,6 +190,18 @@ const AddContractorTransactionModal: React.FC<
               />
             </div>
           )}
+
+          <div>
+            <label className={labelClass}>Transaction Date *</label>
+            <input
+              type="date"
+              name="date"
+              value={transaction.date}
+              onChange={handleChange}
+              className={fieldClass}
+              required
+            />
+          </div>
 
           <div>
             <label className={labelClass}>Type *</label>

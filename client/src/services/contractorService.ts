@@ -21,7 +21,9 @@ export interface ContractorTransaction {
   type: "advance" | "expense" | "additional_payment";
   amount: number;
   description: string;
+  category?: string;
   date: string;
+  createdAt?: string;
   addedBy: { id: string; name: string };
 }
 
@@ -125,6 +127,8 @@ export const addTransaction = async (data: {
   type: "advance" | "expense" | "additional_payment";
   amount: number;
   description: string;
+  category?: string;
+  date?: string;
 }): Promise<{
   transaction: ContractorTransaction;
   updatedContractor: Contractor;
@@ -136,14 +140,15 @@ export const addTransaction = async (data: {
     transaction: {
       id: transaction._id,
       contractor: transaction.contractor,
-      site: { id: transaction.site, name: transaction.siteName || "" }, // Assuming site populated elsewhere
+      site: { id: transaction.site?._id || transaction.site, name: transaction.site?.name || transaction.siteName || "" },
       type: transaction.type,
       amount: transaction.amount,
+      category: transaction.category,
       description: transaction.description,
-      date: transaction.date,
+      date: transaction.date || transaction.createdAt || new Date().toISOString(),
       addedBy: {
-        id: transaction.addedBy,
-        name: transaction.addedByName || "",
+        id: transaction.addedBy?._id || transaction.addedBy,
+        name: transaction.addedBy?.name || transaction.addedByName || "",
       },
     },
     updatedContractor: mapContractor(updatedContractor),
@@ -160,13 +165,13 @@ export const getContractorTransactions = async (
   return response.data.map((tx: any) => ({
     id: tx._id,
     contractor: tx.contractor,
-    site: { id: tx.site._id, name: tx.site.name },
+    site: { id: tx.site?._id || tx.site, name: tx.site?.name || "" },
     type: tx.type,
     amount: tx.amount,
     category: tx.category,
     description: tx.description,
-    date: tx.date,
-    addedBy: { id: tx.addedBy?._id, name: tx.addedBy?.name },
+    date: tx.date || tx.createdAt || new Date().toISOString(),
+    addedBy: { id: tx.addedBy?._id || tx.addedBy, name: tx.addedBy?.name || "" },
   }));
 };
 

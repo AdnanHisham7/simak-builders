@@ -525,7 +525,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
               </thead>
               <tbody className="divide-y divide-console-border bg-white">
                 {[...transactions]
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .sort((a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime())
                   .map((tx) => (
                     <tr key={tx.id}>
                       <td className="px-4 py-3 text-sm capitalize text-console-text">{tx.type}</td>
@@ -535,7 +535,7 @@ const SiteContractorsManager: React.FC<SiteContractorsManagerProps> = ({
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.category || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">{tx.description || "-"}</td>
                       <td className="px-4 py-3 text-sm text-console-muted">
-                        {formatDate(tx.date)}
+                        {formatDate(tx.date || tx.createdAt)}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Tooltip label="Delete transaction">
