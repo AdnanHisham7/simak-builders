@@ -30,6 +30,12 @@ export const attachAuthInterceptor = (client: AxiosInstance) => {
       // Handle 401 Unauthorized (session expired)
       if (error.response?.status === 401 && !originalRequest._retry) {
         originalRequest._retry = true;
+
+        const isAuthenticated = store.getState().auth.isAuthenticated;
+        if (!isAuthenticated) {
+          return Promise.reject(error);
+        }
+
         try {
           await getRefreshPromise();
           return client.request(originalRequest);

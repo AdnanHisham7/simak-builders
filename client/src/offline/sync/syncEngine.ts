@@ -7,6 +7,7 @@ import {
 } from "./syncQueue";
 import { networkManager } from "../network/networkStatus";
 import { privateClient } from "@/api";
+import { store } from "@/store/store";
 
 export interface SyncEngineResult {
   pushed: number;
@@ -25,14 +26,14 @@ class SyncEngine {
   constructor() {
     // Auto-sync when transitioning to online
     networkManager.subscribe((status) => {
-      if (status === "ONLINE") {
+      if (status === "ONLINE" && store.getState().auth.isAuthenticated) {
         this.syncNow().catch(() => {});
       }
     });
 
     // Periodic auto-sync every 3 minutes when online
     this.autoSyncInterval = setInterval(() => {
-      if (networkManager.isOnline()) {
+      if (networkManager.isOnline() && store.getState().auth.isAuthenticated) {
         this.syncNow().catch(() => {});
       }
     }, 3 * 60 * 1000);
@@ -57,6 +58,10 @@ class SyncEngine {
     }
 
     if (!networkManager.isOnline()) {
+      return { pushed: 0, pulled: 0, conflicts: 0, errors: 0 };
+    }
+
+    if (!store.getState().auth.isAuthenticated) {
       return { pushed: 0, pulled: 0, conflicts: 0, errors: 0 };
     }
 
@@ -100,6 +105,10 @@ class SyncEngine {
     conflicts: number;
     errors: number;
   }> {
+    if (!store.getState().auth.isAuthenticated) {
+      return { pushed: 0, conflicts: 0, errors: 0 };
+    }
+
     const mutations = await getPendingMutations();
     if (mutations.length === 0) {
       return { pushed: 0, conflicts: 0, errors: 0 };
@@ -204,6 +213,10 @@ class SyncEngine {
   }
 
   public async pullLatestChanges(): Promise<number> {
+    if (!store.getState().auth.isAuthenticated) {
+      return 0;
+    }
+
     const meta = await offlineDB.sync_metadata.get("main");
     const lastSyncTimestamp = meta?.lastSyncTimestamp;
 

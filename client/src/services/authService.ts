@@ -47,7 +47,8 @@ export const googleLogin = async (credential: string) => {
 export const refreshAccessToken = async () => {
   const response = await api.post("/auth/refresh-token", null, {
     withCredentials: true,
-  });
+    skipErrorToast: true,
+  } as any);
   return response.data;
 };
 

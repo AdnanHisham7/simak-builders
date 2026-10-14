@@ -3,6 +3,11 @@ import axios from "axios";
 
 export const handleAxiosError = (error: unknown) => {
   if (axios.isAxiosError(error)) {
+    const config = error.config as any;
+    if (config?.skipErrorToast || config?.url?.includes("/auth/refresh-token")) {
+      return Promise.reject(error);
+    }
+
     const isNetworkError =
       error.code === "ERR_NETWORK" ||
       error.message === "Network Error" ||
