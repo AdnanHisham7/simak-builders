@@ -153,3 +153,50 @@ export const localGetPurchasesBySite = async (
 
   return records;
 };
+
+export const localUpdatePurchaseDate = async (
+  purchaseId: string,
+  date: string,
+): Promise<{ message: string; isOffline: boolean }> => {
+  const isOnline = networkManager.isOnline();
+  if (isOnline) {
+    try {
+      const response = await privateClient.patch(`/purchases/${purchaseId}/date`, {
+        date,
+      });
+      try {
+        await offlineDB.purchases.update(purchaseId, {
+          date,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch {}
+      syncEngine.pullLatestChanges().catch(() => {});
+      return {
+        message: response.data?.message || "Purchase date updated",
+        isOffline: false,
+      };
+    } catch (err: any) {
+      if (!err.response || err.code === "ERR_NETWORK" || err.response.status >= 500) {
+        // Fallback to offline
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  try {
+    await offlineDB.purchases.update(purchaseId, {
+      date,
+      updatedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    });
+  } catch {}
+
+  await enqueueMutation("purchases", "UPDATE", purchaseId, { date });
+
+  return {
+    message: "Purchase date updated offline (will sync when connected)",
+    isOffline: true,
+  };
+};
+

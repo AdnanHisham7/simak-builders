@@ -9,6 +9,8 @@ const router = express.Router();
 router.post('/', authMiddleware, requireRoles("admin", "siteManager"), upload.single("billUpload"), purchaseController.addPurchase);
 router.patch('/:purchaseId/verify', authMiddleware, requireRoles("admin"), purchaseController.verifyPurchase);
 router.patch('/:purchaseId/items/:itemIndex', authMiddleware, requireRoles("admin", "siteManager"), purchaseController.updatePurchaseItem);
+router.patch('/:purchaseId/date', authMiddleware, requireRoles("admin", "siteManager"), purchaseController.updatePurchaseDate);
+router.patch('/:purchaseId', authMiddleware, requireRoles("admin", "siteManager"), purchaseController.updatePurchaseDate);
 router.delete('/:purchaseId', authMiddleware, requireRoles("admin"), purchaseController.deletePurchase);
 router.get('/', authMiddleware, requireRoles("admin", "siteManager"), purchaseController.getPurchases);
 router.get("/by-site", authMiddleware, requireRoles("admin", "siteManager", "client", "architect"), purchaseController.getPurchasesBySite);

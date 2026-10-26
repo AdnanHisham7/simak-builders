@@ -83,3 +83,51 @@ export const localGetMiscellaneousExpensesBySite = async (
 
   return offlineDB.miscellaneousExpenses.where("siteId").equals(siteId).toArray();
 };
+
+export const localUpdateMiscellaneousExpenseDate = async (
+  expenseId: string,
+  date: string,
+): Promise<{ message: string; isOffline: boolean }> => {
+  const isOnline = networkManager.isOnline();
+  if (isOnline) {
+    try {
+      const response = await privateClient.patch(
+        `/miscellaneous-expenses/${expenseId}/date`,
+        { date },
+      );
+      try {
+        await offlineDB.miscellaneousExpenses.update(expenseId, {
+          date,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch {}
+      syncEngine.pullLatestChanges().catch(() => {});
+      return {
+        message: response.data?.message || "Expense date updated",
+        isOffline: false,
+      };
+    } catch (err: any) {
+      if (!err.response || err.code === "ERR_NETWORK" || err.response.status >= 500) {
+        // Fallback to offline
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  try {
+    await offlineDB.miscellaneousExpenses.update(expenseId, {
+      date,
+      updatedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    });
+  } catch {}
+
+  await enqueueMutation("miscellaneousExpenses", "UPDATE", expenseId, { date });
+
+  return {
+    message: "Expense date updated offline (will sync when connected)",
+    isOffline: true,
+  };
+};
+

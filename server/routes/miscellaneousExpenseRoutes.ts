@@ -10,6 +10,7 @@ router.get("/suggestions", authMiddleware, requireRoles("admin", "siteManager"),
 router.get("/:expenseId", authMiddleware, miscellaneousExpenseController.getMiscellaneousExpenseById);
 router.patch("/:expenseId/verify", authMiddleware, requireRoles("admin"), miscellaneousExpenseController.verifyMiscellaneousExpense);
 router.patch("/:expenseId", authMiddleware, requireRoles("admin", "siteManager"), miscellaneousExpenseController.updateMiscellaneousExpense);
+router.patch("/:expenseId/date", authMiddleware, requireRoles("admin", "siteManager"), miscellaneousExpenseController.updateMiscellaneousExpense);
 router.delete("/:expenseId", authMiddleware, requireRoles("admin"), miscellaneousExpenseController.deleteMiscellaneousExpense);
 
 export default router;

@@ -2,7 +2,16 @@ import { privateClient } from "@/api";
 import {
   localAddMiscellaneousExpense,
   localGetMiscellaneousExpensesBySite,
+  localUpdateMiscellaneousExpenseDate,
 } from "@/offline/repositories/expenseRepository";
+
+export const updateMiscellaneousExpenseDate = async (
+  expenseId: string,
+  date: string,
+) => {
+  return localUpdateMiscellaneousExpenseDate(expenseId, date);
+};
+
 
 export const addMiscellaneousExpense = async (data: {
   siteId: string | null;
@@ -40,7 +49,7 @@ export const verifyMiscellaneousExpense = async (expenseId: string) => {
 
 export const updateMiscellaneousExpense = async (
   expenseId: string,
-  data: { name: string; category: string },
+  data: { name?: string; category?: string; date?: string },
 ) => {
   const response = await privateClient.patch(
     `/miscellaneous-expenses/${expenseId}`,

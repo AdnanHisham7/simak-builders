@@ -2,7 +2,13 @@ import { privateClient } from "@/api";
 import {
   localAddPurchase,
   localGetPurchasesBySite,
+  localUpdatePurchaseDate,
 } from "@/offline/repositories/purchaseRepository";
+
+export const updatePurchaseDate = async (purchaseId: string, date: string) => {
+  return localUpdatePurchaseDate(purchaseId, date);
+};
+
 
 export const addPurchase = async (purchaseData: any) => {
   return localAddPurchase(purchaseData);

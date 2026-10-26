@@ -401,42 +401,92 @@ const updateMiscellaneousExpense = async (
 ) => {
   try {
     const { expenseId } = req.params;
-    const { name, category } = req.body;
+    const { name, category, date } = req.body;
 
     const expense: any = await MiscellaneousExpenseModel.findById(expenseId);
-    if (!expense) throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+    if (!expense || expense.deletedAt) {
+      throw new ApiError("Expense not found", HttpStatus.NOT_FOUND);
+    }
 
-    if (
-      req.user?.role !== "admin" &&
-      req.user?.userId !== expense.addedBy.toString()
-    ) {
+    const isAdmin = req.user?.role === "admin";
+    const isOwner =
+      expense.addedBy && req.user?.userId === expense.addedBy.toString();
+    let isAssigned = false;
+    if (req.user?.role === "siteManager" && expense.site) {
+      const user = await UserModel.findById(req.user.userId);
+      isAssigned = !!user?.assignedSites?.some(
+        (s: any) => s.toString() === expense.site.toString(),
+      );
+    }
+    if (!isAdmin && !isOwner && !isAssigned) {
       throw new ApiError("Unauthorized", HttpStatus.FORBIDDEN);
     }
 
-    if (!name || !String(name).trim())
-      throw new ApiError("Name is required", HttpStatus.BAD_REQUEST);
-    if (!["machinery", "rental", "service", "material"].includes(category)) {
-      throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
+    if (name === undefined && category === undefined && date === undefined) {
+      throw new ApiError(
+        "At least one field (name, category, or date) must be provided",
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const wasVerified = expense.status === "verified";
+    const updatedDetails: string[] = [];
 
-    const trimmedName = String(name).trim();
-    let canonicalExpenseName = trimmedName;
-    try {
-      const { canonicalName } = await resolveItem(
-        trimmedName,
-        category,
-        undefined,
-        req.user?.userId,
+    // If date is provided
+    if (date !== undefined) {
+      if (!date) {
+        throw new ApiError("Date cannot be empty", HttpStatus.BAD_REQUEST);
+      }
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime())) {
+        throw new ApiError("Invalid date format", HttpStatus.BAD_REQUEST);
+      }
+      const oldDate = expense.date;
+      expense.date = parsedDate;
+      updatedDetails.push(
+        `date from ${oldDate ? new Date(oldDate).toISOString().split("T")[0] : "none"} to ${parsedDate.toISOString().split("T")[0]}`,
       );
-      canonicalExpenseName = canonicalName;
-    } catch (itemErr) {
-      console.error("Failed to resolve item in item master:", itemErr);
+
+      // If attached to a site, update the site transaction date
+      if (expense.site) {
+        await SiteModel.updateOne(
+          { _id: expense.site, "transactions.relatedId": expense._id },
+          { $set: { "transactions.$.date": parsedDate } },
+        );
+      }
     }
 
-    expense.name = canonicalExpenseName;
-    expense.category = category;
+    // If category is provided
+    if (category !== undefined) {
+      if (!["machinery", "rental", "service", "material"].includes(category)) {
+        throw new ApiError("Invalid category", HttpStatus.BAD_REQUEST);
+      }
+      expense.category = category;
+      updatedDetails.push("category");
+    }
+
+    // If name is provided
+    if (name !== undefined) {
+      if (!String(name).trim()) {
+        throw new ApiError("Name is required", HttpStatus.BAD_REQUEST);
+      }
+      const trimmedName = String(name).trim();
+      let canonicalExpenseName = trimmedName;
+      try {
+        const { canonicalName } = await resolveItem(
+          trimmedName,
+          category || expense.category,
+          undefined,
+          req.user?.userId,
+        );
+        canonicalExpenseName = canonicalName;
+      } catch (itemErr) {
+        console.error("Failed to resolve item in item master:", itemErr);
+      }
+      expense.name = canonicalExpenseName;
+      updatedDetails.push("name");
+    }
+
     await expense.save();
 
     await ActivityLogModel.create({
@@ -444,7 +494,7 @@ const updateMiscellaneousExpense = async (
       action: "update",
       resource: "miscellaneousExpense",
       resourceId: expense._id,
-      details: `Edited ${wasVerified ? "verified" : "unverified"} miscellaneous expense (name/category)`,
+      details: `Edited ${wasVerified ? "verified" : "unverified"} miscellaneous expense (${updatedDetails.join(", ")})`,
     });
 
     res.status(HttpStatus.OK).json({

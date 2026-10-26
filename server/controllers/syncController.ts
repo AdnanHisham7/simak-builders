@@ -340,6 +340,105 @@ export const pushSync = async (
             serverId: misc._id.toString(),
             serverVersion: 1,
           });
+        } else if (entity === "purchases" && operation === "UPDATE") {
+          const { date } = payload;
+          if (!date) {
+            throw new Error("Date is required for purchase update");
+          }
+          const parsedDate = new Date(date);
+          if (isNaN(parsedDate.getTime())) {
+            throw new Error("Invalid date format");
+          }
+          const purchase = await PurchaseModel.findById(recordId);
+          if (!purchase) {
+            throw new Error("Purchase not found");
+          }
+          purchase.date = parsedDate;
+          purchase.version = (purchase.version || 1) + 1;
+          await purchase.save();
+
+          if (purchase.site) {
+            await SiteModel.updateOne(
+              { _id: purchase.site, "transactions.relatedId": purchase._id },
+              { $set: { "transactions.$.date": parsedDate } },
+            );
+          }
+          const linkedExpenses = await MiscellaneousExpenseModel.find({
+            purchaseId: purchase._id,
+          });
+          if (linkedExpenses.length > 0) {
+            await MiscellaneousExpenseModel.updateMany(
+              { purchaseId: purchase._id },
+              { $set: { date: parsedDate } },
+            );
+            if (purchase.site) {
+              for (const exp of linkedExpenses) {
+                await SiteModel.updateOne(
+                  { _id: purchase.site, "transactions.relatedId": exp._id },
+                  { $set: { "transactions.$.date": parsedDate } },
+                );
+              }
+            }
+          }
+
+          await SyncMutationModel.create({
+            clientMutationId,
+            entity,
+            operation,
+            recordId,
+            userId: new Types.ObjectId(userId),
+            status: "synced",
+            serverId: purchase._id.toString(),
+            serverVersion: purchase.version,
+          });
+
+          results.push({
+            clientMutationId,
+            status: "synced",
+            serverId: purchase._id.toString(),
+            serverVersion: purchase.version,
+          });
+        } else if (entity === "miscellaneousExpenses" && operation === "UPDATE") {
+          const { date, name, category } = payload;
+          const expense = await MiscellaneousExpenseModel.findById(recordId);
+          if (!expense) {
+            throw new Error("Expense not found");
+          }
+          if (date) {
+            const parsedDate = new Date(date);
+            if (isNaN(parsedDate.getTime())) {
+              throw new Error("Invalid date format");
+            }
+            expense.date = parsedDate;
+            if (expense.site) {
+              await SiteModel.updateOne(
+                { _id: expense.site, "transactions.relatedId": expense._id },
+                { $set: { "transactions.$.date": parsedDate } },
+              );
+            }
+          }
+          if (name) expense.name = name;
+          if (category) expense.category = category;
+          expense.version = (expense.version || 1) + 1;
+          await expense.save();
+
+          await SyncMutationModel.create({
+            clientMutationId,
+            entity,
+            operation,
+            recordId,
+            userId: new Types.ObjectId(userId),
+            status: "synced",
+            serverId: expense._id.toString(),
+            serverVersion: expense.version,
+          });
+
+          results.push({
+            clientMutationId,
+            status: "synced",
+            serverId: expense._id.toString(),
+            serverVersion: expense.version,
+          });
         } else {
           // Unsupported or unimplemented mutation type
           results.push({

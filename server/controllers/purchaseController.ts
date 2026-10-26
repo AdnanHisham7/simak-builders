@@ -869,12 +869,100 @@ const getPurchaseById = async (
   }
 };
 
+const updatePurchaseDate = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) => {
+  try {
+    const { purchaseId } = req.params;
+    const { date } = req.body;
+
+    if (!date) {
+      throw new ApiError("Date is required", HttpStatus.BAD_REQUEST);
+    }
+
+    const parsedDate = new Date(date);
+    if (isNaN(parsedDate.getTime())) {
+      throw new ApiError("Invalid date format", HttpStatus.BAD_REQUEST);
+    }
+
+    const purchase: any = await PurchaseModel.findById(purchaseId);
+    if (!purchase || purchase.deletedAt) {
+      throw new ApiError("Purchase not found", HttpStatus.NOT_FOUND);
+    }
+
+    // Authorization check
+    const isAdmin = req.user?.role === "admin";
+    const isOwner =
+      purchase.addedBy && req.user?.userId === purchase.addedBy.toString();
+    let isAssigned = false;
+    if (req.user?.role === "siteManager" && purchase.site) {
+      const user = await UserModel.findById(req.user.userId);
+      isAssigned = !!user?.assignedSites?.some(
+        (s: any) => s.toString() === purchase.site.toString(),
+      );
+    }
+    if (!isAdmin && !isOwner && !isAssigned) {
+      throw new ApiError("Unauthorized to update this purchase", HttpStatus.FORBIDDEN);
+    }
+
+    const oldDate = purchase.date;
+    purchase.date = parsedDate;
+    await purchase.save();
+
+    // 1. If purchase has a site, update site transaction date where relatedId matches
+    if (purchase.site) {
+      await SiteModel.updateOne(
+        { _id: purchase.site, "transactions.relatedId": purchase._id },
+        { $set: { "transactions.$.date": parsedDate } },
+      );
+    }
+
+    // 2. Also update any linked transportation misc expense created from this purchase
+    const linkedExpenses = await MiscellaneousExpenseModel.find({
+      purchaseId: purchase._id,
+    });
+    if (linkedExpenses.length > 0) {
+      await MiscellaneousExpenseModel.updateMany(
+        { purchaseId: purchase._id },
+        { $set: { date: parsedDate } },
+      );
+      if (purchase.site) {
+        for (const exp of linkedExpenses) {
+          await SiteModel.updateOne(
+            { _id: purchase.site, "transactions.relatedId": exp._id },
+            { $set: { "transactions.$.date": parsedDate } },
+          );
+        }
+      }
+    }
+
+    // 3. Activity Log
+    await ActivityLogModel.create({
+      user: req.user?.userId,
+      action: "update",
+      resource: "purchase",
+      resourceId: purchase._id,
+      details: `Updated purchase date from ${oldDate ? new Date(oldDate).toISOString().split("T")[0] : "none"} to ${parsedDate.toISOString().split("T")[0]}`,
+    });
+
+    res.status(HttpStatus.OK).json({
+      message: "Purchase date updated successfully",
+      purchase,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export default {
   getPurchases,
   getPurchaseById,
   addPurchase,
   verifyPurchase,
   updatePurchaseItem,
+  updatePurchaseDate,
   deletePurchase,
   getPurchasesBySite,
   getPurchasesBySiteForReport,

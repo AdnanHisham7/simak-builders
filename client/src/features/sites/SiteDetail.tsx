@@ -67,10 +67,12 @@ import EditThresholdModal from "../stocks/EditThresholdModal";
 import { getProjectBySiteId, Project as PortfolioProject } from "@/services/portfolioService";
 import RequestTransferModal from "../stocks/RequestTransferModal";
 import { usePreferences } from "@/hooks/usePreferences";
+import { formatDate as formatDateUtil } from "@/utils/formatters";
 import {
   getPurchasesBySite,
   verifyPurchase,
   updatePurchaseItem,
+  updatePurchaseDate,
   deleteBillUpload,
   deletePurchase,
 } from "@/services/purchaseService";
@@ -95,6 +97,7 @@ import {
   getMiscellaneousExpensesBySite,
   verifyMiscellaneousExpense,
   updateMiscellaneousExpense,
+  updateMiscellaneousExpenseDate,
 } from "@/services/miscellaneousExpenseService";
 import TransactionsModal from "./TransactionsModal";
 import { toast } from "sonner";
@@ -155,7 +158,7 @@ const SectionCard: React.FC<{ children: React.ReactNode; className?: string }> =
 );
 
 const SiteDetail: React.FC = () => {
-  const { formatDate, formatNumber, formatDecimal } = usePreferences();
+  const { formatDate, formatNumber, formatDecimal, timezone } = usePreferences();
   const { siteId } = useParams<{ siteId: string }>();
   const navigate = useNavigate();
   const { user, userType } = useSelector((state: RootState) => state.auth);
@@ -378,6 +381,14 @@ const SiteDetail: React.FC = () => {
   const [editMiscName, setEditMiscName] = useState("");
   const [editMiscCategory, setEditMiscCategory] = useState("");
   const [savingMiscEdit, setSavingMiscEdit] = useState(false);
+
+  const [editingPurchaseDateId, setEditingPurchaseDateId] = useState<string | null>(null);
+  const [editPurchaseDateValue, setEditPurchaseDateValue] = useState<string>("");
+  const [isSavingPurchaseDate, setIsSavingPurchaseDate] = useState<boolean>(false);
+
+  const [editingMiscDateId, setEditingMiscDateId] = useState<string | null>(null);
+  const [editMiscDateValue, setEditMiscDateValue] = useState<string>("");
+  const [isSavingMiscDate, setIsSavingMiscDate] = useState<boolean>(false);
 
   const [deletePurchaseTarget, setDeletePurchaseTarget] = useState<any | null>(
     null,
@@ -672,6 +683,150 @@ const SiteDetail: React.FC = () => {
   };
 
   const MISC_EXPENSE_CATEGORIES = ["machinery", "rental", "service", "material"];
+
+  const canEditDate = userType === "admin" || userType === "siteManager";
+
+  const startEditPurchaseDate = (purchase: any) => {
+    setEditingPurchaseDateId(purchase._id);
+    const initialVal = formatDateUtil(
+      purchase.date || purchase.createdAt,
+      "YYYY-MM-DD",
+      timezone,
+    );
+    setEditPurchaseDateValue(
+      initialVal && initialVal !== "-"
+        ? initialVal
+        : new Date().toISOString().split("T")[0],
+    );
+  };
+
+  const cancelEditPurchaseDate = () => {
+    setEditingPurchaseDateId(null);
+    setEditPurchaseDateValue("");
+  };
+
+  const saveEditPurchaseDate = async () => {
+    if (!editingPurchaseDateId) return;
+    if (!editPurchaseDateValue || !editPurchaseDateValue.trim()) {
+      toast.error("Please enter a valid date");
+      return;
+    }
+    const parsed = new Date(editPurchaseDateValue);
+    if (isNaN(parsed.getTime())) {
+      toast.error("Invalid date");
+      return;
+    }
+
+    setIsSavingPurchaseDate(true);
+    try {
+      await updatePurchaseDate(editingPurchaseDateId, editPurchaseDateValue);
+      setPurchases((prev) =>
+        prev.map((p) =>
+          p._id === editingPurchaseDateId
+            ? { ...p, date: editPurchaseDateValue }
+            : p,
+        ),
+      );
+      setMiscellaneousExpenses((prev) =>
+        prev.map((m) =>
+          m.purchaseId?._id === editingPurchaseDateId ||
+          m.purchaseId === editingPurchaseDateId
+            ? {
+                ...m,
+                date: editPurchaseDateValue,
+                purchaseId:
+                  typeof m.purchaseId === "object"
+                    ? { ...m.purchaseId, date: editPurchaseDateValue }
+                    : m.purchaseId,
+              }
+            : m,
+        ),
+      );
+      setSite((prev) => {
+        if (!prev || !prev.transactions) return prev;
+        return {
+          ...prev,
+          transactions: prev.transactions.map((t: any) =>
+            t.relatedId?.toString() === editingPurchaseDateId
+              ? { ...t, date: editPurchaseDateValue }
+              : t,
+          ),
+        };
+      });
+      toast.success("Purchase date updated successfully");
+      cancelEditPurchaseDate();
+    } catch (err: any) {
+      console.error("Error updating purchase date:", err);
+      toast.error(
+        err.response?.data?.message || err.message || "Failed to update purchase date",
+      );
+    } finally {
+      setIsSavingPurchaseDate(false);
+    }
+  };
+
+  const startEditMiscDate = (exp: any) => {
+    setEditingMiscDateId(exp._id);
+    const initialVal = formatDateUtil(exp.date, "YYYY-MM-DD", timezone);
+    setEditMiscDateValue(
+      initialVal && initialVal !== "-"
+        ? initialVal
+        : new Date().toISOString().split("T")[0],
+    );
+  };
+
+  const cancelEditMiscDate = () => {
+    setEditingMiscDateId(null);
+    setEditMiscDateValue("");
+  };
+
+  const saveEditMiscDate = async () => {
+    if (!editingMiscDateId) return;
+    if (!editMiscDateValue || !editMiscDateValue.trim()) {
+      toast.error("Please enter a valid date");
+      return;
+    }
+    const parsed = new Date(editMiscDateValue);
+    if (isNaN(parsed.getTime())) {
+      toast.error("Invalid date");
+      return;
+    }
+
+    setIsSavingMiscDate(true);
+    try {
+      await updateMiscellaneousExpenseDate(
+        editingMiscDateId,
+        editMiscDateValue,
+      );
+      setMiscellaneousExpenses((prev) =>
+        prev.map((m) =>
+          m._id === editingMiscDateId
+            ? { ...m, date: editMiscDateValue }
+            : m,
+        ),
+      );
+      setSite((prev) => {
+        if (!prev || !prev.transactions) return prev;
+        return {
+          ...prev,
+          transactions: prev.transactions.map((t: any) =>
+            t.relatedId?.toString() === editingMiscDateId
+              ? { ...t, date: editMiscDateValue }
+              : t,
+          ),
+        };
+      });
+      toast.success("Miscellaneous expense date updated successfully");
+      cancelEditMiscDate();
+    } catch (err: any) {
+      console.error("Error updating miscellaneous expense date:", err);
+      toast.error(
+        err.response?.data?.message || err.message || "Failed to update expense date",
+      );
+    } finally {
+      setIsSavingMiscDate(false);
+    }
+  };
 
   const handleLogUsage = async (usageData: any) => {
     try {
@@ -1821,8 +1976,79 @@ const SiteDetail: React.FC = () => {
                               <ChevronRight size={15} className="text-console-muted" />
                             )}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                            {formatDate(purchase.date || purchase.createdAt)}
+                          <td
+                            className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {editingPurchaseDateId === purchase._id ? (
+                              <div
+                                className="flex items-center gap-1.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="date"
+                                  value={editPurchaseDateValue}
+                                  onChange={(e) =>
+                                    setEditPurchaseDateValue(e.target.value)
+                                  }
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      saveEditPurchaseDate();
+                                    } else if (e.key === "Escape") {
+                                      e.preventDefault();
+                                      cancelEditPurchaseDate();
+                                    }
+                                  }}
+                                  disabled={isSavingPurchaseDate}
+                                  className="rounded-md border border-console-border bg-white px-2 py-1 text-xs text-console-text focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
+                                  autoFocus
+                                />
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    saveEditPurchaseDate();
+                                  }}
+                                  disabled={isSavingPurchaseDate}
+                                  className="rounded p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+                                  title="Save date"
+                                >
+                                  <Check size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    cancelEditPurchaseDate();
+                                  }}
+                                  disabled={isSavingPurchaseDate}
+                                  className="rounded p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                                  title="Cancel"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 group">
+                                <span>
+                                  {formatDate(purchase.date || purchase.createdAt)}
+                                </span>
+                                {canEditDate && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEditPurchaseDate(purchase);
+                                    }}
+                                    className="rounded p-1 text-console-muted hover:text-brand-700 hover:bg-brand-50 transition-colors"
+                                    title="Edit date"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </td>
                           <td className="whitespace-nowrap px-4 py-3.5 text-sm font-semibold text-console-text">
                             ₹{formatNumber(purchase.totalAmount)}
@@ -2354,8 +2580,75 @@ const SiteDetail: React.FC = () => {
                 <tbody className="divide-y divide-console-border bg-white">
                   {filteredMiscExpenses.map((exp: any) => (
                     <tr key={exp._id}>
-                      <td className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text">
-                        {formatDate(exp.date)}
+                      <td
+                        className="whitespace-nowrap px-4 py-3.5 text-sm text-console-text"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {editingMiscDateId === exp._id ? (
+                          <div
+                            className="flex items-center gap-1.5"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <input
+                              type="date"
+                              value={editMiscDateValue}
+                              onChange={(e) => setEditMiscDateValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  saveEditMiscDate();
+                                } else if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  cancelEditMiscDate();
+                                }
+                              }}
+                              disabled={isSavingMiscDate}
+                              className="rounded-md border border-console-border bg-white px-2 py-1 text-xs text-console-text focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-50"
+                              autoFocus
+                            />
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                saveEditMiscDate();
+                              }}
+                              disabled={isSavingMiscDate}
+                              className="rounded p-1 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-50"
+                              title="Save date"
+                            >
+                              <Check size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cancelEditMiscDate();
+                              }}
+                              disabled={isSavingMiscDate}
+                              className="rounded p-1 text-rose-500 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50"
+                              title="Cancel"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group">
+                            <span>{formatDate(exp.date)}</span>
+                            {canEditDate && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditMiscDate(exp);
+                                }}
+                                className="rounded p-1 text-console-muted hover:text-brand-700 hover:bg-brand-50 transition-colors"
+                                title="Edit date"
+                              >
+                                <Edit2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3.5 text-sm capitalize text-console-text">
                         {editingMiscId === exp._id ? (
